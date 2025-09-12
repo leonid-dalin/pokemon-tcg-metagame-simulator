@@ -146,3 +146,5 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 ### `requirements.txt`
 
 **Purpose:** Lists the Python package dependencies required to run the project (e.g., `numpy`, `scipy`, `scikit-learn`, `plotly`, `tqdm`, `beautifulsoup4`).
+
+Last Edited: 12.09.2025, 17:00 UTC+2

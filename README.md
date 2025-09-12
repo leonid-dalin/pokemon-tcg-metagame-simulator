@@ -236,7 +236,7 @@ This tier list rewards **consistency and overall impact** across the *entire sim
 Decks were grouped into clusters based on the similarity of their matchup profiles. This reveals hidden strategic families:
 
 *   **Cluster 0 (Midrange):** `['Dragapult Dusknoir', 'Gardevoir', 'Dragapult Charizard', 'Ogerpon']`
-*   **Cluster 1 (Midrange/Tempo):** `['Blissey', 'Gholdengo', 'Joltik Box', 'Miraidon']`
+*   **Cluster 1 (Tempo):** `['Blissey', 'Gholdengo', 'Joltik Box', 'Miraidon']`
 *   **Cluster 2 (Niche):** `['Conkeldurr']`
 
 ---
