@@ -1,0 +1,14 @@
+2025-11-11 22:51:31,741 - INFO - 🚀 Starting experiment 'default'. Output: output/20251111_225131_replicator_gens1000K
+2025-11-11 22:51:31,741 - INFO - Parameters: mode=replicator, gens=1000000, noise=0
+2025-11-11 22:51:31,741 - INFO - 📂 Loading matchup data from: data/input/ea_input.json
+2025-11-11 22:51:31,742 - INFO - 📊 Loaded 27 archetypes.
+2025-11-11 22:51:31,742 - INFO - ✅ 27 meet minimum match threshold (400).
+2025-11-11 22:51:31,743 - WARNING - ⚠️  High asymmetry detected in data (max: 0.29). This is normal for real-world data.
+2025-11-11 22:51:31,743 - INFO - ✅ Win matrix built: 27x27. Diagonal enforced to 0.5.
+2025-11-11 22:51:31,743 - INFO - 👑 Deck with highest initial growth potential: Joltik Box (Meta-Weighted WR: 52.80%)
+2025-11-11 22:51:31,744 - INFO - Intialized metagame with 27 active decks: {'Alakazam Dudunsparce': '3.7037%', 'Dragapult Dusknoir': '3.7037%', 'Grimmsnarl Froslass': '3.7037%', 'Ceruledge': '3.7037%', 'Gardevoir': '3.7037%'}...
+2025-11-11 22:51:37,094 - INFO - ✅ Metagame stabilized after 200001 generations.
+2025-11-11 22:51:37,095 - INFO - ⏱️  Simulation took 5.35 seconds
+2025-11-11 22:51:37,329 - INFO - ⏱️  Simulation completed in 5.59 seconds
+2025-11-11 22:51:37,743 - INFO - 📈 Convergence at gen 19209 | Avg post-conv change: 1.46e-12
+2025-11-11 22:51:37,744 - INFO - 📈 Convergence at generation: 19209

@@ -8,33 +8,34 @@ Given a dataset of win rates between different deck archetypes, the simulator mo
 
 ## 🚀 Features
 
-*   **Two Simulation Modes:**
-    *   **Replicator Dynamics:** A mathematical model where successful decks grow in frequency proportional to their performance.
-    *   **Tournament Simulation:** A granular, stochastic model that simulates Swiss-style tournaments each generation.
-*   **Realistic Dynamics:**
-    *   **Deck Extinction & Reintroduction:** Poorly performing decks can die out, and extinct decks can be randomly reintroduced, simulating innovation and preventing local optima.
-    *   **Noise:** Adds controlled randomness to replicator dynamics to simulate imperfect information or variance.
-    *   **Soft Convergence:** After a configurable point, noise and reintroduction are turned off to allow the simulation to settle into a true, stable equilibrium.
-*   **Advanced Analytics:**
-    *   Identifies Rock-Paper-Scissors (RPS) cycles in the matchup matrix.
-    *   Generates tier lists based on the **final equilibrium state** and **overall historical impact**.
-    *   Computes deck similarity and performs K-Means clustering on active decks to identify strategic archetypes.
-*   **Interactive Visualizations:**
-    *   Animated plot of deck frequencies over time, with extinction markers.
-    *   Interactive heatmap of the win rate matrix, sorted by tier.
-    *   Network graph showing significant deck matchups and highlighted RPS cycles.
-*   **High Performance & Scalability:**
-    *   Uses vectorized NumPy operations.
-    *   Optional multiprocessing for tournament simulations.
-    *   **Memory-Efficient History:** For very long simulations, the full metagame history can be written incrementally to a CSV file to avoid memory overflow.
-*   **Robust Data Pipeline:**
-    *   **Data Scraper:** Utility to scrape matchup data from HTML files (e.g., from Limitless TCG) into the required JSON format.
-    *   **Data Validation:** Uses Pydantic models to ensure input data integrity.
-    *   **Flexible Starting Conditions:** Easily configurable to start from a uniform distribution or any custom metagame state.
-*   **Enhanced Debugging & Experiment Management:**
-    *   Comprehensive logging to file and console.
-    *   **Unique, Descriptive Output Directories:** Every simulation run creates a uniquely named directory (e.g., `20250912_021459_replicator_gens1000K_CONV@2017410`) for easy tracking and comparison.
-    *   Full batch experiment support for parameter sweeping.
+* **Dual Simulation Modes:**
+    * **Replicator Dynamics:** A mathematical model where successful decks grow in frequency proportional to their performance.
+    * **Tournament Simulation:** A granular, stochastic model that simulates Swiss-style tournaments each generation.
+* **Streamlit Web App:** A user-friendly interface (via `app.py`) to get instant deck recommendations, perform "what-if" analysis on a custom-defined meta, and analyze your own deck's performance, all powered by the core simulation engine.
+* **CLI Prediction Mode:** Run quick predictions directly from the command line, specifying a tournament size and a known meta.
+* **Realistic Dynamics:**
+    * **Deck Extinction & Reintroduction:** Poorly performing decks can die out, and extinct decks can be randomly reintroduced, simulating innovation and preventing local optima.
+    * **Noise:** Adds controlled randomness to replicator dynamics to simulate imperfect information or variance.
+* **Advanced Analytics:**
+    * Identifies Rock-Paper-Scissors (RPS) cycles in the matchup matrix.
+    * Generates tier lists based on the **final equilibrium state** and **overall historical impact**.
+    * Computes deck similarity and performs K-Means clustering on active decks to identify strategic archetypes.
+* **Interactive Visualizations:**
+    * Animated plot of deck frequencies over time, with extinction markers.
+    * Interactive heatmap of the win rate matrix, sorted by tier.
+    * Network graph showing significant deck matchups and highlighted RPS cycles.
+* **High Performance & Scalability:**
+    * **App Caching:** "Pro" mode in the Streamlit app is cached, providing instantaneous results after the first run.
+    * **Vectorized Analytics:** Core analysis and prediction logic (e.g., OMW, All-Time Tiers) are fully vectorized with NumPy for maximum speed.
+    * Optional multiprocessing for tournament simulations.
+    * **Memory-Efficient History:** For very long simulations, the full metagame history can be written incrementally to a CSV file to avoid memory overflow.
+* **Robust Data Pipeline:**
+    * **Data Scraper:** Utility to scrape matchup data from HTML files (e.g., from Limitless TCG) into the required JSON format.
+    * **Flexible Starting Conditions:** Easily configurable to start from a uniform distribution or any custom metagame state.
+* **Enhanced Debugging & Experiment Management:**
+    * Comprehensive logging to file and console.
+    * **Unique, Descriptive Output Directories:** Every simulation run creates a uniquely named directory (e.g., `20250912_021459_replicator_gens1000K_CONV@2017410`) for easy tracking and comparison.
+    * Full batch experiment support for parameter sweeping.
 
 ---
 
@@ -143,6 +144,16 @@ Execute the main script with your desired parameters:
 python -m src.main -i data/input/ea_input.json -g 1_000_000 --mode replicator
 ```
 
+## Running the Streamlit Web App (Recommended)
+
+The easiest way to use the predictor is via the Streamlit app.
+
+```bash
+streamlit run src/app.py
+```
+
+This will launch a local web server and open the app in your browser, allowing you to get recommendations and analyze the meta interactively.
+
 #### Key Command-Line Arguments
 
 | Short Flag | Long Flag               | Description                                                                 | Default             | Type    |
@@ -151,8 +162,9 @@ python -m src.main -i data/input/ea_input.json -g 1_000_000 --mode replicator
 | `-o`       | `--output`              | Directory to save simulation results, plots, and logs. Created if missing.   | `output/`            | `str`   |
 | `-m`       | `--mode`                | Simulation dynamics mode: `replicator` (default) or `tournament`.           | `replicator`        | `str`   |
 | `-g`       | `--gens`                | Maximum number of generations to simulate. Must be > 0.                     | `100`               | `int`   |
-| `-N`       | `--noise`               | Scale of stochastic noise injected into replicator dynamics. ≥ 0.0.         | `0.02`              | `float` |
+| `-M`       | `--min-games`           | Min games required to include a deck in the simulation.         			 | `700`              | `int` |
 | `-e`       | `--extinction-threshold`| Deck frequency threshold for extinction (decks below this may vanish).      | `0.005`             | `float` |
+| `-N`       | `--noise`               | Scale of stochastic noise injected into replicator dynamics. ≥ 0.0.         | `0.02`              | `float` |
 | `-p`       | `--intro-prob`          | Probability per generation to reintroduce a previously extinct deck.        | `0.002`             | `float` |
 | `-s`       | `--seed`                | RNG seed for reproducible simulations.                                      | `1312`              | `int`   |
 | `-P`       | `--no-plot`             | Disable generation of interactive HTML plots (e.g., for headless runs).     | `False`             | `bool`  |
@@ -160,8 +172,12 @@ python -m src.main -i data/input/ea_input.json -g 1_000_000 --mode replicator
 | `-l`       | `--log-level`           | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`.                  | `INFO`              | `str`   |
 | `-b`       | `--batch`               | Run batch experiments (requires `--batch-config`).                          | `False`             | `bool`  |
 | `-c`       | `--batch-config`        | Path to JSON file defining batch experiment parameters.                     | `None`              | `str`   |
+|			 | `--predict`			   | Run metagame prediction instead of simulation.								 | `False`			   | `bool`	 |
+|			 | `--players`			   | Expected tournament size for prediction mode.								 | `32`			   	   | `int`	 |
+|			 | `--meta`			   	   | User-specified meta for prediction (e.g., "DeckA:0.2").					 | `""`			   	   | `str`	 |
 
-> **🚫 Validation:** Invalid values (e.g., --inertia 1.5) will cause immediate, descriptive errors. 
+
+> **🚫 Validation:** Invalid values (e.g., `--intro-prob 1.5`) will cause immediate, descriptive errors. 
      
 
 ---
@@ -179,8 +195,7 @@ After running the simulation, a uniquely named directory (e.g., `YYYYMMDD_HHmmss
 *   `matchup_network.html`: An interactive network graph visualizing deck matchups and identified RPS cycles.
 *   `metagame_history_full.csv`: (If enabled) A full record of the metagame state at every generation, for deep analysis.
 
-The console will also output key metrics, such as convergence generation, top decks in each tier, and detected RPS cycles.
-
+	
 ---
 
 ## 📈 Example Results (Based on BLK/WHT Standard 2025 Data) | Replicator Dynamics

@@ -4,29 +4,34 @@
 from __future__ import annotations
 import json
 import logging
-import os
 import time
-from typing import cast, Dict, Any, Optional
-import numpy as np
+import os
+from typing import cast, Dict, Any, Optional, Literal
 
 # Local modules
-from .data import load_matchup_data, cluster_decks_by_matchup_profile, compute_deck_dominance
+from .data import (
+    load_matchup_data,
+    cluster_decks_by_matchup_profile,
+    compute_deck_dominance,
+)
 from .simulation import find_evolutionary_stable_state
 from .analysis import (
     compute_convergence_metrics,
     generate_final_state_tier_list,
     generate_all_time_tier_list,
     compute_matchup_cycles,
-    compute_deck_similarity
+    compute_deck_similarity,
 )
 from .plotting import (
     plot_metagame_evolution_interactive,
     plot_matchup_heatmap_interactive,
-    plot_matchup_network
+    plot_matchup_network,
 )
 from .config import *
 from .cli_args import *
-from .runtime_config import RuntimeConfig
+from .predictor import predict_best_decks
+from .simulation_config import SimulationConfig
+
 
 # ----------------------------
 # Single Experiment Runner
@@ -36,12 +41,12 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
     # Setup logging
     log_level = getattr(logging, args.log_level.upper())
     logging.basicConfig(level=log_level, format="%(asctime)s - %(levelname)s - %(message)s")
-    
+
     # --- Construct the Unique Output Directory ---
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     mode_str = args.mode
-    gen_str = f"gens{args.gens//1000}K" if args.gens >= 1000 else f"gens{args.gens}"
-    
+    gen_str = f"gens{args.gens // 1000}K" if args.gens >= 1000 else f"gens{args.gens}"
+
     base_output_name = f"{timestamp}_{mode_str}_{gen_str}"
     base_output_dir = os.path.join(args.output, base_output_name)
 
@@ -55,14 +60,13 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
     # Create the initial directory
     os.makedirs(base_output_dir, exist_ok=True)
 
-
     # Log to file
     log_file = os.path.join(base_output_dir, "simulation.txt")
-    file_handler = logging.FileHandler(log_file, mode='w', encoding='utf-8')
+    file_handler = logging.FileHandler(log_file, mode="w", encoding="utf-8")
     file_handler.setLevel(log_level)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     file_handler.setFormatter(formatter)
-    
+
     # Avoid adding handlers repeatedly in batch mode
     root_logger = logging.getLogger()
     if root_logger.handlers:
@@ -71,13 +75,33 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
                 root_logger.removeHandler(handler)
     root_logger.addHandler(file_handler)
 
-
     logging.info(f"🚀 Starting experiment '{experiment_id}'. Output: {base_output_dir}")
     logging.info(f"Parameters: mode={args.mode}, gens={args.gens}, noise={args.noise}")
 
-    # BUILD RUNTIME CONFIG FROM ARGS
-    config = RuntimeConfig.from_args(args)
-    
+    # --- Build SimulationConfig directly ---
+    min_generations = max(1, int(args.gens * MIN_GENERATIONS_PROP))
+    mode_literal = cast(Literal["replicator", "tournament"], args.mode)
+
+    sim_config = SimulationConfig(
+        mode=mode_literal,
+        max_generations=args.gens,
+        min_generations=min_generations,
+        extinction_threshold=args.extinction_threshold,
+        stability_threshold=STABILITY_THRESHOLD,
+        convergence_window=CONVERGENCE_WINDOW,
+        max_inactive_generations=MAX_INACTIVE_GENERATIONS,
+        use_bayesian_winrates=USE_BAYESIAN_WINRATES,
+        tournament_size=TOURNAMENT_SIZE,
+        num_tournaments_per_gen=NUM_TOURNAMENTS_PER_GEN,
+        num_rounds=NUM_ROUNDS,
+        use_multiproc=USE_MULTIPROC,
+        seed=args.seed,
+        dynamic_deck_intro_prob=args.intro_prob,
+        mutation_floor=MUTATION_FLOOR,
+        noise_scale=args.noise,
+        selection_pressure=SELECTION_PRESSURE,
+    )
+
     # Load data
     deck_names, win_matrix, matchup_details = load_matchup_data(args.input, args.min_games)
     if not deck_names:
@@ -93,43 +117,20 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
 
     history_file_path = os.path.join(base_output_dir, "metagame_history_full.csv")
 
-    from .simulation_config import SimulationConfig 
-    mode_literal = cast(Literal['replicator', 'tournament'], args.mode)
-    sim_config = SimulationConfig(
-        mode=mode_literal,
-        max_generations=config.max_generations,
-        soft_convergence_gen=config.soft_convergence_gen,
-        min_generations=config.min_generations,              
-        extinction_threshold=config.extinction_threshold,
-        stability_threshold=config.stability_threshold,
-        convergence_window=config.convergence_window,
-        max_inactive_generations=config.max_inactive_generations,
-        use_bayesian_winrates=config.use_bayesian_winrates,
-        tournament_size=config.tournament_size,
-        num_tournaments_per_gen=config.num_tournaments_per_gen,
-        num_rounds=config.num_rounds,
-        use_multiproc=config.use_multiproc,
-        seed=config.rng_seed,
-        dynamic_deck_intro_prob=config.dynamic_deck_intro_prob,
-        mutation_floor=config.mutation_floor,
-        noise_scale=config.noise_scale,
-        selection_pressure=config.selection_pressure
-    )
-    
     # Run simulation
     start_time = time.time()
     results, history, extinction_gens = find_evolutionary_stable_state(
         deck_names=deck_names,
         win_matrix=win_matrix,
         matchup_details=matchup_details,
-        config=sim_config,
-        history_file_path=history_file_path
+        config=sim_config,  # <--- Pass the new sim_config
+        history_file_path=history_file_path,
     )
     sim_duration = time.time() - start_time
     logging.info(f"⏱️  Simulation completed in {sim_duration:.2f} seconds")
-    
+
     convergence_metrics = compute_convergence_metrics(history)
-    final_conv_gen = convergence_metrics['convergence_generation']
+    final_conv_gen = convergence_metrics["convergence_generation"]
     if final_conv_gen is not None:
         conv_status = f"CONV@{final_conv_gen}"
     else:
@@ -164,8 +165,18 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
     csv_path = os.path.join(output_dir, "ess_equilibrium.csv")
     try:
         import csv
+
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["deck", "frequency", "is_active", "generations_inactive", "extinction_generation"])
+            writer = csv.DictWriter(
+                f,
+                fieldnames=[
+                    "deck",
+                    "frequency",
+                    "is_active",
+                    "generations_inactive",
+                    "extinction_generation",
+                ],
+            )
             writer.writeheader()
             for r in results:
                 writer.writerow({k: ("" if v is None else v) for k, v in r.items()})
@@ -192,20 +203,26 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
     # Plotting
     if not args.no_plot:
         plot_metagame_evolution_interactive(
-            history, deck_names, extinction_gens,
-            save_path=os.path.join(output_dir, "metagame_evolution.html")
+            history,
+            deck_names,
+            extinction_gens,
+            save_path=os.path.join(output_dir, "metagame_evolution.html"),
         )
         tier_order = []
         for tier in "SABCD":
             tier_order.extend([deck["deck"] for deck in final_tiers.get(tier, [])])
         plot_matchup_heatmap_interactive(
-            win_matrix, deck_names, tier_order,
-            save_path=os.path.join(output_dir, "matchup_heatmap.html")
+            win_matrix,
+            deck_names,
+            tier_order,
+            save_path=os.path.join(output_dir, "matchup_heatmap.html"),
         )
         plot_matchup_network(
-            win_matrix, deck_names, cycles,
+            win_matrix,
+            deck_names,
+            cycles,
             metagame_history=history,
-            save_path=os.path.join(output_dir, "matchup_network.html")
+            save_path=os.path.join(output_dir, "matchup_network.html"),
         )
 
     # Return metadata for batch runs
@@ -214,7 +231,7 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
         "duration_seconds": sim_duration,
         "final_active_decks": len([r for r in results if r["is_active"]]),
         "convergence_generation": final_conv_gen,
-        "top_deck": max(results, key=lambda x: x["frequency"])["deck"] if results else None,
+        "top_deck": (max(results, key=lambda x: x["frequency"])["deck"] if results else None),
         "output_dir": output_dir,
         "parameters": {
             "mode": args.mode,
@@ -222,9 +239,10 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
             "noise": args.noise,
             "extinction_threshold": args.extinction_threshold,
             "intro_prob": args.intro_prob,
-        }
+        },
     }
     return metadata
+
 
 # ----------------------------
 # Batch Experiment Runner
@@ -244,8 +262,8 @@ def run_batch_experiments(args: Args):
     results_summary = []
 
     for i, exp_config in enumerate(experiments):
-        exp_id = exp_config.get("experiment_id", f"exp{i+1:03d}")
-        logging.info(f"--- Starting Batch Experiment {i+1}/{len(experiments)}: {exp_id} ---")
+        exp_id = exp_config.get("experiment_id", f"exp{i + 1:03d}")
+        logging.info(f"--- Starting Batch Experiment {i + 1}/{len(experiments)}: {exp_id} ---")
 
         # Start with the base arguments from the command line
         args_dict = args._asdict()
@@ -258,9 +276,9 @@ def run_batch_experiments(args: Args):
                     args_dict[key] = value
                 else:
                     logging.warning(f"Ignoring unknown parameter '{key}' in batch config.")
-        
+
         # Set the main output directory for all batch experiments
-        args_dict['output'] = os.path.join(base_output, "batch")
+        args_dict["output"] = os.path.join(base_output, "batch")
 
         # Create a new immutable Args object for this specific run
         exp_args = Args(**args_dict)
@@ -280,13 +298,47 @@ def run_batch_experiments(args: Args):
 # ----------------------------
 def main():
     """Main entry point for the simulator."""
-    # logging.getLogger("werkzeug").setLevel(logging.WARNING)
     args = parse_args()
 
+    # --- Prediction Mode ---
+    if args.predict:
+        user_meta = {}
+        meta_str = args.meta
+        if meta_str:
+            for part in meta_str.split(","):
+                if ":" in part:
+                    deck, prop = part.split(":", 1)
+                    try:
+                        user_meta[deck.strip()] = float(prop.strip())
+                    except ValueError:
+                        continue
+        try:
+            result = predict_best_decks(
+                user_meta_spec=user_meta,
+                total_players=args.players,
+                min_sample_threshold=10,
+            )
+            recs = result["recommendations"]
+
+            for i, r in enumerate(recs, 1):
+                conf = "✅ High" if r["confidence"] >= 0.6 else "⚠️ Low"
+                print(f"{i}. {r['deck']}")
+                print(f"   Expected Win Rate: {r['expected_win_rate']:.2%}")
+                print(f"   Meta Share: {r['meta_share']:.2%}")
+                print(f"   Confidence: {conf} ({r['sample_support']:.1f} avg matches vs meta)")
+                print()
+            return
+        except Exception as e:
+            import sys
+            logging.error(f"Prediction failed: {e}")
+            sys.exit(1)
+
+    # --- Batch or Single Mode ---
     if args.batch:
         run_batch_experiments(args)
     else:
         run_single_experiment(args)
+
 
 if __name__ == "__main__":
     main()

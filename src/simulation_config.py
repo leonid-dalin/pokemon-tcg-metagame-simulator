@@ -2,11 +2,11 @@
 from dataclasses import dataclass
 from typing import Literal
 
+
 @dataclass
 class SimulationConfig:
-    mode: Literal['replicator', 'tournament']
+    mode: Literal["replicator", "tournament"]
     max_generations: int
-    soft_convergence_gen: int
     min_generations: int
     extinction_threshold: float
     stability_threshold: float
