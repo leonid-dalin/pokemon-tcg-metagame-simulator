@@ -32,10 +32,22 @@ NOISE_SCALE = 0 # 1e-4
 SELECTION_PRESSURE = 6
 
 # ----------------------------
-# I/O Defaults
+# Analysis.py Constants
 # ----------------------------
+TIER_S_THRESHOLD = 0.9
+TIER_A_THRESHOLD = 0.7
+TIER_B_THRESHOLD = 0.5
+TIER_C_THRESHOLD = 0.3
 CONSISTENCY_MEAN_EPSILON = 1e-6
 CONSISTENCY_STD_EPSILON = 1e-9
+COMPOSITE_SCORE_WR_WEIGHT = 0.50
+COMPOSITE_SCORE_PRESENCE_WEIGHT = 0.30
+COMPOSITE_SCORE_CONSISTENCY_WEIGHT = 0.20
+WIN_THRESHOLD = 0.6
+
+# ----------------------------
+# I/O Defaults
+# ----------------------------
 INPUT_DATA = "data/input/ea_input.json"
 OUTPUT_DIR = "output/"
 MATCHUP_DIR = "data/matchups/"

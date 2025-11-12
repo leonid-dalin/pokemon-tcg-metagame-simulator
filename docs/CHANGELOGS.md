@@ -1,15 +1,21 @@
-## Latest Commit
-### refactor(config, analysis): Formalize consistency epsilons and resolve linter warnings
+## Commit 458ded8 (12th November 2025)
+### feat(analysis, config): Vectorize tier list generation and centralize all tuning constants
 
-Refactors the tier list generation logic to improve code quality, resolve linter warnings, and formalize ""magic numbers"" into explicit constants.
+Improves the metagame analysis pipeline by fully optimizing the `generate_all_time_tier_list` function and formalizing all configuration parameters.
 
-Key Changes in `analysis.py`:
-- **Fixed scoping warning:** Replaced a complex, warning-prone list comprehension for deck consistency with a clear, explicit `for` loop to ensure correct assignment of the local variable `std_val`.
-- **Removed unused variable:** Eliminated the unused local variable `num_gens`.
-- **Refactored hardcoded values:** Replaced the hardcoded numerical stability values (`1e-6` and `1e-9`) with imported, named constants.
+### 🚀 Feature & Performance Improvements
 
-Key Changes in `config.py`:
-- **Added constants:** Introduced `CONSISTENCY_MEAN_EPSILON` (1e-6) and `CONSISTENCY_STD_EPSILON` (1e-9) to promote clarity and centralize configuration for the consistency metric calculation.
+  * **Tier List Performance:** Implemented a full **vectorization** of the deck **consistency** calculation in `analysis.py`. This moves the logic from a slow Python `for` loop to highly optimized NumPy operations, significantly speeding up the generation of the `All-Time Tier List`.
+  * **Centralized Configuration:** All numerical tuning parameters for the tier list have been moved to `config.py` for easy adjustment:
+      * `COMPOSITE_SCORE_X_WEIGHT`: Weights for Win Rate, Presence, and Consistency.
+      * `TIER_X_THRESHOLD`: Score thresholds for S, A, B, and C tiers.
+  * **Tier List Tuning:** The default tier thresholds have been optimized to create a **stricter competitive distribution** (e.g., S-Tier threshold raised to $0.90$) to better align with professional metagame standards.
+
+### 🐛 Bug Fixes & Refactoring
+
+  * **Code Quality:** Eliminated the "referenced before assignment" linter warning in `analysis.py` by replacing a complex walrus-operator list comprehension with a clear, explicit `for` loop for consistency calculation.
+  * **Numerical Stability:** Formalized the hardcoded epsilon values (`1e-6` and `1e-9`) into explicit constants (`CONSISTENCY_MEAN_EPSILON` and `CONSISTENCY_STD_EPSILON`) in `config.py`, making the numerical stability logic transparent and configurable.
+  * **Code Hygiene:** Removed the unused local variable `num_gens` from `analysis.py`.
 
 -----
 

@@ -6,7 +6,19 @@ import numpy as np
 from typing import List, Dict, Any, Optional
 from scipy.stats import rankdata
 from sklearn.metrics.pairwise import cosine_similarity
-from .config import STABILITY_THRESHOLD, CONSISTENCY_MEAN_EPSILON, CONSISTENCY_STD_EPSILON
+from .config import (
+    STABILITY_THRESHOLD,
+    CONSISTENCY_MEAN_EPSILON,
+    CONSISTENCY_STD_EPSILON,
+    TIER_S_THRESHOLD,
+    TIER_A_THRESHOLD,
+    TIER_B_THRESHOLD,
+    TIER_C_THRESHOLD,
+    COMPOSITE_SCORE_WR_WEIGHT,
+    COMPOSITE_SCORE_PRESENCE_WEIGHT,
+    COMPOSITE_SCORE_CONSISTENCY_WEIGHT,
+    WIN_THRESHOLD
+)
 
 
 # ----------------------------
@@ -164,56 +176,79 @@ def generate_all_time_tier_list(
         deck_names: List[str], metagame_history: List[np.ndarray], win_matrix: np.ndarray
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Generate tier list based on entire simulation history — “career performance”.
-    Incorporates win rate, presence, consistency, and meta impact.
+
+    Incorporates four core metrics: average win rate, average presence, consistency, and meta impact.
+
     Args:
         deck_names (List[str]): List of deck names.
-        metagame_history (List[np.ndarray]): Full history of frequencies.
+        metagame_history (List[np.ndarray]): Full history of deck frequencies (generations x decks).
         win_matrix (np.ndarray): Win-rate matrix.
+
     Returns:
-        Dict mapping tier to list of deck data dicts.
+        Dict mapping tier ('S', 'A', 'B', 'C', 'D') to list of deck data dicts.
     """
     n = len(deck_names)
     if not metagame_history:
         return {tier: [] for tier in "SABCD"}
 
-    # Vectorized all history-based calculations ---
+    # --- Vectorized History-Based Calculations ---
     freq_history = np.array(metagame_history)
 
-    # (N_decks,) vector of average presence
+    # 1. Presence: (N_decks,) vector of average share over time
     total_metagame = np.mean(freq_history, axis=0)
 
-    # (N_decks, N_decks) @ (N_decks, N_gens) -> (N_decks, N_gens)
+    # 2. Win Rate: Average effective win rate (Payoffs = Win Matrix @ Frequencies)
+    # (N_decks, N_decks) @ (N_decks, N_gens) -> (N_decks, N_gens) payoffs over time
     payoffs_over_time = win_matrix @ freq_history.T
-
-    # (N_decks,) vector of average win rate over time
     win_rates = np.mean(payoffs_over_time, axis=1)
-    # <--- End of Vectorization ---
 
-    # Consistency = mean / std (coefficient of variation inverse)
-    consistency_list = []
-    for i in range(n):
-        mean = np.mean(freq_history[:, i])
-        std_val = np.std(freq_history[:, i])
+    # 3. Consistency: mean / std (inverse coefficient of variation)
+    # Vectorize calculation for performance and numerical stability
+    mean_share = np.mean(freq_history, axis=0)
+    std_dev_share = np.std(freq_history, axis=0)
 
-        if mean > CONSISTENCY_MEAN_EPSILON and std_val > 0:
-            consistency_list.append(mean / (std_val + CONSISTENCY_STD_EPSILON))
-        else:
-            consistency_list.append(0.0)
+    # Calculate raw consistency: Mean / Std Dev, safely handle division by zero
+    raw_consistency = np.divide(
+        mean_share,
+        std_dev_share + CONSISTENCY_STD_EPSILON, # Add epsilon to prevent division by zero
+        out=np.zeros_like(mean_share),
+        where=std_dev_share > 0,
+    )
 
-    consistency = np.array(consistency_list)
-    # Composite score
+    # Assign 0.0 consistency to decks that are effectively extinct (mean share < epsilon)
+    consistency = np.where(
+        mean_share > CONSISTENCY_MEAN_EPSILON,
+        raw_consistency,
+        0.0,
+    )
+    # --- End of Vectorization ---
+
+    # 4. Composite Score (Weighted Average of Ranks)
+    # Use rankdata / n to get a normalized rank [0, 1] for each metric
     normalized_win = rankdata(win_rates) / n
     normalized_presence = rankdata(total_metagame) / n
     normalized_consistency = rankdata(consistency) / n
+
+    # Weights: Win Rate (0.50), Presence (0.30), Consistency (0.20)
     composite_score = (
-            normalized_win * 0.50
-            + normalized_presence * 0.30
-            + normalized_consistency * 0.20
+            normalized_win * COMPOSITE_SCORE_WR_WEIGHT
+            + normalized_presence * COMPOSITE_SCORE_PRESENCE_WEIGHT
+            + normalized_consistency * COMPOSITE_SCORE_CONSISTENCY_WEIGHT
     )
-    # Meta impact metric
+
+    # 5. Meta Impact (Win Rate * Presence * Consistency Modifier)
+    # The tanh term smooths the consistency factor, making high-consistency decks get a slight boost.
     meta_impact = win_rates * total_metagame * (1.0 + np.tanh(consistency - 1.0))
-    tier_thresholds = {"S": 0.75, "A": 0.60, "B": 0.40, "C": 0.25}
+
+    # --- Tier Assignment and Output Generation ---
+    tier_thresholds = {
+        "S": TIER_S_THRESHOLD,
+        "A": TIER_A_THRESHOLD,
+        "B": TIER_B_THRESHOLD,
+        "C": TIER_C_THRESHOLD,
+    }
     tiers = {tier: [] for tier in "SABCD"}
+
     for i in range(n):
         deck_data = {
             "deck": deck_names[i],
@@ -223,18 +258,23 @@ def generate_all_time_tier_list(
             "consistency": float(consistency[i]),
             "meta_impact": float(meta_impact[i]),
         }
-        if composite_score[i] >= tier_thresholds["S"]:
+        score = composite_score[i]
+        if score >= tier_thresholds["S"]:
             tiers["S"].append(deck_data)
-        elif composite_score[i] >= tier_thresholds["A"]:
+        elif score >= tier_thresholds["A"]:
             tiers["A"].append(deck_data)
-        elif composite_score[i] >= tier_thresholds["B"]:
+        elif score >= tier_thresholds["B"]:
             tiers["B"].append(deck_data)
-        elif composite_score[i] >= tier_thresholds["C"]:
+        elif score >= tier_thresholds["C"]:
             tiers["C"].append(deck_data)
         else:
             tiers["D"].append(deck_data)
+
+    # Sort each tier by composite score
     for tier in tiers:
         tiers[tier].sort(key=lambda x: x["composite_score"], reverse=True)
+
+    # --- Logging Summary ---
     logging.info("🏅 All-Time Tier List Generated")
     for tier in "SABCD":
         if tiers[tier]:
@@ -242,13 +282,15 @@ def generate_all_time_tier_list(
             logging.info(
                 f"  {tier}-Tier Leader: {top['deck']} (Impact: {top['meta_impact']:.4f})"
             )
-    # --- Log full S, A, D tiers ---
+
+    # Log full S, A, D tiers
     for target_tier in ["S", "A", "D"]:
         logging.info(f"  Full {target_tier}-Tier List:")
         for deck_data in tiers[target_tier]:
             logging.info(
                 f"    - {deck_data['deck']} (Score: {deck_data['composite_score']:.4f}, WR: {deck_data['win_rate']:.2%}, Presence: {deck_data['presence']:.2%}, Consistency: {deck_data['consistency']:.4f})"
             )
+
     return tiers
 
 
@@ -275,21 +317,21 @@ def compute_matchup_cycles(
         logging.warning("Only 3-cycles implemented currently.")
         return cycles
     from itertools import combinations
-    win_threshold = 0.6
+
     # Iterate over all unique combinations of 3 deck indices
     for i, j, k in combinations(range(n), 3):
         # Check for cycle: i -> j -> k -> i
         if (
-                win_matrix[i, j] > win_threshold
-                and win_matrix[j, k] > win_threshold
-                and win_matrix[k, i] > win_threshold
+                win_matrix[i, j] > WIN_THRESHOLD
+                and win_matrix[j, k] > WIN_THRESHOLD
+                and win_matrix[k, i] > WIN_THRESHOLD
         ):
             cycles.append([deck_names[i], deck_names[j], deck_names[k]])
         # Check for the reverse cycle: i -> k -> j -> i
         elif (
-                win_matrix[i, k] > win_threshold
-                and win_matrix[k, j] > win_threshold
-                and win_matrix[j, i] > win_threshold
+                win_matrix[i, k] > WIN_THRESHOLD
+                and win_matrix[k, j] > WIN_THRESHOLD
+                and win_matrix[j, i] > WIN_THRESHOLD
         ):
             cycles.append([deck_names[i], deck_names[k], deck_names[j]])
     logging.info(f"🌀 Found {len(cycles)} unique RPS-style 3-cycles in matchup graph.")
