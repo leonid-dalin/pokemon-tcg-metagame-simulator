@@ -1,4 +1,19 @@
-## Commit 8e978979d4f13fe9c9c774f14cb10132868e1ab2
+## Latest Commit
+### refactor(config, analysis): Formalize consistency epsilons and resolve linter warnings
+
+Refactors the tier list generation logic to improve code quality, resolve linter warnings, and formalize ""magic numbers"" into explicit constants.
+
+Key Changes in `analysis.py`:
+- **Fixed scoping warning:** Replaced a complex, warning-prone list comprehension for deck consistency with a clear, explicit `for` loop to ensure correct assignment of the local variable `std_val`.
+- **Removed unused variable:** Eliminated the unused local variable `num_gens`.
+- **Refactored hardcoded values:** Replaced the hardcoded numerical stability values (`1e-6` and `1e-9`) with imported, named constants.
+
+Key Changes in `config.py`:
+- **Added constants:** Introduced `CONSISTENCY_MEAN_EPSILON` (1e-6) and `CONSISTENCY_STD_EPSILON` (1e-9) to promote clarity and centralize configuration for the consistency metric calculation.
+
+-----
+
+## Commit 8e97897 (12th November 2025)
 ### fix(analysis, cli, plotting): Resolve stability issues, serialization errors, and improve core logic
 
 This commit implements a series of fixes across the core simulation files to address static analysis warnings, a runtime serialization error, and a critical issue (kinda) in how strategic deck similarity is calculated.
@@ -39,7 +54,7 @@ Fixes:
 
 -----
 
-## Commit a727312
+## Commit a727312 (11th November 2025)
 ### refactor(core): Full-stack optimization, caching, and architectural streamlining
 
 This is a major squashed commit that introduces significant performance

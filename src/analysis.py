@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Dict, Any, Optional
 from scipy.stats import rankdata
 from sklearn.metrics.pairwise import cosine_similarity
-from .config import STABILITY_THRESHOLD
+from .config import STABILITY_THRESHOLD, CONSISTENCY_MEAN_EPSILON, CONSISTENCY_STD_EPSILON
 
 
 # ----------------------------
@@ -178,7 +178,6 @@ def generate_all_time_tier_list(
 
     # Vectorized all history-based calculations ---
     freq_history = np.array(metagame_history)
-    num_gens = len(freq_history)
 
     # (N_decks,) vector of average presence
     total_metagame = np.mean(freq_history, axis=0)
@@ -191,17 +190,17 @@ def generate_all_time_tier_list(
     # <--- End of Vectorization ---
 
     # Consistency = mean / std (coefficient of variation inverse)
-    consistency = np.array(
-        [
-            (
-                mean / (std_val + 1e-9)
-                if (mean := np.mean(freq_history[:, i])) > 1e-6
-                   and (std_val := np.std(freq_history[:, i])) > 0
-                else 0.0
-            )
-            for i in range(n)
-        ]
-    )
+    consistency_list = []
+    for i in range(n):
+        mean = np.mean(freq_history[:, i])
+        std_val = np.std(freq_history[:, i])
+
+        if mean > CONSISTENCY_MEAN_EPSILON and std_val > 0:
+            consistency_list.append(mean / (std_val + CONSISTENCY_STD_EPSILON))
+        else:
+            consistency_list.append(0.0)
+
+    consistency = np.array(consistency_list)
     # Composite score
     normalized_win = rankdata(win_rates) / n
     normalized_presence = rankdata(total_metagame) / n

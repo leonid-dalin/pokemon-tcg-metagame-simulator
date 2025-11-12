@@ -34,6 +34,8 @@ SELECTION_PRESSURE = 6
 # ----------------------------
 # I/O Defaults
 # ----------------------------
+CONSISTENCY_MEAN_EPSILON = 1e-6
+CONSISTENCY_STD_EPSILON = 1e-9
 INPUT_DATA = "data/input/ea_input.json"
 OUTPUT_DIR = "output/"
 MATCHUP_DIR = "data/matchups/"
