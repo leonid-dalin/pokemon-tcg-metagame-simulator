@@ -1,21 +1,38 @@
-## Commit 458ded8 (12th November 2025)
-### feat(analysis, config): Vectorize tier list generation and centralize all tuning constants
+## Latest Commit
+### feat(analysis, config, docs): Vectorize tier list, centralize constants, and perform repository cleanup
 
-Improves the metagame analysis pipeline by fully optimizing the `generate_all_time_tier_list` function and formalizing all configuration parameters.
+Improves the metagame analysis pipeline by optimizing performance, ensuring full configuration transparency, and performing necessary repository maintenance.
 
 ### 🚀 Feature & Performance Improvements
-
-  * **Tier List Performance:** Implemented a full **vectorization** of the deck **consistency** calculation in `analysis.py`. This moves the logic from a slow Python `for` loop to highly optimized NumPy operations, significantly speeding up the generation of the `All-Time Tier List`.
-  * **Centralized Configuration:** All numerical tuning parameters for the tier list have been moved to `config.py` for easy adjustment:
-      * `COMPOSITE_SCORE_X_WEIGHT`: Weights for Win Rate, Presence, and Consistency.
-      * `TIER_X_THRESHOLD`: Score thresholds for S, A, B, and C tiers.
-  * **Tier List Tuning:** The default tier thresholds have been optimized to create a **stricter competitive distribution** (e.g., S-Tier threshold raised to $0.90$) to better align with professional metagame standards.
+- **Performance:** Implemented a full **vectorization** of the deck **consistency** calculation in `analysis.py`. This significantly speeds up tier list generation by moving from slow Python loops to efficient NumPy operations.
+- **Centralized Configuration:** All numerical tuning parameters for the tier list are now centralized in `config.py`:
+    - **Composite Weights:** Added `COMPOSITE_SCORE_WR_WEIGHT`, `_PRESENCE_WEIGHT`, and `_CONSISTENCY_WEIGHT`.
+    - **Tier Thresholds:** Added `TIER_S_THRESHOLD`, `_A_THRESHOLD`, `_B_THRESHOLD`, and `_C_THRESHOLD`.
+- **Tier List Tuning:** Updated default tier thresholds (e.g., S-Tier from 0.75 to 0.90) to enforce a stricter, more competitively realistic performance distribution.
 
 ### 🐛 Bug Fixes & Refactoring
+- **Code Quality:** Eliminated the "referenced before assignment" linter warning in `analysis.py` by replacing a complex list comprehension with an explicit `for` loop.
+- **Numerical Stability:** Formalized the hardcoded epsilon values (`1e-6`, `1e-9`) into explicit constants (`CONSISTENCY_MEAN_EPSILON`, `CONSISTENCY_STD_EPSILON`) in `config.py`.
+- **Code Hygiene:** Removed the unused local variable `num_gens` from `analysis.py`.
 
-  * **Code Quality:** Eliminated the "referenced before assignment" linter warning in `analysis.py` by replacing a complex walrus-operator list comprehension with a clear, explicit `for` loop for consistency calculation.
-  * **Numerical Stability:** Formalized the hardcoded epsilon values (`1e-6` and `1e-9`) into explicit constants (`CONSISTENCY_MEAN_EPSILON` and `CONSISTENCY_STD_EPSILON`) in `config.py`, making the numerical stability logic transparent and configurable.
-  * **Code Hygiene:** Removed the unused local variable `num_gens` from `analysis.py`.
+### 🧹 Chore & Maintenance
+- **I/O Cleanup:** Updated `.gitignore` or build scripts to manage and exclude excessive `/output/` directories and artifacts created during new simulation runs.
+- **Documentation Hygiene:** Sanitized and refined `CHANGELOG.md` to ensure clarity and remove redundant or conversational language.
+
+-----
+
+## Commit 458ded8 (12th November 2025)
+### refactor(config, analysis): Formalize consistency epsilons and resolve linter warnings
+
+Refactors the tier list generation logic to improve code quality, resolve linter warnings, and formalize ""magic numbers"" into explicit constants.
+
+Key Changes in `analysis.py`:
+- **Fixed scoping warning:** Replaced a complex, warning-prone list comprehension for deck consistency with a clear, explicit `for` loop to ensure correct assignment of the local variable `std_val`.
+- **Removed unused variable:** Eliminated the unused local variable `num_gens`.
+- **Refactored hardcoded values:** Replaced the hardcoded numerical stability values (`1e-6` and `1e-9`) with imported, named constants.
+
+Key Changes in `config.py`:
+- **Added constants:** Introduced `CONSISTENCY_MEAN_EPSILON` (1e-6) and `CONSISTENCY_STD_EPSILON` (1e-9) to promote clarity and centralize configuration for the consistency metric calculation.
 
 -----
 
