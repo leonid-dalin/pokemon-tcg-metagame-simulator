@@ -51,7 +51,7 @@ def plot_metagame_evolution_interactive(
     fig = go.Figure()
     colors = px.colors.qualitative.Bold + px.colors.qualitative.Dark24
     # List to hold all annotations (extinction markers)
-    annotations = []
+    annotations_list = []
 
     for i, idx in enumerate(top_indices):
         deck_name = deck_names[idx]
@@ -71,7 +71,7 @@ def plot_metagame_evolution_interactive(
         )
 
         if extinction_gen is not None and extinction_gen < len(freq_series):
-            annotations.append(
+            annotations_list.append(
                 go.layout.Annotation(
                     x=extinction_gen,
                     y=freq_series[extinction_gen],
@@ -87,7 +87,7 @@ def plot_metagame_evolution_interactive(
             )
 
     fig.update_layout(
-        annotations=annotations,
+        annotations=annotations_list,
         title=dict(text=title, font=dict(size=22, color="#333")),
         xaxis_title="Generation",
         yaxis_title="Metagame Share",
@@ -212,22 +212,21 @@ def plot_matchup_network(
         - Click on a node to focus on it and its direct neighbors.
         - Node size is scaled by the deck's all-time presence (if history is provided).
     """
-    G = nx.DiGraph()
+    graph = nx.DiGraph()
     n = len(deck_names)
-    deck_to_idx = {name: i for i, name in enumerate(deck_names)}
 
     for i in range(n):
         for j in range(n):
             if i == j:
                 continue
             if win_matrix[i, j] > 0.55:
-                G.add_edge(deck_names[i], deck_names[j], weight=win_matrix[i, j])
+                graph.add_edge(deck_names[i], deck_names[j], weight=win_matrix[i, j])
 
-    if len(G.nodes) == 0:
+    if len(graph.nodes) == 0:
         logging.warning("No significant edges to plot.")
         return None
 
-    pos = nx.kamada_kawai_layout(G)
+    pos = nx.kamada_kawai_layout(graph)
 
     # --- Calculate All-Time Presence for Node Sizing ---
     if metagame_history is not None and len(metagame_history) > 0:
@@ -246,7 +245,7 @@ def plot_matchup_network(
     edge_from_nodes = []
     edge_to_nodes = []
 
-    for edge in G.edges(data=True):
+    for edge in graph.edges(data=True):
         x0, y0 = pos[edge[0]]
         x1, y1 = pos[edge[1]]
         edge_x.extend([x0, x1, None])
@@ -267,12 +266,12 @@ def plot_matchup_network(
     )
 
     # --- Create the node trace ---
-    node_x = [pos[node][0] for node in G.nodes()]
-    node_y = [pos[node][1] for node in G.nodes()]
+    node_x = [pos[node][0] for node in graph.nodes()]
+    node_y = [pos[node][1] for node in graph.nodes()]
     # Use all-time presence for sizing
     base_size = 10
     max_presence = max(deck_presence.values()) if deck_presence else 1.0
-    node_size = [base_size + 30 * (deck_presence[node] / max_presence) for node in G.nodes()]
+    node_size = [base_size + 30 * (deck_presence[node] / max_presence) for node in graph.nodes()]
 
     node_trace = go.Scatter(
         x=node_x,
@@ -280,10 +279,10 @@ def plot_matchup_network(
         mode="markers+text",
         hoverinfo="text",
         marker=dict(size=node_size, color="lightblue", line=dict(width=2, color="darkblue")),
-        text=list(G.nodes()),
+        text=list(graph.nodes()),
         textposition="top center",
         textfont=dict(size=10, color="black"),
-        hovertext=[f"{node} (Degree: {G.degree(node)}, Presence: {deck_presence[node]:.2%})" for node in G.nodes()],
+        hovertext=[f"{node} (Degree: {graph.degree(node)}, Presence: {deck_presence[node]:.2%})" for node in graph.nodes()],
         # Assign an ID to the node trace for the callback
         uid="node_trace",
     )

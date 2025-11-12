@@ -330,11 +330,13 @@ def compute_deck_similarity(
 
     if np.any(active_mask) and len(np.where(active_mask)[0]) >= 2:
         active_indices = np.where(active_mask)[0]
-        # Extract win-rate submatrix for active decks only
-        active_win_matrix = win_matrix[np.ix_(active_indices, active_indices)]
         active_deck_names = [deck_names[i] for i in active_indices]
-        # Compute similarity on the active subset
-        active_similarity = cosine_similarity(active_win_matrix)
+
+        # Extract *full* win-rate profiles (all N columns) for active decks only.
+        active_deck_profiles = win_matrix[active_indices, :]
+
+        # Compute similarity on the active subset's full profiles
+        active_similarity = cosine_similarity(active_deck_profiles)
         np.fill_diagonal(active_similarity, 1.0)
         # Initialize full similarity matrix
         similarity = np.zeros((n, n))
@@ -355,7 +357,7 @@ def compute_deck_similarity(
 
             # Call for side-effect: logs cluster members
             cluster_decks_by_matchup_profile(
-                win_matrix=active_win_matrix,
+                win_matrix=active_deck_profiles,
                 deck_names=active_deck_names,
                 n_clusters=n_clusters,
                 method="kmeans",

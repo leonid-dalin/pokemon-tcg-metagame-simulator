@@ -26,12 +26,11 @@ except ImportError:
 # Local import
 from .config import *
 from .data import safe_normalize
-
+from .simulation_config import SimulationConfig
 
 # ----------------------------
 # Tournament Simulation (Vectorized & Parallel Optimized)
 # ----------------------------
-
 
 def _tournament_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
     """
@@ -219,7 +218,6 @@ def update_replicator_dynamics(
 # ----------------------------
 # Evolutionary Stable State Solver
 # ----------------------------
-
 
 def find_evolutionary_stable_state(
         deck_names: List[str],

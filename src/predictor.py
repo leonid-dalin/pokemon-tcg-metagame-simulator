@@ -189,7 +189,7 @@ def predict_best_decks(
             fallback_free = safe_normalize(fallback_free)
         else:
             # Fallback if pro meta is 0 for all free decks
-            fallback_free = free_mask.astype(float)
+            fallback_free = np.array(free_mask).astype(float)
             fallback_free = safe_normalize(fallback_free)
 
         # Apply bounds and re-normalize the free portion
@@ -216,7 +216,7 @@ def predict_best_decks(
     sos_values = 1.0 - meta_vec
 
     # OMW: Opponent's Match Win Percentage
-    # <--- OPTIMIZATION: Vectorized OMW calculation (removed O(N^2) loop)
+    # Vectorized OMW calculation (removed O(N^2) loop)
     total_weighted_wr = np.sum(meta_vec * expected_wr)
     # (scalar) - (vector) -> (vector of sums for all opponents)
     opponent_wr_sums = total_weighted_wr - (meta_vec * expected_wr)
@@ -240,7 +240,7 @@ def predict_best_decks(
     omw_weight = 0.1  # Slightly penalize high OMW (faced stronger decks)
     undef_weight = 0.4  # Heavily weight Undefeated Prob
 
-    # Note: SoS and OMW are *subtracted* as higher values mean a harder field
+    # Note: SoS and OMW are subtracted as higher values thus mean a harder field
     composite_scores = (
             wr_weight * expected_wr -
             sos_weight * sos_values -

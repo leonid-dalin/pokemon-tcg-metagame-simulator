@@ -6,7 +6,7 @@ import json
 import logging
 import time
 import os
-from typing import cast, Dict, Any, Optional, Literal
+from typing import cast, Dict, Any, Optional, Literal, TextIO, IO
 
 # Local modules
 from .data import (
@@ -168,7 +168,7 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
 
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
-                f,
+                cast(TextIO, f),
                 fieldnames=[
                     "deck",
                     "frequency",
@@ -188,9 +188,9 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
     final_tiers = generate_final_state_tier_list(deck_names, history, win_matrix)
     all_time_tiers = generate_all_time_tier_list(deck_names, history, win_matrix)
     with open(os.path.join(output_dir, "final_tiers.json"), "w", encoding="utf-8") as f:
-        json.dump(final_tiers, f, indent=2)
+        json.dump(final_tiers, cast(TextIO, f), indent=2)
     with open(os.path.join(output_dir, "all_time_tiers.json"), "w", encoding="utf-8") as f:
-        json.dump(all_time_tiers, f, indent=2)
+        json.dump(all_time_tiers, cast(TextIO, f), indent=2)
 
     # Matchup analysis
     cycles = compute_matchup_cycles(win_matrix, deck_names)
@@ -199,6 +199,8 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
     # Create a list indicating if deck is active in the FINAL state
     final_active_mask = [r["is_active"] for r in results]
     similarity = compute_deck_similarity(win_matrix, deck_names, final_active_mask=final_active_mask)
+    with open(os.path.join(output_dir, "deck_similarity.json"), "w", encoding="utf-8") as f:
+        json.dump(similarity.tolist(), cast(TextIO,f), indent=2)
 
     # Plotting
     if not args.no_plot:
@@ -289,7 +291,7 @@ def run_batch_experiments(args: Args):
     # Save batch summary
     summary_path = os.path.join(base_output, "batch_summary.json")
     with open(summary_path, "w", encoding="utf-8") as f:
-        json.dump(results_summary, f, indent=4)
+        json.dump(results_summary, cast(TextIO, f), indent=4)
     logging.info(f"📊 Batch summary saved to {summary_path}")
 
 
