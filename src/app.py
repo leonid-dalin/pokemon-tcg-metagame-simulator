@@ -18,7 +18,7 @@ from src.predictor import (
 from src.data import load_matchup_data
 from src.config import *
 from src.simulation import find_evolutionary_stable_state
-from .simulation_config import SimulationConfig
+from src.simulation_config import SimulationConfig
 
 @st.cache_data
 def get_valid_deck_names() -> List[str]:
@@ -40,7 +40,6 @@ def get_pro_meta() -> np.ndarray:
     """
     Runs the full simulation once and caches the result for "pro" mode.
     """
-    st.toast("Running first-time 'Pro' meta simulation... (this may take a moment)")
     input_path = os.path.join(INPUT_DIR, "ea_input.json")
     deck_names, win_matrix, matchup_details = load_matchup_data(input_path, MIN_GAMES)
 
@@ -70,7 +69,6 @@ def get_pro_meta() -> np.ndarray:
         config=sim_config,
     )
     fallback_meta = np.array([r["frequency"] for r in results])
-    st.toast("'Pro' meta simulation complete and cached!")
     return fallback_meta
 
 

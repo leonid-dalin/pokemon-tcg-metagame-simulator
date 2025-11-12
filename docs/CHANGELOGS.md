@@ -1,4 +1,4 @@
-## Latest Commit
+## Commit 8e978979d4f13fe9c9c774f14cb10132868e1ab2
 ### fix(analysis, cli, plotting): Resolve stability issues, serialization errors, and improve core logic
 
 This commit implements a series of fixes across the core simulation files to address static analysis warnings, a runtime serialization error, and a critical issue (kinda) in how strategic deck similarity is calculated.
