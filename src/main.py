@@ -6,7 +6,7 @@ import json
 import logging
 import time
 import os
-from typing import cast, Dict, Any, Optional, Literal, TextIO, IO
+from typing import cast, Dict, Any, Optional, Literal, TextIO
 
 # Local modules
 from .data import (
@@ -87,20 +87,21 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
         max_generations=args.gens,
         min_generations=min_generations,
         extinction_threshold=args.extinction_threshold,
-        stability_threshold=STABILITY_THRESHOLD,
-        convergence_window=CONVERGENCE_WINDOW,
-        max_inactive_generations=MAX_INACTIVE_GENERATIONS,
-        use_bayesian_winrates=USE_BAYESIAN_WINRATES,
-        tournament_size=TOURNAMENT_SIZE,
-        num_tournaments_per_gen=NUM_TOURNAMENTS_PER_GEN,
-        num_rounds=NUM_ROUNDS,
-        use_multiproc=USE_MULTIPROC,
+        stability_threshold=args.stability_threshold,
+        convergence_window=args.convergence_window,
+        max_inactive_generations=args.max_inactive_generations,
+        use_bayesian_winrates=args.use_bayesian_winrates,
+        tournament_size=args.tournament_size,
+        num_tournaments_per_gen=args.num_tournaments_per_gen,
+        num_rounds=args.num_rounds,
+        use_multiproc=args.use_multiproc,
         seed=args.seed,
         dynamic_deck_intro_prob=args.intro_prob,
-        mutation_floor=MUTATION_FLOOR,
+        mutation_floor=args.mutation_floor,
         noise_scale=args.noise,
-        selection_pressure=SELECTION_PRESSURE,
+        selection_pressure=args.selection_pressure,
     )
+    logging.debug(f"Simulation Config: {sim_config}")
 
     # Load data
     deck_names, win_matrix, matchup_details = load_matchup_data(args.input, args.min_games)
@@ -123,7 +124,7 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
         deck_names=deck_names,
         win_matrix=win_matrix,
         matchup_details=matchup_details,
-        config=sim_config,  # <--- Pass the new sim_config
+        config=sim_config,
         history_file_path=history_file_path,
     )
     sim_duration = time.time() - start_time

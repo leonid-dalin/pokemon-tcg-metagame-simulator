@@ -5,6 +5,10 @@ from typing import Literal
 
 @dataclass
 class SimulationConfig:
+    """
+    Defines the complete set of parameters required to run a single metagame
+    evolution simulation experiment.
+    """
     mode: Literal["replicator", "tournament"]
     max_generations: int
     min_generations: int

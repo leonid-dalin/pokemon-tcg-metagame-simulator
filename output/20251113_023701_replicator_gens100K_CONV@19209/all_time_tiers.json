@@ -1,0 +1,228 @@
+{
+  "S": [
+    {
+      "deck": "Gholdengo Lunatone",
+      "composite_score": 0.9074074074074074,
+      "win_rate": 0.5062720929741297,
+      "presence": 0.16385217051305412,
+      "consistency": 0.4532094804524755,
+      "meta_impact": 0.04163359787100285
+    },
+    {
+      "deck": "Joltik Box",
+      "composite_score": 0.9074074074074074,
+      "win_rate": 0.5049497341956132,
+      "presence": 0.3633778111085374,
+      "consistency": 0.7615202335095921,
+      "meta_impact": 0.14054056423554098
+    }
+  ],
+  "A": [
+    {
+      "deck": "Crustle",
+      "composite_score": 0.8333333333333333,
+      "win_rate": 0.5288966543254365,
+      "presence": 0.03883739882730326,
+      "consistency": 0.20545209816053964,
+      "meta_impact": 0.006963846957245958
+    },
+    {
+      "deck": "Kangaskhan Bouffalant",
+      "composite_score": 0.8222222222222222,
+      "win_rate": 0.557975649734816,
+      "presence": 0.01327678867800207,
+      "consistency": 0.12084563941722859,
+      "meta_impact": 0.0021780225740595004
+    },
+    {
+      "deck": "Conkeldurr",
+      "composite_score": 0.7962962962962963,
+      "win_rate": 0.5022225308231217,
+      "presence": 0.049318516779987394,
+      "consistency": 0.2334007610061557,
+      "meta_impact": 0.008794246462360768
+    },
+    {
+      "deck": "Ethan's Typhlosion",
+      "composite_score": 0.7777777777777777,
+      "win_rate": 0.5429567049913934,
+      "presence": 0.012341155691607878,
+      "consistency": 0.11922180294265126,
+      "meta_impact": 0.0019645890749325607
+    },
+    {
+      "deck": "Gardevoir",
+      "composite_score": 0.7592592592592592,
+      "win_rate": 0.4895396621951337,
+      "presence": 0.04538760442825084,
+      "consistency": 0.22247764234858827,
+      "meta_impact": 0.007748169852585282
+    },
+    {
+      "deck": "Gardevoir Jellicent",
+      "composite_score": 0.7407407407407407,
+      "win_rate": 0.4756064275908191,
+      "presence": 0.0942580930936618,
+      "consistency": 0.3296022800735739,
+      "meta_impact": 0.018593524527335023
+    },
+    {
+      "deck": "Cynthia's Garchomp",
+      "composite_score": 0.7111111111111111,
+      "win_rate": 0.5064042537696619,
+      "presence": 0.00977430406632455,
+      "consistency": 0.11058624977840152,
+      "meta_impact": 0.00142996247918248
+    }
+  ],
+  "B": [
+    {
+      "deck": "Grimmsnarl Froslass",
+      "composite_score": 0.6481481481481481,
+      "win_rate": 0.4492503268054872,
+      "presence": 0.09650899498747541,
+      "consistency": 0.3363018899248019,
+      "meta_impact": 0.018174294040022444
+    },
+    {
+      "deck": "Mega Absol Box",
+      "composite_score": 0.6481481481481481,
+      "win_rate": 0.45869370794529124,
+      "presence": 0.05969020278166998,
+      "consistency": 0.25566328685947076,
+      "meta_impact": 0.010082285115412898
+    },
+    {
+      "deck": "Flareon Noctowl",
+      "composite_score": 0.6222222222222222,
+      "win_rate": 0.48687698422059444,
+      "presence": 0.01065492616569535,
+      "consistency": 0.10689654266746373,
+      "meta_impact": 0.0014892505739523497
+    },
+    {
+      "deck": "Tera Box",
+      "composite_score": 0.5925925925925926,
+      "win_rate": 0.4591215666829417,
+      "presence": 0.028349534433152225,
+      "consistency": 0.17396323826263355,
+      "meta_impact": 0.004186660282754478
+    },
+    {
+      "deck": "Ceruledge",
+      "composite_score": 0.5074074074074074,
+      "win_rate": 0.46754339795734695,
+      "presence": 5.400808414688938e-05,
+      "consistency": 0.05774431984543263,
+      "meta_impact": 6.659809416283308e-06
+    }
+  ],
+  "C": [
+    {
+      "deck": "Alakazam Dudunsparce",
+      "composite_score": 0.4814814814814814,
+      "win_rate": 0.4830202658942504,
+      "presence": 4.5143887733845565e-05,
+      "consistency": 0.03980556097452253,
+      "meta_impact": 5.574257525331228e-06
+    },
+    {
+      "deck": "Gholdengo Joltik Box",
+      "composite_score": 0.45185185185185184,
+      "win_rate": 0.46417162107194904,
+      "presence": 4.688870007008105e-05,
+      "consistency": 0.04925161538418197,
+      "meta_impact": 5.656096875029041e-06
+    },
+    {
+      "deck": "Lucario Hariyama",
+      "composite_score": 0.37037037037037035,
+      "win_rate": 0.47934190935478366,
+      "presence": 2.870493862041294e-05,
+      "consistency": 0.03444641449586263,
+      "meta_impact": 3.4846731914112554e-06
+    },
+    {
+      "deck": "Dragapult Dusknoir",
+      "composite_score": 0.36666666666666664,
+      "win_rate": 0.43353063032297623,
+      "presence": 6.060997871855532e-05,
+      "consistency": 0.04474459727662941,
+      "meta_impact": 6.7752593314397805e-06
+    },
+    {
+      "deck": "Ho-Oh Armarouge",
+      "composite_score": 0.34444444444444444,
+      "win_rate": 0.3898540937273491,
+      "presence": 0.013846574263813157,
+      "consistency": 0.12010999929260323,
+      "meta_impact": 0.0015850881806665263
+    },
+    {
+      "deck": "Pidgeot Control",
+      "composite_score": 0.3333333333333333,
+      "win_rate": 0.44095026737132587,
+      "presence": 4.237826129265591e-05,
+      "consistency": 0.053510793505503224,
+      "meta_impact": 4.8923755816322646e-06
+    }
+  ],
+  "D": [
+    {
+      "deck": "Mega Venusaur",
+      "composite_score": 0.24074074074074073,
+      "win_rate": 0.45100212274063406,
+      "presence": 2.4768094281258396e-05,
+      "consistency": 0.032874733440159294,
+      "meta_impact": 2.8212312912783095e-06
+    },
+    {
+      "deck": "Charizard Pidgeot",
+      "composite_score": 0.2222222222222222,
+      "win_rate": 0.4228680529238055,
+      "presence": 4.546006999924486e-05,
+      "consistency": 0.042917335852689684,
+      "meta_impact": 4.940991826603406e-06
+    },
+    {
+      "deck": "Dragapult Charizard",
+      "composite_score": 0.2111111111111111,
+      "win_rate": 0.42403924360452305,
+      "presence": 3.4233277072515467e-05,
+      "consistency": 0.03849779765061366,
+      "meta_impact": 3.7024257755545113e-06
+    },
+    {
+      "deck": "Festival Lead",
+      "composite_score": 0.19629629629629627,
+      "win_rate": 0.4106950946075971,
+      "presence": 5.157666193189323e-05,
+      "consistency": 0.03817473163395104,
+      "meta_impact": 5.399577076415823e-06
+    },
+    {
+      "deck": "Slowking",
+      "composite_score": 0.19259259259259257,
+      "win_rate": 0.42327004065364765,
+      "presence": 4.006048541700206e-05,
+      "consistency": 0.039765475116166016,
+      "meta_impact": 4.334371063361194e-06
+    },
+    {
+      "deck": "Raging Bolt Ogerpon",
+      "composite_score": 0.16666666666666663,
+      "win_rate": 0.42387642449097046,
+      "presence": 3.08619434414742e-05,
+      "consistency": 0.035454366447332596,
+      "meta_impact": 3.318845988964346e-06
+    },
+    {
+      "deck": "N's Zoroark",
+      "composite_score": 0.14814814814814814,
+      "win_rate": 0.4299336782451808,
+      "presence": 2.1229798739140563e-05,
+      "consistency": 0.03238405990092212,
+      "meta_impact": 2.3032573232177335e-06
+    }
+  ]
+}
