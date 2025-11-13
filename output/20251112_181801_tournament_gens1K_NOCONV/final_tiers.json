@@ -1,0 +1,53 @@
+{
+  "S": [],
+  "A": [
+    {
+      "deck": "Flareon Noctowl",
+      "score": 0.8518518518518519,
+      "win_rate": 0.5225745193910728,
+      "presence": 0.23031735694742514
+    }
+  ],
+  "B": [
+    {
+      "deck": "Gholdengo Lunatone",
+      "score": 0.8148148148148149,
+      "win_rate": 0.5199546535472876,
+      "presence": 0.16142454599034756
+    }
+  ],
+  "C": [
+    {
+      "deck": "Dragapult Dusknoir",
+      "score": 0.6222222222222222,
+      "win_rate": 0.48433109769721006,
+      "presence": 0.5677323305950461
+    }
+  ],
+  "D": [
+    {
+      "deck": "Raging Bolt Ogerpon",
+      "score": 0.4814814814814815,
+      "win_rate": 0.44248027117773825,
+      "presence": 1.7942670158499232e-06
+    },
+    {
+      "deck": "Conkeldurr",
+      "score": 0.4518518518518519,
+      "win_rate": 0.43115483809521127,
+      "presence": 5.035060063588904e-06
+    },
+    {
+      "deck": "Alakazam Dudunsparce",
+      "score": 0.4,
+      "win_rate": 0.38808545132870953,
+      "presence": 0.040515336510864294
+    },
+    {
+      "deck": "Festival Lead",
+      "score": 0.37777777777777777,
+      "win_rate": 0.4118786424190776,
+      "presence": 1.2429707851094007e-06
+    }
+  ]
+}

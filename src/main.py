@@ -28,7 +28,7 @@ from .plotting import (
     plot_matchup_network,
 )
 from .config import *
-from .cli_args import *
+from .cli_args import parse_args, Args
 from .predictor import predict_best_decks
 from .simulation_config import SimulationConfig
 
