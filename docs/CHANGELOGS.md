@@ -1,4 +1,20 @@
-## Latest Commit
+## Latest Commit (Mar 18, 2026)
+### refactor(scraper): overhaul data extraction pipeline, enforce precision, and improve hygiene
+
+Another overhaul to the `scraper.py` utility to ensure the data fed into the simulation engine is highly accurate, properly formatted, and strictly typed. 
+
+### 🚀 Feature & Performance Improvements
+- **Strict Naming Conventions:** The scraper now uses _slightly faster_ string splitting to extract metadata directly from the `Archetype - Standard - Website` file naming format.
+- **Enhanced Mathematical Precision:** Win rates exported to `ea_input.json` and CSVs are now locked to a 4-decimal precision (`.4f`) from (`.2f`). 
+
+### 🐛 Bug Fixes & Data Hygiene
+- **HTML Fallback Fix:** If a file is misnamed, the scraper now successfully falls back to extracting both the deck name and the exact format directly from Limitless's HTML infobox tags.
+- **Rogue Data Exclusion:** Hard-banned the generic **"Other"** archetype from being processed. This prevents aggregated, non-cohesive rogue decks from artificially skewing the K-Means clustering and Rock-Paper-Scissors cycle detection.
+- **Architectural Alignment:** Removed premature data filtering from the scraper. The responsibility of filtering out decks with low match counts is now correctly delegated to the central `data.py` pipeline.
+
+-----
+
+## Commit 48fa2c3 (Nov 12, 2025)
 ### feat(analysis, config, docs): Vectorize tier list, centralize constants, and perform repository cleanup
 
 Improves the metagame analysis pipeline by optimizing performance, ensuring full configuration transparency, and performing necessary repository maintenance.
@@ -21,7 +37,7 @@ Improves the metagame analysis pipeline by optimizing performance, ensuring full
 
 -----
 
-## Commit 458ded8 (12th November 2025)
+## Commit 458ded8 (Nov 12, 2025)
 ### refactor(config, analysis): Formalize consistency epsilons and resolve linter warnings
 
 Refactors the tier list generation logic to improve code quality, resolve linter warnings, and formalize ""magic numbers"" into explicit constants.
@@ -36,7 +52,7 @@ Key Changes in `config.py`:
 
 -----
 
-## Commit 8e97897 (12th November 2025)
+## Commit 8e97897 (Nov 12, 2025)
 ### fix(analysis, cli, plotting): Resolve stability issues, serialization errors, and improve core logic
 
 This commit implements a series of fixes across the core simulation files to address static analysis warnings, a runtime serialization error, and a critical issue (kinda) in how strategic deck similarity is calculated.
@@ -77,7 +93,7 @@ Fixes:
 
 -----
 
-## Commit a727312 (11th November 2025)
+## Commit a727312 (Nov 11, 2025)
 ### refactor(core): Full-stack optimization, caching, and architectural streamlining
 
 This is a major squashed commit that introduces significant performance

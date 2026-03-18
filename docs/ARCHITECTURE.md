@@ -101,14 +101,16 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 
 ### `scraper.py`
 
-**Purpose:** A utility script to scrape matchup data from HTML files (e.g., from Limitless TCG) and convert it into the required JSON format (`ea_input.json`).
+**Purpose:** A utility script to scrape and aggregate matchup data from HTML files (specifically from Limitless TCG) and convert it into the required JSON format (`ea_input.json`). It enforces strict data hygiene before passing the matrix to the core simulation engine.
 
 **Key Functions:**
 
-* `normalize_archetype(name: str) -> str`: Normalizes archetype names for consistent matching.
-* `scrape_matchup_data(file_path: str, ..._ -> List[Dict]`: Scrapes the matchup table from an HTML file.
-* `build_complete_matchup_matrix(all_matchup_data: List[Dict]) -> Dict`: Builds a complete matchup matrix from the scraped data, filtering out archetypes with insufficient total matches.
-* `main()`: The main entry point for the scraper.
+* `normalize_archetype(name: str) -> str`: Normalizes archetype names using fast string replacement for consistent matrix mapping.
+* `extract_deck_info_from_filename(filename: str) -> Tuple[str, str]`: Strictly parses metadata relying on the required `Archetype - Format - Website` file naming convention.
+* `get_deck_archetype(file_path: str, filename: str) -> Tuple[str, str]`: Orchestrates metadata extraction, falling back to precise HTML `<div class="format">` scraping if the filename does not match conventions.
+* `scrape_matchup_data(file_path: str, ...) -> List[Dict[str, Any]]`: Scrapes the matchup table from an HTML file. **Crucially enforces data hygiene by explicitly ignoring the non-cohesive `"Other"` archetype** to protect downstream clustering accuracy.
+* `build_complete_matchup_matrix(all_matchup_data: List[Dict]) -> Dict`: Aggregates scraped data into a complete, mirrored matchup matrix.
+* `save_matrix_to_csv(...) / save_to_csv(...)`: Exports the aggregated data, actively enforcing a **4-decimal (`.4f`) float precision** to preserve mathematical sensitivity for the Replicator Dynamics calculations.
 
 ---
 
@@ -160,4 +162,4 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 
 **Purpose:** Lists the Python package dependencies required to run the project (e.g., `numpy`, `scipy`, `scikit-learn`, `plotly`, `tqdm`, `beautifulsoup4`, `streamlit`).
 
-Last Edited: 11.11.2025, 22:00 UTC+2
+Last Edited: 18.03.2026, 23:00 UTC+2
