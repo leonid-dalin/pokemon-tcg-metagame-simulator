@@ -127,16 +127,18 @@ def load_matchup_data(
 def cluster_decks_by_matchup_profile(
     win_matrix: np.ndarray,
     deck_names: List[str],
-    n_clusters: int = 5,
+    n_clusters: int | str = "auto",
     method: str = "kmeans",
 ) -> Dict[str, Any]:
     """Group decks into clusters based on similarity of their matchup vectors.
-    Useful for identifying “archetype families” — e.g., all control decks, all aggro decks.
+    Uses StandardScaler to normalize profile variance and Silhouette Score to find optimal K.
+    
     Args:
         win_matrix (np.ndarray): n x n win-rate matrix.
         deck_names (List[str]): List of deck names.
-        n_clusters (int): Number of clusters to form.
+        n_clusters (int | str): Number of clusters. Use "auto" for dynamic Silhouette optimization.
         method (str): Clustering algorithm — "kmeans" or "hierarchical".
+        
     Returns:
         Dict containing:
             - "labels": Cluster assignment per deck.
@@ -145,24 +147,59 @@ def cluster_decks_by_matchup_profile(
     """
     try:
         from sklearn.cluster import KMeans, AgglomerativeClustering
-        from sklearn.metrics import pairwise_distances
+        from sklearn.metrics import pairwise_distances, silhouette_score
+        from sklearn.preprocessing import StandardScaler
     except ImportError:
         logging.warning("⚠️  scikit-learn not installed. Clustering unavailable.")
         return {"labels": [0] * len(deck_names), "centroids": None, "distances": None}
 
     # Use 1D win profiles as features (each deck = vector of win rates vs others)
     X = win_matrix.copy()
-    # Compute distance matrix (cosine or Euclidean)
-    distances = pairwise_distances(X, metric="euclidean")
+    
+    # Scale features so archetype "shape" matters more than raw win rate magnitude
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # Compute distance matrix on scaled data
+    distances = pairwise_distances(X_scaled, metric="euclidean")
+
+    n_samples = len(deck_names)
+    max_possible_k = min(6, n_samples - 1) if n_samples > 2 else 2
 
     if method == "kmeans":
-        # Explicitly specify n_init as int (or 'auto')
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-        labels = kmeans.fit_predict(X)
-        centroids = kmeans.cluster_centers_
+        best_k = 5 if isinstance(n_clusters, str) else n_clusters
+        best_labels = None
+        best_centroids = None
+
+        # --- Dynamic Silhouette Optimization ---
+        if n_clusters == "auto" and n_samples > 2:
+            best_score = -1.0
+            for k in range(2, max_possible_k + 1):
+                kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+                labels = kmeans.fit_predict(X_scaled)
+                score = silhouette_score(X_scaled, labels)
+                
+                if score > best_score:
+                    best_score = score
+                    best_k = k
+                    best_labels = labels
+                    best_centroids = kmeans.cluster_centers_
+                    
+            logging.info(f"🔍 Silhouette Optimization selected k={best_k} (Score: {best_score:.3f})")
+        else:
+            # Fallback to static K if specified
+            kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
+            best_labels = kmeans.fit_predict(X_scaled)
+            best_centroids = kmeans.cluster_centers_
+
+        labels = best_labels
+        centroids = best_centroids
+        final_k = best_k
+
     elif method == "hierarchical":
-        hc = AgglomerativeClustering(n_clusters=n_clusters, linkage="ward")
-        labels = hc.fit_predict(X)
+        final_k = 5 if n_clusters == "auto" else int(n_clusters)
+        hc = AgglomerativeClustering(n_clusters=final_k, linkage="ward")
+        labels = hc.fit_predict(X_scaled)
         centroids = None
     else:
         raise ValueError(f"Unsupported clustering method: {method}")
@@ -172,14 +209,15 @@ def cluster_decks_by_matchup_profile(
         "centroids": centroids.tolist() if centroids is not None else None,
         "distances": distances.tolist(),
         "method": method,
-        "n_clusters": n_clusters,
+        "n_clusters": final_k,
     }
+    
     # Log cluster summaries
-    for i in range(n_clusters):
+    for i in range(final_k):
         members = [deck_names[j] for j in range(len(labels)) if labels[j] == i]
         logging.info(f"🧩 Cluster {i}: {len(members)} decks — {members}")
+        
     return cluster_map
-
 
 # ----------------------------
 # Meta Dominance Diagnostic

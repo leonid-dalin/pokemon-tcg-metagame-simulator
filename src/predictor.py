@@ -79,7 +79,7 @@ def resolve_meta_constraints(
     user_spec: UserMetaSpec, 
     deck_to_idx: Dict[str, int]
 ) -> np.ndarray:
-    """Iterative water-filling algorithm to strictly enforce user Min/Max/Exact bounds."""
+    """Vectorized iterative water-filling algorithm to strictly enforce user Min/Max/Exact bounds."""
     n = len(baseline_meta)
     final_meta = np.zeros(n)
     
@@ -87,7 +87,7 @@ def resolve_meta_constraints(
     max_bounds = np.ones(n)
     is_locked = np.zeros(n, dtype=bool)
 
-    # 1. Parse Specs
+    # 1. Parse Specs (O(N) - Fast enough to keep as a simple loop)
     for deck, spec in user_spec.items():
         if deck not in deck_to_idx:
             continue
@@ -108,49 +108,52 @@ def resolve_meta_constraints(
                 min_bounds[i] = float(spec["min"])
                 max_bounds[i] = float(spec["max"])
 
-    # 2. Iterative Water-Filling
+    # 2. Pure Vectorized Water-Filling
     max_iterations = 100
-    iterations = 0
     
-    while iterations < max_iterations:
-        iterations += 1
+    for iterations in range(max_iterations):
         remaining_mass = 1.0 - np.sum(final_meta[is_locked])
         
         if remaining_mass <= 1e-8:
-            break # No mass left to distribute
+            break
             
-        unlocked_indices = np.where(~is_locked)[0]
-        if len(unlocked_indices) == 0:
+        unlocked_mask = ~is_locked
+        if not np.any(unlocked_mask):
             break
             
         # Proportional baseline for unlocked decks
-        unlocked_baseline = baseline_meta[unlocked_indices]
-        if np.sum(unlocked_baseline) == 0:
-            unlocked_baseline = np.ones(len(unlocked_indices))
+        unlocked_baseline = baseline_meta[unlocked_mask]
+        baseline_sum = np.sum(unlocked_baseline)
+        
+        if baseline_sum == 0:
+            unlocked_baseline = np.ones(np.sum(unlocked_mask))
+            baseline_sum = np.sum(unlocked_baseline)
             
-        unlocked_baseline = safe_normalize(unlocked_baseline)
-        proposed_alloc = unlocked_baseline * remaining_mass
+        proposed_alloc = (unlocked_baseline / baseline_sum) * remaining_mass
         
-        bounds_violated = False
+        # Vectorized bounds checking
+        over_mask = proposed_alloc > max_bounds[unlocked_mask]
+        under_mask = proposed_alloc < min_bounds[unlocked_mask]
         
-        for idx, alloc in zip(unlocked_indices, proposed_alloc):
-            if alloc > max_bounds[idx]:
-                final_meta[idx] = max_bounds[idx]
-                is_locked[idx] = True
-                bounds_violated = True
-            elif alloc < min_bounds[idx]:
-                final_meta[idx] = min_bounds[idx]
-                is_locked[idx] = True
-                bounds_violated = True
-            else:
-                final_meta[idx] = alloc
-                
-        if not bounds_violated:
-            break # All unlocked decks fit within their bounds
+        if not (np.any(over_mask) or np.any(under_mask)):
+            final_meta[unlocked_mask] = proposed_alloc
+            break # All unlocked decks fit beautifully
+            
+        # Map the local unlocked masks back to global indices to apply locks
+        unlocked_indices = np.where(unlocked_mask)[0]
+        
+        over_global = unlocked_indices[over_mask]
+        under_global = unlocked_indices[under_mask]
+        
+        # Apply the bounds and lock them
+        final_meta[over_global] = max_bounds[over_global]
+        is_locked[over_global] = True
+        
+        final_meta[under_global] = min_bounds[under_global]
+        is_locked[under_global] = True
 
-    # Log a warning if we somehow hit the ceiling
-    if iterations == max_iterations:
-        print("⚠️ Warning: Water-filling algorithm hit max iterations. Precision loss likely.")
+    if iterations == max_iterations - 1:
+        print("⚠️ Warning: Vectorized water-filling hit max iterations. Precision loss likely.")
 
     return safe_normalize(final_meta)
 

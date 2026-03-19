@@ -21,4 +21,4 @@ class SimulationConfig:
     mutation_floor: float
     noise_scale: float
     selection_pressure: float
-    tournament_style: Literal["pure_swiss", "championship_series"] = "pure_swiss" # <--- Added
+    tournament_style: Literal["pure_swiss", "championship_series"] = "pure_swiss"

@@ -114,7 +114,7 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
 
     # Clustering
     if args.cluster:
-        cluster_decks_by_matchup_profile(win_matrix, deck_names, n_clusters=5)
+        cluster_decks_by_matchup_profile(win_matrix, deck_names, n_clusters="auto")
 
     history_file_path = os.path.join(base_output_dir, "metagame_history_full.csv")
 

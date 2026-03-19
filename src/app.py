@@ -73,37 +73,41 @@ def calculate_ultimate_score(res: Dict[str, Any], mc_res: Dict[str, Any], d2_rou
         return res
     
     wrs = np.array([res["metrics_per_deck"][d]["expected_win_rate"] for d in active_decks])
-    day2s = np.array([mc_res.get(d, {}).get("day2_conversion", 0) for d in active_decks])
-    top8s = np.array([mc_res.get(d, {}).get("top_cut_conversion", 0) for d in active_decks])
-    wins = np.array([mc_res.get(d, {}).get("win_probability", 0) for d in active_decks])
+    meta_shares = np.array([res["metrics_per_deck"][d]["meta_share"] for d in active_decks])
+    
+    # Raw individual probabilities
+    raw_day2s = np.array([mc_res.get(d, {}).get("day2_conversion", 0) for d in active_decks])
+    raw_top8s = np.array([mc_res.get(d, {}).get("top_cut_conversion", 0) for d in active_decks])
+    raw_wins = np.array([mc_res.get(d, {}).get("win_probability", 0) for d in active_decks])
 
-    def min_max_norm(arr):
-        arr_min, arr_max = np.min(arr), np.max(arr)
-        if arr_max > arr_min:
-            return (arr - arr_min) / (arr_max - arr_min)
-        return np.full_like(arr, 0.5)
+    def z_score(arr):
+        std = np.std(arr)
+        return (arr - np.mean(arr)) / std if std > 0 else np.zeros_like(arr)
 
-    norm_wrs = min_max_norm(wrs)
-    norm_day2s = min_max_norm(day2s)
-    norm_top8s = min_max_norm(top8s)
-    norm_wins = min_max_norm(wins)
+    z_wrs = z_score(wrs)
 
-    if d2_rounds > 0 and top_cut > 0:
-        raw_composite = 0.40 * norm_wrs + 0.30 * norm_day2s + 0.20 * norm_top8s + 0.10 * norm_wins
-    elif top_cut > 0:
-        raw_composite = 0.50 * norm_wrs + 0.35 * norm_top8s + 0.15 * norm_wins
-    else:
-        raw_composite = norm_wrs
-        
-    final_scores = min_max_norm(raw_composite) * 100.0
+    def compute_final_score(z_d2, z_t8, z_w):
+        if d2_rounds > 0 and top_cut > 0:
+            raw_z = 0.20 * z_wrs + 0.25 * z_d2 + 0.25 * z_t8 + 0.30 * z_w
+        elif top_cut > 0:
+            raw_z = 0.30 * z_wrs + 0.30 * z_t8 + 0.40 * z_w
+        else:
+            raw_z = z_wrs
+        return (np.tanh(raw_z) + 1.0) / 2.0 * 100.0
+
+    # 1. Player POV (Individual EV)
+    scores_player = compute_final_score(z_score(raw_day2s), z_score(raw_top8s), z_score(raw_wins))
+    
+    # 2. Archetype POV (Macro Impact)
+    scores_archetype = compute_final_score(
+        z_score(raw_day2s * meta_shares), 
+        z_score(raw_top8s * meta_shares), 
+        z_score(raw_wins * meta_shares)
+    )
     
     for idx, d in enumerate(active_decks):
-        res["metrics_per_deck"][d]["composite_score"] = float(final_scores[idx])
-        
-    all_decks_sorted = sorted(active_decks, key=lambda d: res["metrics_per_deck"][d]["composite_score"], reverse=True)
-    
-    res["recommendations"] = [{"deck": d, **res["metrics_per_deck"][d]} for d in all_decks_sorted]
-    res["avoid"] = [{"deck": d, **res["metrics_per_deck"][d]} for d in all_decks_sorted[::-1]]
+        res["metrics_per_deck"][d]["score_player"] = float(scores_player[idx])
+        res["metrics_per_deck"][d]["score_archetype"] = float(scores_archetype[idx])
     
     return res
 
@@ -141,7 +145,7 @@ def main():
 
     # ==========================================
     # SIDEBAR: TOURNAMENT & ENGINE SETTINGS
-    # ==========================================
+    # ==========================================    
     with st.sidebar:
         st.header("🏟️ Tournament Settings")
         with st.container(border=True):
@@ -216,7 +220,7 @@ def main():
             target_col = constraint_cols[idx % 2]
             with target_col:
                 with st.container(border=True):
-                    cols = st.columns([3, 2, 3, 0.5])
+                    cols = st.columns([3, 2, 3, 0.8])
                     with cols[0]:
                         available = [d for d in deck_names if d not in seen_decks or d == row.get("deck")]
                         if not available: break
@@ -273,7 +277,12 @@ def main():
                     progress_callback=mc_progress_callback, use_tie_convergence=use_tie_convergence, global_tie_rate=global_tie_rate
                 )
                 
-                res = calculate_ultimate_score(res, mc_res, d2_rounds, top_cut)
+                res = calculate_ultimate_score(
+                    res, 
+                    mc_res, 
+                    d2_rounds, 
+                    top_cut, 
+                )
                 status.update(label="✅ Simulation Complete!", state="complete", expanded=False)
                 
                 st.session_state.prediction_result = res
@@ -291,25 +300,34 @@ def main():
         full_deck_names, full_win_matrix = load_full_win_matrix()
         deck_to_idx = {name: i for i, name in enumerate(full_deck_names)}
 
-        data = []
-        all_decks = sorted(full_deck_names, key=lambda x: res["metrics_per_deck"][x]["composite_score"], reverse=True)
-        active_decks = [d for d in all_decks if res["metrics_per_deck"][d]["meta_share"] >= 0.001]
-        
         st.subheader("📊 Interactive Dashboard & Tournament Odds")
         
+        # The View Toggle sits right above the data
         view_col1, view_col2 = st.columns([1, 3])
         with view_col1:
-            odds_view = st.radio("Odds Perspective", ["Archetype (Macro Field)", "Player (Individual)"], index=0, help="Switch between macro archetype performance (% of the bracket) and individual player odds (If I play this deck...).")
+            odds_view = st.radio(
+                "Odds Perspective", 
+                ["Player (Individual EV)", "Archetype (Macro Impact)"], 
+                index=0, 
+                help="Switch between individual player odds (If I play this deck...) and macro performance (% of the bracket dominating)."
+            )
         
-        for i, deck in enumerate(active_decks, 1):
+        # Dynamically sort based on the chosen view
+        score_key = "score_player" if odds_view == "Player (Individual EV)" else "score_archetype"
+        
+        active_decks = [d for d in full_deck_names if res["metrics_per_deck"][d]["meta_share"] >= 0.001]
+        all_decks_sorted = sorted(active_decks, key=lambda d: res["metrics_per_deck"][d][score_key], reverse=True)
+        
+        data = []
+        for i, deck in enumerate(all_decks_sorted, 1):
             metrics = res["metrics_per_deck"][deck]
             mc_metrics = mc_res.get(deck, {"day2_conversion": 0, "top_cut_conversion": 0, "win_probability": 0, "day2_share": 0, "top_cut_share": 0})
             
             row_data = {
                 "#": i,
-                "Tier": get_tier(metrics["composite_score"]),
+                "Tier": get_tier(metrics[score_key]),
                 "Deck": deck,
-                "Score": metrics["composite_score"],
+                "Score": metrics[score_key],
                 "Type": "🔒 User" if deck in user_meta else "📈 Base",
                 "Exp. WR %": metrics["expected_win_rate"] * 100,
                 "SoS %": metrics["sos"] * 100,
@@ -318,7 +336,7 @@ def main():
             
             meta_share = metrics["meta_share"] * 100
             
-            if odds_view == "Player (Individual)":
+            if odds_view == "Player (Individual EV)":
                 row_data["Meta Share %"] = meta_share
                 if d2_rounds > 0: row_data["Day 2 (Player) %"] = mc_metrics.get("day2_conversion", 0) * 100
                 if top_cut > 0:
@@ -337,16 +355,16 @@ def main():
 
         col_config = {
             "#": st.column_config.NumberColumn(width="small"),
-            "Tier": st.column_config.TextColumn(width="small"),
+            "Tier": st.column_config.TextColumn(width="small", help="S-Tier (>90), A-Tier (>70), B-Tier (>50)."),
             "Deck": st.column_config.TextColumn(width="medium"),
-            "Score": st.column_config.NumberColumn(format="%.2f"),
-            "Type": st.column_config.TextColumn(),
-            "Exp. WR %": st.column_config.NumberColumn(format="%.2f %%"),
-            "SoS %": st.column_config.NumberColumn(format="%.2f %%"),
-            "OMW %": st.column_config.NumberColumn(format="%.2f %%")
+            "Score": st.column_config.NumberColumn(format="%.2f", help="Ultimate Composite Score (0-100)."),
+            "Type": st.column_config.TextColumn(help="Forced by user constraint (🔒) or simulated baseline (📈)."),
+            "Exp. WR %": st.column_config.NumberColumn(format="%.2f %%", help="Expected Win Rate against the entire predicted field."),
+            "SoS %": st.column_config.NumberColumn(format="%.2f %%", help="Strength of Schedule. Lower means an easier run."),
+            "OMW %": st.column_config.NumberColumn(format="%.2f %%", help="Opponent's Match Win %. Primary tiebreaker.")
         }
         
-        if odds_view == "Player (Individual)":
+        if odds_view == "Player (Individual EV)":
             col_config["Meta Share %"] = st.column_config.NumberColumn(format="%.2f %%")
             if d2_rounds > 0: col_config["Day 2 (Player) %"] = st.column_config.NumberColumn(format="%.2f %%")
             if top_cut > 0:
@@ -365,7 +383,7 @@ def main():
 
         # --- Head-to-Head Field Comparator ---
         st.subheader("⚔️ Head-to-Head Field Comparator")
-        st.markdown("Compare your exact **Individual Player Odds** between two decks across the predicted field.")
+        st.markdown("Compare odds and matchups between two decks across the predicted field.")
         
         valid_meta_decks = [d["Deck"] for d in data]
         c1, c2 = st.columns(2)
@@ -378,14 +396,14 @@ def main():
             da_mc, db_mc = mc_res.get(deck_a, {}), mc_res.get(deck_b, {})
 
             metrics_cols = st.columns(5)
-            metrics_cols[0].metric("Ultimate Score", f"{da_metrics['composite_score']:.2f}", f"{da_metrics['composite_score'] - db_metrics['composite_score']:.2f} vs {deck_b}")
+            metrics_cols[0].metric("Ultimate Score", f"{da_metrics[score_key]:.2f}", f"{da_metrics[score_key] - db_metrics[score_key]:.2f} vs {deck_b}")
             metrics_cols[1].metric("Exp. Win Rate", f"{da_metrics['expected_win_rate']:.2%}", f"{da_metrics['expected_win_rate'] - db_metrics['expected_win_rate']:.2%} vs {deck_b}")
             
             if d2_rounds > 0:
-                metrics_cols[2].metric("Individual Day 2 Odds", f"{da_mc.get('day2_conversion',0):.2%}", f"{da_mc.get('day2_conversion',0) - db_mc.get('day2_conversion',0):.2%} vs {deck_b}")
+                metrics_cols[2].metric("Day 2 Odds", f"{da_mc.get('day2_conversion',0):.2%}", f"{da_mc.get('day2_conversion',0) - db_mc.get('day2_conversion',0):.2%} vs {deck_b}")
             if top_cut > 0:
-                metrics_cols[3].metric("Individual Top 8 Odds", f"{da_mc.get('top_cut_conversion',0):.2%}", f"{da_mc.get('top_cut_conversion',0) - db_mc.get('top_cut_conversion',0):.2%} vs {deck_b}")
-                metrics_cols[4].metric("Individual Win Odds", f"{da_mc.get('win_probability',0):.2%}", f"{da_mc.get('win_probability',0) - db_mc.get('win_probability',0):.2%} vs {deck_b}")
+                metrics_cols[3].metric("Top 8 Odds", f"{da_mc.get('top_cut_conversion',0):.2%}", f"{da_mc.get('top_cut_conversion',0) - db_mc.get('top_cut_conversion',0):.2%} vs {deck_b}")
+                metrics_cols[4].metric("Win Odds", f"{da_mc.get('win_probability',0):.2%}", f"{da_mc.get('win_probability',0) - db_mc.get('win_probability',0):.2%} vs {deck_b}")
 
             st.markdown("#### Matchups vs Top Metagame")
             
@@ -394,28 +412,45 @@ def main():
             for field_deck in top_field:
                 opp_name = field_deck["Deck"]
                 opp_idx = deck_to_idx[opp_name]
-                wr_a = full_win_matrix[da_idx, opp_idx]
-                wr_b = full_win_matrix[db_idx, opp_idx]
+                wr_a = full_win_matrix[da_idx, opp_idx] * 100
+                wr_b = full_win_matrix[db_idx, opp_idx] * 100
                 comp_data.append({
                     "Opponent": opp_name,
-                    "Field Share": f"{res['metrics_per_deck'][opp_name]['meta_share']*100:.2f}%",
-                    f"{deck_a} WR": wr_a * 100,
-                    f"{deck_b} WR": wr_b * 100,
+                    "Field Share": res["metrics_per_deck"][opp_name]["meta_share"], # Keep as float for styling, format in config
+                    f"{deck_a} WR": wr_a,
+                    f"{deck_b} WR": wr_b,
                     "Advantage": f"{deck_a}" if wr_a > wr_b else f"{deck_b}" if wr_b > wr_a else "Tie"
                 })
             
             comp_df = pd.DataFrame(comp_data)
+            
+            # --- PANDAS STYLER FOR COLOR CODING ---
+            def highlight_winrates(val):
+                if isinstance(val, (int, float)):
+                    if val >= 55.0:
+                        return 'background-color: rgba(46, 204, 113, 0.2)' # Soft Green
+                    elif val <= 45.0:
+                        return 'background-color: rgba(231, 76, 60, 0.2)' # Soft Red
+                return ''
+
+            styled_comp_df = comp_df.style.map(highlight_winrates, subset=[f"{deck_a} WR", f"{deck_b} WR"])
+
             st.dataframe(
-                comp_df, 
+                styled_comp_df, 
                 width="stretch", 
                 hide_index=True, 
                 column_config={
+                    "Field Share": st.column_config.NumberColumn(format="%.2f %%"),
                     f"{deck_a} WR": st.column_config.NumberColumn(format="%.2f %%"),
                     f"{deck_b} WR": st.column_config.NumberColumn(format="%.2f %%")
                 }
             )
 
         st.divider()
+
+        # Generate Dynamic Recommendations based on active view
+        recommendations = [{"deck": d, **res["metrics_per_deck"][d]} for d in all_decks_sorted]
+        avoids = [{"deck": d, **res["metrics_per_deck"][d]} for d in all_decks_sorted[::-1]]
 
         best_day2 = max(active_decks, key=lambda d: mc_res.get(d, {}).get("day2_conversion", 0)) if d2_rounds > 0 else None
         best_top8 = max(active_decks, key=lambda d: mc_res.get(d, {}).get("top_cut_conversion", 0)) if top_cut > 0 else None
@@ -425,8 +460,8 @@ def main():
         # --- Recommendations & Avoids ---
         col_rec, col_avoid = st.columns(2)
         with col_rec:
-            st.markdown("### 🔥 Top Recommendations")
-            visible_recs = res["recommendations"][:st.session_state.rec_limit]
+            st.markdown(f"### 🔥 Top Recommendations ({odds_view})")
+            visible_recs = recommendations[:st.session_state.rec_limit]
             
             for i, r in enumerate(visible_recs, 1):
                 deck = r["deck"]
@@ -457,12 +492,12 @@ def main():
                         if threats: 
                             st.error(f"⚠️ Weak vs: {', '.join([f'{d} ({wr:.0%})' for d, wr in threats])}")
 
-            if st.session_state.rec_limit < len(res["recommendations"]):
+            if st.session_state.rec_limit < len(recommendations):
                 st.button("⬇️ Load more...", key="btn_load_recs", on_click=load_more_recs, width="stretch")
 
         with col_avoid:
-            st.markdown("### 🚫 Decks to Avoid")
-            visible_avoids = res["avoid"][:st.session_state.avoid_limit]
+            st.markdown(f"### 🚫 Decks to Avoid ({odds_view})")
+            visible_avoids = avoids[:st.session_state.avoid_limit]
             
             for i, r in enumerate(visible_avoids, 1):
                 deck = r["deck"]
@@ -483,7 +518,7 @@ def main():
                         if favorable: 
                             st.success(f"✅ Favored vs: {', '.join([f'{d} ({wr:.0%})' for d, wr in favorable])}")
 
-            if st.session_state.avoid_limit < len(res["avoid"]):
+            if st.session_state.avoid_limit < len(avoids):
                 st.button("⬇️ Load more...", key="btn_load_avoids", on_click=load_more_avoids, width="stretch")
 
 if __name__ == "__main__":

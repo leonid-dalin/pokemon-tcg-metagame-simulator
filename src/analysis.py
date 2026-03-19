@@ -393,14 +393,12 @@ def compute_deck_similarity(
         # --- Perform Clustering on Active Decks Only ---
         try:
             from .data import cluster_decks_by_matchup_profile
-            # Determine number of clusters dynamically (min 2, max 5, or sqrt of active decks)
-            n_clusters = max(2, min(5, int(np.ceil(np.sqrt(len(active_indices))))))
 
             # Call for side-effect: logs cluster members
             cluster_decks_by_matchup_profile(
                 win_matrix=active_deck_profiles,
                 deck_names=active_deck_names,
-                n_clusters=n_clusters,
+                n_clusters="auto",
                 method="kmeans",
             )
         except Exception as e:
@@ -412,13 +410,12 @@ def compute_deck_similarity(
         # --- Perform Clustering on All Decks (fallback) ---
         try:
             from .data import cluster_decks_by_matchup_profile
-            n_clusters = max(2, min(5, int(np.ceil(np.sqrt(n)))))
 
             # Call for side-effect: logs cluster members
             cluster_decks_by_matchup_profile(
                 win_matrix=win_matrix,
                 deck_names=deck_names,
-                n_clusters=n_clusters,
+                n_clusters="auto",
                 method="kmeans",
             )
         except Exception as e:

@@ -1,4 +1,30 @@
 ## Latest Commit `?` (Mar 19, 2026)
+### refactor(core): fix Ultimate Score math, vectorize engine, optimize clustering, and overhaul UI POV
+
+#### **Mathematical & Logic Fixes**
+* **`app.py`:** 
+    * **Fixed Ultimate Score:** Replaced the flawed "Double Min-Max" scoring system with a rigorous **Z-Score Standardization** model mapped to a sigmoid curve (`np.tanh`).
+    * **Dual-Scoring Architecture:** The engine now simultaneously calculates both `score_player` (Individual EV) and `score_archetype` (Macro Metagame Impact). Decks with massive format presence (like Gholdengo) are appropriately rewarded in the Archetype view, while high-converting rogue decks shine in the Player view.
+* **`data.py`:** 
+    * **Clustering Overhaul:** Applied `StandardScaler` to the win-rate matrix before passing it to K-Means. This forces the algorithm to cluster decks by their strategic archetype "shape" rather than raw win-rate magnitude.
+    * **Silhouette Optimization:** `cluster_decks_by_matchup_profile` now accepts `n_clusters="auto"`, dynamically calculating the Silhouette Score to pick the mathematically optimal number of tiers/clusters (between $K=2$ and $K=6$).
+
+#### **Performance Improvements**
+* **`predictor.py`:** 
+    * **Vectorized Constraints:** Completely replaced the inner `for` loops in the `resolve_meta_constraints` water-filling algorithm with pure NumPy boolean masking, massively speeding up constraint resolution for large fields.
+* **`monte_carlo.py`:**
+    * **Boolean Micro-Optimization:** Replaced dual floating-point array comparisons with an inverted boolean mask (`~(p1_wins | p2_wins)`) inside the hottest loop of the Parabolic Tie Convergence engine, saving redundant memory allocations across millions of iterations.
+
+#### **UI/UX Updates & Bug Fixes**
+* **`app.py`:**
+    * **Dynamic Perspective Toggle:** The "Odds Perspective" radio button now sits directly above the dataframe, allowing users to instantly swap the data sorting and Top Recommendations between Individual EV and Macro Impact without re-triggering the Monte Carlo engine.
+    * **Head-to-Head Color Coding:** Integrated a Pandas `Styler` into the matchup comparator to natively highlight favorable ($\ge 55\%$) matchups in green and unfavorable ($\le 45\%$) in red.
+    * **Tooltips Added:** The Streamlit interactive dataframe now utilizes `st.column_config` `help` parameters, injecting native hover-tooltips for all table headers (e.g., explaining SoS, OMW, and composite scores).
+    * **Layout & State Fixes:** Widened the custom constraint columns to prevent the delete button from clipping. Added defensive dictionary key initialization (`score_player`, `score_archetype`) to prevent Streamlit caching `KeyError`s during hot-reloads.
+
+---
+
+## Commit `6100540` (Mar 19, 2026)
 ### feat(sim): implement tournament equity engine with parabolic tie convergence
 
 #### **Core Logic & Engine Updates**

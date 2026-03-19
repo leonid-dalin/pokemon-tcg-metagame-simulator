@@ -46,13 +46,13 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                     tie_probs = global_tie_rate * 4.0 * win_probs * (1.0 - win_probs)
                     rolls = rng.random(len(p1s))
                     
-                    # Shift probabilities to accommodate the tie sliver in the middle
                     p1_win_thresh = win_probs - (tie_probs / 2.0)
                     tie_thresh = p1_win_thresh + tie_probs
                     
+                    # Micro-optimized boolean evaluation
                     p1_wins = rolls < p1_win_thresh
-                    ties = (rolls >= p1_win_thresh) & (rolls < tie_thresh)
                     p2_wins = rolls >= tie_thresh
+                    ties = ~(p1_wins | p2_wins)
                     
                     match_points[p1s[p1_wins]] += 3
                     match_points[p2s[p2_wins]] += 3
