@@ -1,45 +1,46 @@
-# Pokémon TCG Metagame Evolution Simulator
+# Pokémon TCG Metagame Simulator
 
-This project simulates the long-term evolutionary dynamics of a competitive Pokémon Trading Card Game (TCG) metagame. Using principles from evolutionary game theory (specifically, Replicator Dynamics) and agent-based tournament simulations, it predicts the stable equilibrium state (Evolutionary Stable State) where deck frequencies no longer change significantly.
+This project is a high-fidelity analytical suite designed to model both the long-term evolutionary trends and the immediate, stochastic reality of a competitive **Pokémon Trading Card Game (TCG)** metagame.
 
-Given a dataset of win rates between different deck archetypes, the simulator models how the metagame will evolve over thousands of "generations" as players adapt and switch to more successful strategies. It features robust logging, unique output directories for every run, and sophisticated analysis to provide deep strategic insights.
+By leveraging principles from evolutionary game theory (Replicator Dynamics), the simulator predicts the **Evolutionary Stable State (ESS)**, identifying the equilibrium point where deck frequencies become unexploitable as players adapt to performance shifts. Complementing this mathematical core is a robust **Monte Carlo Bracket Engine** that simulates up to 1,000,000 full tournament iterations. This engine accounts for official Play! Pokémon structures (Variant #5), seeded Top Cut pairings, and a parabolic tie convergence model that mirrors the "match-point bleed" of real-world Best-of-Three (BO3) Swiss rounds.
+
+Integrated with an interactive Streamlit dashboard and vectorized Swiss metrics (SoS, OMW), the simulator provides deep strategic insights—ranging from macro-level archetype shifts to your individual statistical odds of surviving the "Day 2 bubble."
 
 ---
 
 ## 🚀 Features
 
-* **Dual Simulation Modes:**
-    * **Replicator Dynamics:** A mathematical model where successful decks grow in frequency proportional to their performance.
-    * **Tournament Simulation:** A granular, stochastic model that simulates Swiss-style tournaments each generation.
-* **Streamlit Web App:** A user-friendly interface (via `app.py`) to get instant deck recommendations, perform "what-if" analysis on a custom-defined meta, and analyze your own deck's performance, all powered by the core simulation engine.
-* **CLI Prediction Mode:** Run quick predictions directly from the command line, specifying a tournament size and a known meta.
-* **Realistic Dynamics:**
-    * **Deck Extinction & Reintroduction:** Poorly performing decks can die out, and extinct decks can be randomly reintroduced, simulating innovation and preventing local optima.
-    * **Noise:** Adds controlled randomness to replicator dynamics to simulate imperfect information or variance.
-* **Advanced Analytics:**
-    * Identifies Rock-Paper-Scissors (RPS) cycles in the matchup matrix.
-    * Generates tier lists based on the **final equilibrium state** and **overall historical impact**.
-    * Computes deck similarity and performs K-Means clustering on active decks to identify strategic archetypes.
-* **Interactive Visualizations:**
-    * Animated plot of deck frequencies over time, with extinction markers.
-    * Interactive heatmap of the win rate matrix, sorted by tier.
-    * Network graph showing significant deck matchups and highlighted RPS cycles.
-* **High Performance & Scalability:**
-    * **App Caching:** "Pro" mode in the Streamlit app is cached, providing instantaneous results after the first run.
-    * **Vectorized Analytics:** Core analysis and prediction logic (e.g., OMW, All-Time Tiers) are fully vectorized with NumPy for maximum speed.
-    * Optional multiprocessing for tournament simulations.
-    * **Memory-Efficient History:** For very long simulations, the full metagame history can be written incrementally to a CSV file to avoid memory overflow.
-* **Robust Data Pipeline:**
-    * **Data Scraper:** Utility to scrape matchup data from HTML files (e.g., from Limitless TCG) into the required JSON format.
-    * **Flexible Starting Conditions:** Easily configurable to start from a uniform distribution or any custom metagame state.
-* **Enhanced Debugging & Experiment Management:**
-    * Comprehensive logging to file and console.
-    * **Unique, Descriptive Output Directories:** Every simulation run creates a uniquely named directory (e.g., `20250912_021459_replicator_gens1000K_CONV@2017410`) for easy tracking and comparison.
-    * Full batch experiment support for parameter sweeping.
+### 🎲 Stochastic Tournament Modeling (Monte Carlo)
+* **High-Fidelity Bracket Engine:** Simulates up to 1,000,000 full tournament iterations (Swiss + Single-Elimination Playoffs) using parallelized NumPy workers.
+* **Official TPCi Variant #5 Support:** Automatically applies official Play! Pokémon round counts, match-point cutoffs (e.g., 16 or 19 points), and seeded Top Cut brackets based on player volume (up to 8,192 players).
+* **BETA: Parabolic Tie Convergence:** Models the ~15% real-world "match-point bleed" using a parabolic probability curve—ensuring that close matchups correctly result in ties (1 point) rather than binary win/loss outcomes.
+
+### 🧬 Metagame Evolution (Replicator Dynamics)
+* **Evolutionary Stability:** Models the "Game Theory" of a metagame using Replicator Dynamics, where successful decks grow in frequency proportional to their meta-weighted performance.
+* **Deck Extinction & Reintroduction:** Simulates innovation and meta-shifts. Poorly performing decks can die out, while "rogue" decks can be randomly reintroduced to challenge the established equilibrium.
+* **Stability Thresholds:** Identifies the **Evolutionary Stable State (ESS)**—the point where the metagame becomes unexploitable.
+
+### 📊 Advanced Competitive Analytics
+* **Composite Scoring:** A 0–100 normalized ranking derived from four pillars: Expected Win Rate, Day 2 Conversion, Top 8 Conversion, and Tournament Win Probability.
+* **Swiss Logic Integration:** Vectorized calculation of **Strength of Schedule (SoS)** and **Opponent's Match Win % (OMW)**.
+* **RPS & Cluster Analysis:** Identifies Rock-Paper-Scissors cycles in the matchup matrix and uses K-Means clustering to group strategically similar archetypes.
+
+### 💻 Professional Streamlit Interface
+* **Interactive Dashboard:** A sortable, centered dashboard with **Perspective Toggles** (switch between Macro Archetype Shares and Individual Player Odds).
+* **Field Comparator:** Side-by-side "A vs. B" tool to weigh a primary recommendation against a personal deck choice across the entire predicted field.
+* **Execution Console:** A live status debugger that provides real-time transparency into the engine's data loading, water-filling, and parallel processing progress.
+* **Limitless HTML Ingestion:** Native parser to extract metagame shares directly from Limitless Labs exports to pre-populate simulation constraints.
 
 ---
 
 ## 📦 Installation
+
+0. **Get [Python 3.12](https://www.python.org/downloads/)**
+    **Windows:**
+    ```PowerShell
+    winget install -e --id Python.Python.3.12
+    ```
+    *Note: Restart your terminal after installation.*
 
 1.  **Clone the repository:**
     ```bash
@@ -48,9 +49,15 @@ Given a dataset of win rates between different deck archetypes, the simulator mo
     ```
 
 2.  **Set up a virtual environment (Recommended):**
+    **Windows:**
     ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    python3.12 -m venv venv
+    venv\Scripts\activate
+    ```
+    **Linux:**
+    ```bash
+    python3.12 -m venv venv
+    source venv/bin/activate
     ```
 
 3.  **Install dependencies:**

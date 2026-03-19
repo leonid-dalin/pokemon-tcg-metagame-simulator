@@ -1,4 +1,40 @@
-## Latest Commit (Mar 18, 2026)
+## Latest Commit `?` (Mar 19, 2026)
+### feat(sim): implement tournament equity engine with parabolic tie convergence
+
+#### **Core Logic & Engine Updates**
+* **`monte_carlo.py` (New File):** * Created a high-performance, parallelized bracket engine.
+    * Implemented **Parabolic Tie Convergence (BETA)** which simulates match-point decay in Swiss rounds based on matchup closeness ($P_{tie} = T_{global} \times 4P(1-P)$).
+    * Added **True Bracket Seeding**; Top Cut now pairs 1v8, 2v7, etc., rather than arbitrary pairings.
+* **`predictor.py`:** * Vectorized the calculation of **Strength of Schedule (SoS)** and **Opponent's Match Win % (OMW)**.
+    * Added **Undefeated Probability** metrics.
+    * *Note:* Heuristic scores are now generated as a baseline, intended to be overwritten by the MC engine in the final UI.
+* **`simulation.py` & `simulation_config.py`:**
+    * Integrated **Official TPCi Variant #5** logic. The simulator now maps player counts to specific Day 1/Day 2 round counts and match-point cutoffs.
+    * Added `tournament_style` toggles (`pure_swiss` vs `championship_series`).
+
+#### **Complete Overhaul of the `app.py`: Logic & Purpose**
+
+#### **Architectural Shift**
+* **Deprecation of Replicator Dynamics:** Removed the `InferenceMode` ("casual" vs "pro") and the `find_evolutionary_stable_state` logic. The app no longer predicts "meta evolution" but instead performs "tournament equity" simulation.
+* **Integration of Monte Carlo Engine:** Introduced `run_monte_carlo_analytics` as the primary engine, simulating thousands of individual tournament brackets (Swiss + Top Cut) to find conversion rates.
+* **Official TPCi Structures:** Replaced static round counts with `get_variant_5_structure`, which automatically sets rounds, match-point cuts, and top-cut sizes based on official Play! Pokémon standards.
+
+#### **Mathematical Refinements**
+* **Ultimate Scoring System:** Replaced the old heuristic "Score" with a Min-Max normalized value (0–100) based on four tournament pillars: Win Rate, Day 2 Conversion, Top 8 Conversion, and Win Probability.
+* **Parabolic Tie Convergence (BETA):** Implemented a new model for BO3 time-outs, allowing match points to "bleed" via ties (1 point) rather than forcing binary win/loss (3/0 points) outcomes.
+* **Vectorized Swiss Metrics:** Shifted calculation of SoS (Strength of Schedule) and OMW (Opponent's Match Win %) to vectorized NumPy operations for speed.
+
+#### **UI/UX & Frontend Overhaul**
+* **Constraint Management:** Constraints moved from a vertical list to a **2-column grid** inside an expander, drastically reducing vertical clutter.
+* **Execution Debugger:** Replaced the simple spinner with an `st.status` **Execution Console**, providing real-time feedback on data loading, water-filling, and parallel core progress.
+* **Interactive Dashboard:** Replaced the "Full Inferred Meta" text list with a sortable, interactive `st.dataframe` featuring **Archetype vs. Player** perspective toggles.
+* **Head-to-Head Comparator:** Added a "A vs. B" tool that allows users to compare a primary deck/archetype against another across the entire predicted field.
+* **Dynamic Recommendation Badges:** Recommendations now include specific paragraph-style tags (e.g., `🏆 Best to Win Event`, `🛡️ Safest Day 2`).
+* **Limitless HTML Ingestion:** Added a native parser to extract metagame shares directly from Limitless Labs HTML exports.
+
+-----
+
+## Commit `2ee8ade` (Mar 18, 2026)
 ### refactor(scraper): overhaul data extraction pipeline, enforce precision, and improve hygiene
 
 Another overhaul to the `scraper.py` utility to ensure the data fed into the simulation engine is highly accurate, properly formatted, and strictly typed. 
@@ -14,7 +50,7 @@ Another overhaul to the `scraper.py` utility to ensure the data fed into the sim
 
 -----
 
-## Commit 48fa2c3 (Nov 12, 2025)
+## Commit `48fa2c3` (Nov 12, 2025)
 ### feat(analysis, config, docs): Vectorize tier list, centralize constants, and perform repository cleanup
 
 Improves the metagame analysis pipeline by optimizing performance, ensuring full configuration transparency, and performing necessary repository maintenance.
@@ -37,7 +73,7 @@ Improves the metagame analysis pipeline by optimizing performance, ensuring full
 
 -----
 
-## Commit 458ded8 (Nov 12, 2025)
+## Commit `458ded8` (Nov 12, 2025)
 ### refactor(config, analysis): Formalize consistency epsilons and resolve linter warnings
 
 Refactors the tier list generation logic to improve code quality, resolve linter warnings, and formalize ""magic numbers"" into explicit constants.
@@ -52,7 +88,7 @@ Key Changes in `config.py`:
 
 -----
 
-## Commit 8e97897 (Nov 12, 2025)
+## Commit `8e97897` (Nov 12, 2025)
 ### fix(analysis, cli, plotting): Resolve stability issues, serialization errors, and improve core logic
 
 This commit implements a series of fixes across the core simulation files to address static analysis warnings, a runtime serialization error, and a critical issue (kinda) in how strategic deck similarity is calculated.
@@ -93,7 +129,7 @@ Fixes:
 
 -----
 
-## Commit a727312 (Nov 11, 2025)
+## Commit `a727312` (Nov 11, 2025)
 ### refactor(core): Full-stack optimization, caching, and architectural streamlining
 
 This is a major squashed commit that introduces significant performance

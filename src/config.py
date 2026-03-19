@@ -21,6 +21,19 @@ TOURNAMENT_SIZE = 32
 NUM_TOURNAMENTS_PER_GEN = 16
 NUM_ROUNDS = 5
 USE_MULTIPROC = True
+_STRUCTURE_THRESHOLDS = (8, 16, 32, 64, 128, 256, 512, 1024, 2048)
+_STRUCTURE_RESULTS = (
+    (3, 99, 0, 0),   # <= 8
+    (4, 99, 0, 2),   # <= 16
+    (6, 99, 0, 4),   # <= 32
+    (7, 99, 0, 6),   # <= 64
+    (7, 13, 2, 8),   # <= 128
+    (8, 16, 2, 8),   # <= 256
+    (8, 16, 3, 8),   # <= 512
+    (8, 16, 4, 8),   # <= 1024
+    (8, 16, 5, 8),   # <= 2048
+    (8, 16, 6, 8),   # > 2048 (Default)
+)
 
 # ----------------------------
 # Simulation Enhancements

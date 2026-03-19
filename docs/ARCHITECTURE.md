@@ -29,16 +29,13 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 * `run_batch_experiments(args: Args)`: Manages running multiple simulation experiments with different configurations.
 * `main()`: The top-level entry point that delegates to single/batch runners or the CLI prediction mode.
 
+---
+
 ### `app.py`
 
-**Purpose:** A standalone Streamlit web application, providing a user-friendly GUI for the `predictor` module.
+<<TO BE REWRITTEN>>
 
-**Key Functions:**
-
-* `get_valid_deck_names() -> List[str]`: Cached function to load deck names for UI selectors.
-* `load_full_win_matrix()`: Cached function to load the win matrix for matchup analysis.
-* `get_pro_meta() -> np.ndarray`: **(Performance Critical)** A cached function that runs the full `find_evolutionary_stable_state` simulation *once* to get the "Pro" metagame. The result is cached for the lifetime of the app server, making "Pro" mode recommendations instantaneous after the first load.
-* `main()`: Renders the Streamlit UI, collects user inputs (tournament size, known meta), and calls `predictor.predict_best_decks` (passing the cached "Pro" meta if selected) to display recommendations, avoidance lists, and performance metrics for the user's chosen deck.
+---
 
 ### `predictor.py`
 
@@ -46,13 +43,11 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 
 **Key Functions:**
 
+* `resolve_meta_constraints` **(Water-Filling Algorithm)**: Strictly enforces user-defined constraints (Exact or Range). It distributes the remaining tournament mass proportionally based on Laplace-smoothed empirical data
 * `swiss_rounds_from_players(n_players: int) -> int`: Calculates the number of Swiss rounds based on `log2(n)`.
-* `predict_best_decks(user_meta_spec: UserMetaSpec, ...) -> PredictionResult`: The main prediction function. It:
-    * Loads all matchup data.
-    * Constructs a plausible metagame vector by blending user-specified "fixed" decks with a "fallback" meta (either "Pro" simulation or "Casual" uniform).
-    * Calculates expected win rate (WR), Strength of Schedule (SoS), and Opponent's Match Win % (OMW) for all decks **using vectorized NumPy operations.**
-    * Calculates an "undefeated probability" and a final "composite score".
-    * Returns a `PredictionResult` dictionary containing recommendations, avoidance lists, and full metrics.
+* `predict_best_decks(user_meta_spec: UserMetaSpec, ...) -> PredictionResult`: <<TO BE REWRITTEN>>
+
+---
 
 ### `data.py`
 
@@ -65,17 +60,35 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 * `cluster_decks_by_matchup_profile(win_matrix: np.ndarray, deck_names: List[str], n_clusters: int, method: Literal["kmeans", "hierarchical"]) -> Dict[str, Any]`: Groups decks into clusters based on the similarity of their matchup vectors using K-Means or Hierarchical clustering.
 * `compute_deck_dominance(win_matrix: np.ndarray, deck_names: List[str]) -> np.ndarray`: Computes and logs the most dominant deck based on its expected win rate against an even field.
 
+---
+
+## `monte_carlo.py`
+
+**Purpose:** High-performance computational core of the `app.py`. It uses parallelized NumPy workers to simulate thousands of complete tournament brackets to determine individual and archetype equity.
+
+**Key Components:**
+
+* `_mc_worker:` The parallelized worker function. It pairs players based on current match points, resolves matches using a Parabolic Tie Convergence model (to simulate Game 3 time-outs), and executes a seeded Top Cut bracket.
+
+* `run_monte_carlo_analytics:` The primary entry point for simulations. It manages the multiprocessing pool, aggregates raw conversion counts, and calculates Win Probability and conversion shares (Day 2 / Top 8)
+
+---
+
 ### `simulation.py`
 
 **Purpose:** Contains the core engine for simulating metagame evolution over generations.
 
 **Key Functions:**
 
+* `get_variant_5_structure`: Implements the official Play! Pokémon Handbook standards. It dynamically maps player volume to specific Day 1/Day 2 round counts and match-point advancement thresholds (e.g., 16 or 19 points).
+* `_championship_series_worker`: Simulates a 2-day event and scales performance into "Win-Equivalents" for the engine.
 * `_tournament_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]`: A helper function for multiprocessing. Simulates a single Swiss-style tournament and returns aggregated wins and matches per deck.
 * `run_tournament_generation(current_freq: np.ndarray, ...) -> np.ndarray`: Runs one generation of stochastic tournaments (using `_tournament_worker` optionally in parallel) and returns the new metagame frequency vector. Uses `selection_pressure` from its config dict.
 * `update_replicator_dynamics(current_freq: np.ndarray, win_matrix: np.ndarray, rng: np.random.Generator, noise_scale: float) -> np.ndarray`: Implements the Replicator Dynamics equation with optional Gaussian noise, using a passed-in RNG for reproducibility.
 * `reintroduce_extinct_decks(current_freq: np.ndarray, ...) -> np.ndarray`: Reintroduces extinct decks with a small probability and ensures a mutation floor for all decks.
-* `find_evolutionary_stable_state(deck_names: List[str], win_matrix: np.ndarray, matchup_details: Dict, config: SimulationConfig, history_file_path: Optional[str]) -> Tuple[List[Dict], List[np.ndarray], List[Optional[int]]]`: The main simulation function. It runs the metagame evolution for a specified number of generations, handling deck extinction, reintroduction, and convergence checking. **Accepts a single `SimulationConfig` object for all parameters.** Can write history incrementally to a file via `history_file_path` to manage memory. Returns the final results, a buffer of the recent history, and extinction generation data.
+* `find_evolutionary_stable_state(deck_names: List[str], win_matrix: np.ndarray, matchup_details: Dict, config: SimulationConfig, history_file_path: Optional[str]) -> Tuple[List[Dict], List[np.ndarray], List[Optional[int]]]`: [[TO BE REWRITTEN]]
+
+---
 
 ### `analysis.py`
 
@@ -89,6 +102,8 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 * `compute_matchup_cycles(win_matrix: np.ndarray, deck_names: List[str], cycle_length: int) -> List[List[str]]`: Identifies unique Rock-Paper-Scissors (RPS) cycles in the matchup graph.
 * `compute_deck_similarity(win_matrix: np.ndarray, deck_names: List[str], final_active_mask: Optional[List[bool]]) -> np.ndarray`: Computes pairwise cosine similarity between decks based on their matchup profiles. Optionally filters out extinct decks and performs K-Means clustering on the active subset.
 
+---
+
 ### `plotting.py`
 
 **Purpose:** Generates interactive visualizations using Plotly for the simulation results.
@@ -98,6 +113,8 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 * `plot_metagame_evolution_interactive(history: List[np.ndarray], deck_names: List[str], ...) -> Optional[go.Figure]`: Creates an interactive line plot showing the metagame share of top decks over time.
 * `plot_matchup_heatmap_interactive(win_matrix: np.ndarray, deck_names: List[str], ...) -> Optional[go.Figure]`: Creates an interactive heatmap of the win-rate matrix, optionally sorted by tier.
 * `plot_matchup_network(win_matrix: np.ndarray, deck_names: List[str], cycles: List[List[str]], ...) -> Optional[go.Figure]`: Creates an interactive network graph visualizing significant win-rate edges and highlighting detected RPS cycles.
+
+---
 
 ### `scraper.py`
 
@@ -127,6 +144,8 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 * `USE_BAYESIAN_WINRATES`, `TOURNAMENT_SIZE`, `NUM_TOURNAMENTS_PER_GEN`, `NUM_ROUNDS`, `USE_MULTIPROC`: Tournament simulation defaults.
 * `DYNAMIC_DECK_INTRO_PROB`, `MUTATION_FLOOR`, `NOISE_SCALE`, `SELECTION_PRESSURE`: Simulation enhancement defaults.
 
+---
+
 ### `simulation_config.py`
 
 **Purpose:** Defines the `SimulationConfig` dataclass, which bundles all parameters required for the core simulation engine into a single, typed object.
@@ -134,6 +153,8 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 **Key Class:**
 
 * `SimulationConfig(dataclass)`: A mutable configuration object. Its fields include `mode`, `max_generations`, `min_generations`, `extinction_threshold`, `stability_threshold`, `convergence_window`, `max_inactive_generations`, `use_bayesian_winrates`, `tournament_size`, `num_tournaments_per_gen`, `num_rounds`, `use_multiproc`, `seed`, `dynamic_deck_intro_prob`, `mutation_floor`, `noise_scale`, and `selection_pressure`.
+
+---
 
 ### `cli_args.py`
 

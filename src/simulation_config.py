@@ -2,13 +2,8 @@
 from dataclasses import dataclass
 from typing import Literal
 
-
 @dataclass
 class SimulationConfig:
-    """
-    Defines the complete set of parameters required to run a single metagame
-    evolution simulation experiment.
-    """
     mode: Literal["replicator", "tournament"]
     max_generations: int
     min_generations: int
@@ -26,3 +21,4 @@ class SimulationConfig:
     mutation_floor: float
     noise_scale: float
     selection_pressure: float
+    tournament_style: Literal["pure_swiss", "championship_series"] = "pure_swiss" # <--- Added

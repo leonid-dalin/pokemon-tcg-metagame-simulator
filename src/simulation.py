@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
-# simulation.py — Core metagame evolution engine with performance & dynamics enhancements
+# simulation.py — Core metagame evolution engine with dual tournament modes
 from __future__ import annotations
 import time
 import logging
 import numpy as np
-from typing import List, Tuple, Dict, Any, Optional, Iterable
 import csv
+import bisect
+from typing import List, Tuple, Dict, Any, Optional, Iterable
 
 # Optional modules — gracefully degrade
 try:
     from tqdm import tqdm
-
     TQDM_AVAILABLE = True
 except ImportError:
     TQDM_AVAILABLE = False
     tqdm = None
 try:
     import multiprocessing as mp
-
     MULTIPROC_AVAILABLE = True
 except ImportError:
     MULTIPROC_AVAILABLE = False
@@ -29,24 +28,18 @@ from .data import safe_normalize
 from .simulation_config import SimulationConfig
 
 # ----------------------------
-# Tournament Simulation (Vectorized & Parallel Optimized)
+# Tournament Simulation Workers
 # ----------------------------
 
-def _tournament_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
+def _pure_swiss_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Simulates a single Swiss-style tournament with vectorized operations where possible.
-
-    Returns:
-        wins_per_deck: np.ndarray of shape (n_decks,) — total wins per deck index
-        matches_per_deck: np.ndarray of shape (n_decks,) — total matches per deck index
+    Simulates a standard, fast, single-phase Swiss tournament.
     """
     field_indices, config, win_matrix, matchup_details, rng_seed = args
-    # Recreate RNG for reproducibility
     local_rng = np.random.default_rng(rng_seed)
 
     num_players = len(field_indices)
     player_wins = np.zeros(num_players, dtype=int)
-    # Use adjacency matrix for opponent tracking (faster than set operations for small N)
     opponents = np.zeros((num_players, num_players), dtype=bool)
 
     num_rounds = config["num_rounds"]
@@ -55,27 +48,23 @@ def _tournament_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
     n_decks = len(deck_names)
 
     for _ in range(num_rounds):
-        # Vectorized grouping by win count
         unique_wins, inverse = np.unique(player_wins, return_inverse=True)
-        sorted_indices = np.argsort(-unique_wins[inverse])  # descending wins
+        sorted_indices = np.argsort(-unique_wins[inverse]) 
         unpaired = np.arange(num_players)[sorted_indices]
         paired = np.zeros(num_players, dtype=bool)
         matchups = []
 
-        # Vectorized pairing: find first unpaired opponent not previously faced
         for i in range(num_players):
             if paired[i]:
                 continue
             p1 = unpaired[i]
-            # Vectorized check for unpaired and not previously faced
             candidates = np.where((~paired) & (unpaired != p1) & (~opponents[p1, unpaired]))[0]
             if len(candidates) > 0:
                 p2 = unpaired[candidates[0]]
             else:
-                # Fallback: any unpaired
                 candidates = np.where(~paired & (unpaired != p1))[0]
                 if len(candidates) == 0:
-                    continue  # No one left to pair
+                    continue 
                 p2 = unpaired[candidates[0]]
 
             paired[i] = True
@@ -83,7 +72,6 @@ def _tournament_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
             matchups.append((p1, p2))
             opponents[p1, p2] = opponents[p2, p1] = True
 
-        # Vectorized match resolution
         if len(matchups) == 0:
             continue
 
@@ -91,26 +79,19 @@ def _tournament_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
         p2_indices = np.array([field_indices[p2] for _, p2 in matchups])
 
         if use_bayesian:
-            # <--- REFACTOR: Replaced complex list comprehension with a clear loop
-            # This is much more maintainable and has identical performance.
             win_probs_list = []
-            default_mu = {"win_rate": 0.5, "match_count": 2}  # Default prior
+            default_mu = {"win_rate": 0.5, "match_count": 2}
             for d1, d2 in zip(p1_indices, p2_indices):
                 mu_key = (deck_names[d1], deck_names[d2])
                 mu = matchup_details.get(mu_key, default_mu)
-
                 wr = mu["win_rate"]
                 mc = mu["match_count"]
 
                 if mc > 0:
-                    # Sample from Beta(alpha, beta)
-                    # alpha = wins + 1 = (wr * mc) + 1
-                    # beta = losses + 1 = (mc - wr * mc) + 1
                     alpha = wr * mc + 1
                     beta = (1 - wr) * mc + 1
                     prob = local_rng.beta(alpha, beta)
                 else:
-                    # Default to 0.5 if no match data (e.g., mc=0)
                     prob = 0.5
                 win_probs_list.append(prob)
             win_probs = np.array(win_probs_list)
@@ -121,16 +102,137 @@ def _tournament_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
 
         for idx, (p1, p2) in enumerate(matchups):
             if p1_wins[idx]:
-                # Find original index in 'unpaired' array to update wins
                 player_wins[np.where(unpaired == p1)[0][0]] += 1
             else:
                 player_wins[np.where(unpaired == p2)[0][0]] += 1
 
-    # Vectorized aggregation
-    wins_per_deck = np.zeros(n_decks, dtype=int)
-    matches_per_deck = np.zeros(n_decks, dtype=int)
+    wins_per_deck = np.zeros(n_decks, dtype=float)
+    matches_per_deck = np.zeros(n_decks, dtype=float)
     np.add.at(wins_per_deck, field_indices, player_wins)
     np.add.at(matches_per_deck, field_indices, num_rounds)
+
+    return wins_per_deck, matches_per_deck
+
+def get_variant_5_structure(players: int) -> Tuple[int, int, int, int]:
+    """Returns: (Day1_Rounds, Match_Point_Cutoff, Day2_Rounds, Top_Cut) based on official handbook."""
+    from .config import _STRUCTURE_RESULTS, _STRUCTURE_THRESHOLDS
+    index = bisect.bisect_left(_STRUCTURE_THRESHOLDS, players)
+    return _STRUCTURE_RESULTS[index]
+
+def _championship_series_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Simulates a full 2-Day Play! Pokémon Regional/International (Variant #5).
+    Converts placement into "Win-Equivalents" for evolutionary scaling.
+    """
+    field_indices, config, win_matrix, matchup_details, rng_seed = args
+    local_rng = np.random.default_rng(rng_seed)
+    
+    num_players = len(field_indices)
+    n_decks = len(config["deck_names"])
+    
+    d1_rounds, cut_points, d2_rounds, top_cut = get_variant_5_structure(num_players)
+    
+    # BO3 Conversion Formula: P_bo3 = 3p^2 - 2p^3
+    bo3_win_matrix = 3 * (win_matrix ** 2) - 2 * (win_matrix ** 3)
+    
+    match_points = np.zeros(num_players, dtype=int)
+    opponents_history = [[] for _ in range(num_players)]
+    active_players = np.arange(num_players)
+    
+    # Helper for fast Swiss-style pairing
+    def simulate_swiss_phase(rounds_to_play, current_active):
+        for _ in range(rounds_to_play):
+            if len(current_active) < 2: break
+            
+            # Shuffle to randomize tiebreakers, then sort by points
+            local_rng.shuffle(current_active)
+            order = np.argsort(-match_points[current_active], kind='mergesort')
+            sorted_active = current_active[order]
+            
+            p1s = sorted_active[0::2]
+            p2s = sorted_active[1::2]
+            if len(p1s) > len(p2s): p1s = p1s[:-1] # Drop the bye for simulation speed
+            
+            p1_decks = field_indices[p1s]
+            p2_decks = field_indices[p2s]
+            
+            win_probs = bo3_win_matrix[p1_decks, p2_decks]
+            p1_wins = local_rng.random(len(p1s)) < win_probs
+            
+            # 3 match points for a win, 0 for loss
+            match_points[p1s[p1_wins]] += 3
+            match_points[p2s[~p1_wins]] += 3
+            
+            for p1, p2 in zip(p1s, p2s):
+                opponents_history[p1].append(p2)
+                opponents_history[p2].append(p1)
+
+    # --- Phase 1 (Day 1) ---
+    simulate_swiss_phase(d1_rounds, active_players)
+    
+    # --- The Cut ---
+    day2_mask = match_points >= cut_points
+    day2_players = np.where(day2_mask)[0]
+    
+    # --- Phase 2 (Day 2) ---
+    simulate_swiss_phase(d2_rounds, day2_players)
+    
+    # --- Tiebreakers & Top Cut ---
+    top_players = []
+    champion = None
+    
+    if len(day2_players) > 0 and top_cut > 0:
+        owp = np.zeros(num_players)
+        for i in day2_players:
+            opps = opponents_history[i]
+            if len(opps) == 0: continue
+            opp_win_pcts = [match_points[o] / (len(opponents_history[o]) * 3) for o in opps]
+            opp_win_pcts = np.clip(opp_win_pcts, 0.25, 1.0) # Handbook min bounds
+            owp[i] = np.mean(opp_win_pcts)
+            
+        # Lexsort sorts by last key first. We negate to get descending.
+        top_order = np.lexsort((-owp[day2_players], -match_points[day2_players]))
+        top_players = day2_players[top_order][:top_cut]
+        
+        # --- Single Elimination Playoffs ---
+        standings = list(top_players)
+        while len(standings) > 1:
+            next_round = []
+            p1s = np.array(standings[0::2])
+            p2s = np.array(standings[1::2])
+            if len(p1s) > len(p2s): p1s = p1s[:-1]
+
+            p1_decks = field_indices[p1s]
+            p2_decks = field_indices[p2s]
+            p1_wins = local_rng.random(len(p1s)) < bo3_win_matrix[p1_decks, p2_decks]
+
+            next_round.extend(p1s[p1_wins])
+            next_round.extend(p2s[~p1_wins])
+            standings = next_round
+            
+        champion = standings[0] if standings else None
+
+    # --- Win-Equivalent Scaling ---
+    # Translate tournament placement back into "Win Rate" equivalents for the engine
+    wins_equiv = match_points / 3.0
+    matches_equiv = np.full(num_players, float(d1_rounds))
+
+    # Apply structural bonuses
+    matches_equiv[day2_players] += d2_rounds
+    wins_equiv[day2_players] += 1.5 
+    matches_equiv[day2_players] += 1.5
+
+    if len(top_players) > 0:
+        matches_equiv[top_players] += 3.0
+        wins_equiv[top_players] += 3.0 
+        if champion is not None:
+            wins_equiv[champion] += 4.0
+            matches_equiv[champion] += 4.0
+
+    wins_per_deck = np.zeros(n_decks, dtype=float)
+    matches_per_deck = np.zeros(n_decks, dtype=float)
+    np.add.at(wins_per_deck, field_indices, wins_equiv)
+    np.add.at(matches_per_deck, field_indices, matches_equiv)
 
     return wins_per_deck, matches_per_deck
 
@@ -144,48 +246,46 @@ def run_tournament_generation(
         rng: np.random.Generator,
 ) -> np.ndarray:
     """
-    Runs one generation of stochastic tournaments with optimized parallel processing.
-    Uses imap_unordered for maximum throughput.
+    Runs one generation of stochastic tournaments handling either Pure Swiss or Championship Series modes.
     """
     n_decks = len(deck_names)
     tasks = []
+    tournament_style = config.get("tournament_style", "pure_swiss")
 
-    # <--- OPTIMIZATION: Create config dict ONCE before the loop
     task_config = {
         "num_rounds": config["num_rounds"],
         "use_bayesian_winrates": config["use_bayesian_winrates"],
         "deck_names": deck_names,
+        "selection_pressure": config["selection_pressure"],
+        "tournament_style": tournament_style
     }
 
     for _ in range(config["num_tournaments_per_gen"]):
         field_indices = rng.choice(n_decks, size=config["tournament_size"], p=current_freq)
         task_rng_seed = rng.integers(1 << 60)
-        # Pass the pre-built config
         tasks.append((field_indices, task_config, win_matrix, matchup_details, task_rng_seed))
 
     deck_wins = np.zeros(n_decks)
     deck_matches = np.zeros(n_decks)
+    
+    worker_func = _championship_series_worker if tournament_style == "championship_series" else _pure_swiss_worker
 
     use_pool = config["use_multiproc"] and MULTIPROC_AVAILABLE and len(tasks) > 1 and mp is not None
     if use_pool:
         assert mp is not None
         with mp.Pool() as pool:
-            # Use imap_unordered for best performance
-            for wins, matches in pool.imap_unordered(_tournament_worker, tasks):
+            for wins, matches in pool.imap_unordered(worker_func, tasks):
                 deck_wins += wins
                 deck_matches += matches
     else:
         for task in tasks:
-            wins, matches = _tournament_worker(task)
+            wins, matches = worker_func(task)
             deck_wins += wins
             deck_matches += matches
 
-    # Calculate payoffs only for decks that played matches, default to 0.5 otherwise.
-    # Wrap in errstate to suppress harmless 'invalid value' warning when deck_matches is 0.
     with np.errstate(divide="ignore", invalid="ignore"):
         payoffs = np.where(deck_matches > 0, deck_wins / deck_matches, 0.5)
 
-    # Apply exponential selection pressure from config
     new_freq = current_freq * np.exp(config["selection_pressure"] * (payoffs - 0.5))
     return safe_normalize(new_freq)
 
@@ -196,20 +296,17 @@ def update_replicator_dynamics(
         rng: np.random.Generator,
         noise_scale: float = NOISE_SCALE,
 ) -> np.ndarray:
-    """
-    Replicator dynamics with optional Gaussian noise and frequency-based dampening.
-    """
     payoffs = win_matrix @ current_freq
     avg_payoff = current_freq @ payoffs
 
     if avg_payoff <= 0:
-        return current_freq  # Avoid division by zero
+        return current_freq 
 
     growth = payoffs / avg_payoff
 
     if noise_scale > 0:
         noise = rng.normal(0, noise_scale, size=growth.shape)
-        growth *= np.exp(noise)  # Multiplicative noise
+        growth *= np.exp(noise) 
 
     new_freq = current_freq * growth
     return safe_normalize(new_freq)
@@ -223,33 +320,14 @@ def find_evolutionary_stable_state(
         deck_names: List[str],
         win_matrix: np.ndarray,
         matchup_details: Dict[Tuple[str, str], Dict[str, Any]],
-        config: SimulationConfig,  # Accepts a single SimulationConfig object
-        history_file_path: Optional[str] = None,  # Optional path for incremental history saving
+        config: SimulationConfig,
+        history_file_path: Optional[str] = None, 
 ) -> Tuple[List[Dict[str, Any]], List[np.ndarray], List[Optional[int]]]:
-    """
-    Simulates metagame evolution with enhanced dynamics: noise, reintroduction.
-    Writes history to a file incrementally to manage memory for long simulations.
-
-    Args:
-        deck_names (List[str]): List of deck archetype names.
-        win_matrix (np.ndarray): Symmetric n x n matrix of win probabilities.
-        matchup_details (Dict): Raw data for Bayesian sampling, keyed by (deck_a, deck_b).
-        config (SimulationConfig): A dataclass containing all simulation parameters.
-        history_file_path (Optional[str]): If provided, the full metagame history will be
-                                          written to this CSV file incrementally.
-
-    Returns:
-        Tuple containing:
-            - List[Dict]: Final results for each deck (frequency, activity, etc.).
-            - List[np.ndarray]: In-memory history of the last `convergence_window` generations.
-            - List[Optional[int]]: Generation number when each deck went extinct.
-    """
     n = len(deck_names)
     if n == 0:
         logging.warning("No decks for simulation")
         return [], [], []
 
-    # --- Extract all parameters from the `config` object ---
     mode = config.mode
     max_generations = config.max_generations
     min_generations = config.min_generations
@@ -267,17 +345,16 @@ def find_evolutionary_stable_state(
     mutation_floor = config.mutation_floor
     noise_scale = config.noise_scale
     selection_pressure = config.selection_pressure
+    
+    # Graceful fallback if the user hasn't added this to SimulationConfig yet
+    tournament_style = getattr(config, "tournament_style", "pure_swiss")
 
-    # Initialize RNG and metagame state
     rng = np.random.default_rng(seed)
     current_freq = np.ones(n, dtype=float) / n
     usage_history = np.zeros(n, dtype=int)
     extinction_gens: List[Optional[int]] = [None] * n
 
-    # --- History Management (Full In-Memory) ---
-    # Initialize the full history list with the starting state
     history: List[np.ndarray] = [current_freq.copy()]
-    # For convergence checking, we track the max change in a rolling window.
     recent_max_changes = np.full(convergence_window, np.inf)
 
     history_file_handle = None
@@ -286,9 +363,7 @@ def find_evolutionary_stable_state(
         try:
             history_file_handle = open(history_file_path, "w", newline="", encoding="utf-8")
             history_writer = csv.writer(history_file_handle)
-            # Write header
             history_writer.writerow(["generation"] + deck_names)
-            # Write initial state
             history_writer.writerow([0] + current_freq.tolist())
         except Exception as e:
             logging.error(f"Failed to open history file {history_file_path}: {e}")
@@ -297,7 +372,6 @@ def find_evolutionary_stable_state(
             history_file_handle = None
             history_writer = None
 
-    # Log initial state
     initial_state_summary = {
         deck_names[i]: f"{current_freq[i]:.4%}" for i in range(len(deck_names)) if current_freq[i] > 0
     }
@@ -305,7 +379,6 @@ def find_evolutionary_stable_state(
         f"Intialized metagame with {len(initial_state_summary)} active decks: {dict(list(initial_state_summary.items())[:5])}{'...' if len(initial_state_summary) > 5 else ''}"
     )
 
-    # Set up generation iterator
     gens_iter: Iterable[int] = range(max_generations)
     if TQDM_AVAILABLE and tqdm is not None:
         gens_iter = tqdm(gens_iter, desc=f"Simulating Metagame ({mode})", leave=False)
@@ -313,7 +386,6 @@ def find_evolutionary_stable_state(
     start_time = time.time()
     converged = False
 
-    # <--- OPTIMIZATION: Create static tournament config ONCE before the loop
     tourney_config = {
         "use_bayesian_winrates": use_bayesian_winrates,
         "tournament_size": tournament_size,
@@ -321,12 +393,12 @@ def find_evolutionary_stable_state(
         "num_rounds": num_rounds,
         "use_multiproc": use_multiproc,
         "deck_names": deck_names,
-        "selection_pressure": selection_pressure
+        "selection_pressure": selection_pressure,
+        "tournament_style": tournament_style
     }
 
     try:
         for gen in gens_iter:
-            # 1. Compute next frequency
             if mode == "replicator":
                 target_freq = update_replicator_dynamics(
                     current_freq, win_matrix, rng, noise_scale
@@ -343,11 +415,9 @@ def find_evolutionary_stable_state(
             else:
                 raise ValueError(f"Unknown mode: {mode}")
 
-            # 2. Apply selection pressure and normalize
             next_freq = target_freq.copy()
             next_freq = safe_normalize(next_freq)
 
-            # 3. Handle extinction (Frequency-based only)
             inactive_mask = next_freq < extinction_threshold
             usage_history = np.where(inactive_mask, usage_history + 1, 0)
             extinct_mask = (usage_history >= max_inactive_generations) & np.array([g is None for g in extinction_gens])
@@ -356,7 +426,6 @@ def find_evolutionary_stable_state(
                 extinction_gens[i] = gen
                 next_freq[i] = 0.0
 
-            # 4. Reintroduction & mutation floor
             next_freq = reintroduce_extinct_decks(
                 next_freq,
                 extinction_gens,
@@ -367,31 +436,25 @@ def find_evolutionary_stable_state(
                 current_generation=gen,
             )
 
-            # 5. Convergence check
             max_change = float(np.max(np.abs(next_freq - current_freq)))
-            # Update the rolling buffer for convergence
             recent_max_changes[gen % convergence_window] = max_change
 
-            # Record the current state in the full history
             history.append(current_freq.copy())
 
-            # Also write to history file every generation (if enabled)
             if history_writer and history_file_handle:
                 try:
                     history_writer.writerow([gen + 1] + current_freq.tolist())
-                    history_file_handle.flush()  # Ensure data is written to disk
+                    history_file_handle.flush()
                 except Exception as e:
                     logging.error(f"Failed to write to history file at gen {gen + 1}: {e}")
 
-            # Check for stability after min_generations
             if gen >= min_generations:
                 is_stable = np.max(recent_max_changes) < stability_threshold
                 if is_stable and not converged:
                     logging.info(f"✅ Metagame stabilized after {gen + 1} generations.")
                     converged = True
-                    break  # Exit early if converged
+                    break 
 
-            # Update current state for next iteration
             current_freq = next_freq
 
         if not converged:
@@ -400,17 +463,14 @@ def find_evolutionary_stable_state(
     except KeyboardInterrupt:
         logging.info("🛑 Simulation interrupted.")
     finally:
-        # Close the history file
         if history_file_handle:
             history_file_handle.close()
 
-        # Ensure the final state is in the history
         if len(history) == 0 or not np.array_equal(history[-1], current_freq):
             history.append(current_freq.copy())
 
         logging.info(f"⏱️  Simulation took {time.time() - start_time:.2f} seconds")
 
-    # Optional Smoothing (for visualization) - only on the in-memory buffer
     try:
         from scipy.ndimage import gaussian_filter1d
         if len(history) > 2:
@@ -419,15 +479,13 @@ def find_evolutionary_stable_state(
             for i in range(n):
                 smoothed[:, i] = gaussian_filter1d(arr[:, i], sigma=1.0)
             row_sums = smoothed.sum(axis=1, keepdims=True)
-            row_sums[row_sums <= 0] = 1.0  # Avoid division by zero
+            row_sums[row_sums <= 0] = 1.0 
             smoothed = np.maximum(smoothed, 0.0) / row_sums
             history = [row.copy() for row in smoothed]
     except Exception as e:
-        # Optional smoothing failed, proceed without it.
         logging.debug(f"Optional smoothing failed, returning raw history: {e}")
         pass
 
-    # Build and return final results
     results = []
     for i in range(n):
         results.append(
@@ -446,7 +504,6 @@ def find_evolutionary_stable_state(
 # Deck Dynamics
 # ----------------------------
 
-
 def reintroduce_extinct_decks(
         current_freq: np.ndarray,
         extinction_gens: List[Optional[int]],
@@ -456,64 +513,16 @@ def reintroduce_extinct_decks(
         mutation_floor: float = MUTATION_FLOOR,
         current_generation: int = 0,
 ) -> np.ndarray:
-    """
-    Manages the population dynamics of a deck-based simulation by applying a mutation floor
-    and, with a small probability, reintroducing extinct decks.
-
-    This function performs two main operations to prevent the simulation from
-    losing diversity and becoming stuck in a local equilibrium:
-
-    1. Applies a **mutation floor** to the frequencies of all decks. This ensures
-       that no deck's frequency drops below a minimum threshold, preventing any
-       deck from being completely eliminated. This maintains a small, persistent
-       presence for all decks in the population.
-
-    2. Reintroduces a single **extinct deck** with a small probability. If the
-       random event occurs, a randomly chosen extinct deck is given a small,
-       non-zero frequency, effectively reviving it. This process helps to
-       maintain genetic diversity and allows the simulation to explore new
-       evolutionary paths.
-
-    Args:
-        current_freq (np.ndarray):
-            The current normalized frequencies of all decks in the population.
-        extinction_gens (List[Optional[int]]):
-            A list tracking the generation in which each deck went extinct.
-            'None' indicates the deck is currently active.
-        deck_names (List[str]):
-            A list of the names of the decks, corresponding to the indices
-            in `current_freq`. Used for logging purposes.
-        rng (np.random.Generator):
-            A NumPy random number generator instance for reproducible randomness.
-        intro_prob (float, optional):
-            The probability (between 0 and 1) that a single extinct deck
-            will be reintroduced in the current generation. Defaults to
-            `DYNAMIC_DECK_INTRO_PROB`.
-        mutation_floor (float, optional):
-            The minimum frequency allowed for any deck in the population.
-            This value also serves as the base for the revival frequency.
-            Defaults to `MUTATION_FLOOR`.
-        current_generation (int, optional):
-            The current generation number of the simulation. Used for
-            informational logging. Defaults to 0.
-
-    Returns:
-        np.ndarray: The updated deck frequencies after applying the mutation floor
-                    and, if applicable, reintroducing an extinct deck. The returned
-                    array is normalized.
-    """
+    
     active_mask = np.array([g is None for g in extinction_gens])
     extinct_indices = np.where(~active_mask)[0]
 
-    # Apply mutation floor to all decks
     current_freq = np.maximum(current_freq, mutation_floor)
 
-    # Chance to reintroduce extinct decks
     if len(extinct_indices) > 0 and rng.random() < intro_prob:
         chosen_idx = rng.choice(extinct_indices)
-        # Revive with small frequency
         current_freq[chosen_idx] = mutation_floor * 10
-        extinction_gens[chosen_idx] = None  # Mark as active again
+        extinction_gens[chosen_idx] = None 
         logging.debug(f"Reintroduced deck '{deck_names[chosen_idx]}' at generation {current_generation}.")
 
     return safe_normalize(current_freq)

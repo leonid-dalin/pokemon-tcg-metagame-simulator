@@ -1,361 +1,490 @@
-# src/app.py
 import streamlit as st
 import os
 import sys
+import uuid
+import json
+import re
 import numpy as np
-from typing import List, cast
+import pandas as pd
+from typing import List, cast, Tuple, Dict, Any
 
+# Ensure project root is in path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from src.predictor import (
-    predict_best_decks,
-    UserMetaSpec,
-    MetaValue,
-    swiss_rounds_from_players,
-    InferenceMode,
-)
+from src.predictor import predict_best_decks, UserMetaSpec, MatchFormat, swiss_rounds_from_players
 from src.data import load_matchup_data
-from src.config import *
-from src.simulation import find_evolutionary_stable_state
-from src.simulation_config import SimulationConfig
+from src.config import INPUT_DIR, MIN_GAMES, TIER_S_THRESHOLD, TIER_A_THRESHOLD, TIER_B_THRESHOLD, TIER_C_THRESHOLD
+from src.simulation import get_variant_5_structure
+from src.monte_carlo import run_monte_carlo_analytics
 
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def get_valid_deck_names() -> List[str]:
     input_path = os.path.join(INPUT_DIR, "ea_input.json")
     deck_names, _, _ = load_matchup_data(input_path, MIN_GAMES)
     return sorted(deck_names)
 
-
-@st.cache_data
+@st.cache_data(show_spinner=False)
 def load_full_win_matrix():
     input_path = os.path.join(INPUT_DIR, "ea_input.json")
     deck_names, win_matrix, _ = load_matchup_data(input_path, MIN_GAMES)
     return deck_names, win_matrix
 
+# --- HTML Parser for Limitless Labs ---
+def parse_limitless_html(html_str: str, valid_decks: List[str]) -> Tuple[Dict[str, int], int, int]:
+    """Parses Limitless Labs HTML for deck representation."""
+    deck_script_match = re.search(r'<script type="application/json" data-sveltekit-fetched data-url="[^"]*/tcg/decks[^"]*">(.*?)</script>', html_str, re.DOTALL)
+    
+    if not deck_script_match:
+        raise ValueError("Could not locate the internal JSON data block in the uploaded HTML.")
+        
+    wrapper_json = json.loads(deck_script_match.group(1))
+    body_json = json.loads(wrapper_json.get("body", "{}"))
+    decks = body_json.get("message", [])
+    
+    if not decks:
+        raise ValueError("Deck array was empty in the parsed JSON.")
 
-# <--- OPTIMIZATION: Cache the expensive "pro" meta simulation ---
-@st.cache_data
-def get_pro_meta() -> np.ndarray:
-    """
-    Runs the full simulation once and caches the result for "pro" mode.
-    """
-    input_path = os.path.join(INPUT_DIR, "ea_input.json")
-    deck_names, win_matrix, matchup_details = load_matchup_data(input_path, MIN_GAMES)
+    parsed_meta = {}
+    wildcard_players = 0
+    total_players = 0
 
-    sim_config = SimulationConfig(
-        mode="replicator",
-        max_generations=MAX_GENERATIONS,
-        min_generations=int(MAX_GENERATIONS * MIN_GENERATIONS_PROP),
-        extinction_threshold=EXTINCTION_THRESHOLD,
-        stability_threshold=STABILITY_THRESHOLD,
-        convergence_window=CONVERGENCE_WINDOW,
-        max_inactive_generations=MAX_INACTIVE_GENERATIONS,
-        use_bayesian_winrates=USE_BAYESIAN_WINRATES,
-        tournament_size=TOURNAMENT_SIZE,
-        num_tournaments_per_gen=NUM_TOURNAMENTS_PER_GEN,
-        num_rounds=NUM_ROUNDS,
-        use_multiproc=USE_MULTIPROC,
-        seed=RNG_SEED,
-        dynamic_deck_intro_prob=DYNAMIC_DECK_INTRO_PROB,
-        mutation_floor=MUTATION_FLOOR,
-        noise_scale=NOISE_SCALE,
-        selection_pressure=SELECTION_PRESSURE,
-    )
-    results, _, _ = find_evolutionary_stable_state(
-        deck_names=deck_names,
-        win_matrix=win_matrix,
-        matchup_details=matchup_details,
-        config=sim_config,
-    )
-    fallback_meta = np.array([r["frequency"] for r in results])
-    return fallback_meta
+    valid_decks_lower = {d.lower(): d for d in valid_decks}
 
+    for d in decks:
+        name = d.get("name", "Unknown")
+        players = int(d.get("players", 0))
+        total_players += players
+        
+        if name.lower() in valid_decks_lower:
+            canonical_name = valid_decks_lower[name.lower()]
+            parsed_meta[canonical_name] = parsed_meta.get(canonical_name, 0) + players
+        else:
+            wildcard_players += players
 
-# --- End of Optimization ---
+    return parsed_meta, total_players, wildcard_players
 
+# --- Composite Score Generator ---
+def calculate_ultimate_score(res: Dict[str, Any], mc_res: Dict[str, Any], d2_rounds: int, top_cut: int) -> Dict[str, Any]:
+    full_deck_names = list(res["metrics_per_deck"].keys())
+    active_decks = [d for d in full_deck_names if res["metrics_per_deck"][d]["meta_share"] >= 0.001]
+    
+    if not active_decks: 
+        return res
+    
+    wrs = np.array([res["metrics_per_deck"][d]["expected_win_rate"] for d in active_decks])
+    day2s = np.array([mc_res.get(d, {}).get("day2_conversion", 0) for d in active_decks])
+    top8s = np.array([mc_res.get(d, {}).get("top_cut_conversion", 0) for d in active_decks])
+    wins = np.array([mc_res.get(d, {}).get("win_probability", 0) for d in active_decks])
+
+    def min_max_norm(arr):
+        arr_min, arr_max = np.min(arr), np.max(arr)
+        if arr_max > arr_min:
+            return (arr - arr_min) / (arr_max - arr_min)
+        return np.full_like(arr, 0.5)
+
+    norm_wrs = min_max_norm(wrs)
+    norm_day2s = min_max_norm(day2s)
+    norm_top8s = min_max_norm(top8s)
+    norm_wins = min_max_norm(wins)
+
+    if d2_rounds > 0 and top_cut > 0:
+        raw_composite = 0.40 * norm_wrs + 0.30 * norm_day2s + 0.20 * norm_top8s + 0.10 * norm_wins
+    elif top_cut > 0:
+        raw_composite = 0.50 * norm_wrs + 0.35 * norm_top8s + 0.15 * norm_wins
+    else:
+        raw_composite = norm_wrs
+        
+    final_scores = min_max_norm(raw_composite) * 100.0
+    
+    for idx, d in enumerate(active_decks):
+        res["metrics_per_deck"][d]["composite_score"] = float(final_scores[idx])
+        
+    all_decks_sorted = sorted(active_decks, key=lambda d: res["metrics_per_deck"][d]["composite_score"], reverse=True)
+    
+    res["recommendations"] = [{"deck": d, **res["metrics_per_deck"][d]} for d in all_decks_sorted]
+    res["avoid"] = [{"deck": d, **res["metrics_per_deck"][d]} for d in all_decks_sorted[::-1]]
+    
+    return res
+
+# --- State Management ---
+def init_session_state():
+    defaults = {
+        "meta_rows": [], "prediction_result": None, "mc_result": None,
+        "rec_limit": 3, "avoid_limit": 3, "imported_players": 256
+    }
+    for key, val in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = val
+
+def add_meta_row(deck="", spec_type="Exact", val=10.0, is_locked=False): 
+    st.session_state.meta_rows.append({"id": str(uuid.uuid4()), "deck": deck, "spec_type": spec_type, "val": val, "is_locked": is_locked})
+def delete_meta_row(row_id: str): st.session_state.meta_rows = [r for r in st.session_state.meta_rows if r["id"] != row_id]
+def clear_all_rows(): st.session_state.meta_rows = []
+def load_more_recs(): st.session_state.rec_limit += 3
+def load_more_avoids(): st.session_state.avoid_limit += 3
+
+def get_tier(score: float) -> str:
+    if score >= TIER_S_THRESHOLD * 100: return "S"
+    if score >= TIER_A_THRESHOLD * 100: return "A"
+    if score >= TIER_B_THRESHOLD * 100: return "B"
+    if score >= TIER_C_THRESHOLD * 100: return "C"
+    return "D"
+
+# --- Main Application ---
 def main():
-    st.set_page_config(page_title="TCG Metagame Predictor", layout="wide")
+    st.set_page_config(page_title="TCG Metagame Predictor", page_icon="🏆", layout="wide")
+    init_session_state()
+    
     st.title("🏆 TCG Metagame Predictor")
+    st.markdown("Predict meta-weighted performance using real-world empirical data and strict Monte Carlo bracket simulations.")
 
-    # Sidebar
-    st.sidebar.header("🏟️ Tournament Settings")
-    players = st.sidebar.number_input(
-        "Number of Players", min_value=2, max_value=256, value=32, step=1, format="%d"
-    )
-    swiss_rounds = swiss_rounds_from_players(players)
-    st.sidebar.info(f"Swiss Rounds: **{swiss_rounds}**")
+    # ==========================================
+    # SIDEBAR: TOURNAMENT & ENGINE SETTINGS
+    # ==========================================
+    with st.sidebar:
+        st.header("🏟️ Tournament Settings")
+        with st.container(border=True):
+            tourney_structure = st.radio("Tournament Structure", ["Championship Series", "Pure Swiss"], index=0)
+            players = st.number_input("Number of Players", min_value=2, max_value=8192, value=st.session_state.imported_players, step=1)
+            
+            if tourney_structure == "Championship Series":
+                d1_rounds, cut_points, d2_rounds, top_cut = get_variant_5_structure(players)
+                total_swiss = d1_rounds + d2_rounds
+                st.caption("**Championship Series Details**")
+                st.markdown(f"- **Day 1**: {d1_rounds} Rounds\n- **Day 2 Cut**: {cut_points} Match Pts\n- **Day 2**: {d2_rounds} Rounds\n- **Playoffs**: Top {top_cut}")
+            else:
+                d1_rounds = swiss_rounds_from_players(players)
+                cut_points, d2_rounds, top_cut = 999, 0, (8 if players >= 8 else 0)
+                total_swiss = d1_rounds
+                st.caption("**Pure Swiss Details**")
+                st.markdown(f"- **Swiss**: {total_swiss} Rounds")
+                if top_cut > 0: st.markdown(f"- **Playoffs**: Top {top_cut}")
 
-    input_mode = st.sidebar.radio(
-        "Input Mode",
-        ["Players", "Percentage"],
-        help="Enter **raw player counts** or **percentages**."
-    )
+        st.header("⚙️ Engine Parameters")
+        with st.container(border=True):
+            mc_iterations = st.selectbox("Monte Carlo Iterations", options=[1000, 10000, 100000, 1000000], format_func=lambda x: f"{x:,}", index=1)
+            match_format = st.radio("Match Format", ["BO1", "BO3"], index=1)
+            
+            min_sample_threshold = st.slider("Matchup Minimum Games", min_value=1, max_value=100, value=10, step=1)
+            input_mode = st.radio("Constraint Mode", ["Percentage", "Raw Players"])
+            is_raw = input_mode == "Raw Players"
 
-    inference_mode = st.sidebar.radio(
-        "Inference Mode",
-        ["pro", "casual"],
-        format_func=lambda x: "Pro (Idealized Meta)" if x == "pro" else "Casual (Uniform Fill)",
-        help="**Pro**: Uses simulation equilibrium. **Casual**: Uniform fill."
-    )
+            st.divider()
+            st.markdown("**🧪 BETA Features**")
+            use_tie_convergence = st.toggle("Enable Win-Rate Tie Convergence", value=True, help="Mathematically simulates real-world match timeouts using a parabolic curve based on matchup closeness.")
+            global_tie_rate = st.slider("Global Tie Rate (%)", min_value=0.0, max_value=30.0, value=15.0, step=0.5, disabled=not use_tie_convergence) / 100.0
 
-    st.header("🃏 Your Deck (Optional)")
-    my_deck = st.selectbox(
-        "Simulate your expected performance",
-        [""] + get_valid_deck_names(),
-        key="my_deck"
-    )
+    # ==========================================
+    # MAIN UI: META CONSTRAINTS & IMPORT
+    # ==========================================
+    st.subheader("📊 Metagame Constraints")
+    
+    with st.expander("📁 Import Limitless Labs HTML", expanded=False):
+        uploaded_file = st.file_uploader("Upload a saved HTML file from Limitless Labs...", type=["html", "htm"])
+        if uploaded_file is not None:
+            if st.button("Extract Data & Populate Constraints", type="secondary"):
+                try:
+                    parsed_meta, total_import_players, wildcard_players = parse_limitless_html(uploaded_file.getvalue().decode("utf-8"), get_valid_deck_names())
+                    st.session_state.imported_players = total_import_players
+                    clear_all_rows()
+                    for deck_name, count in parsed_meta.items():
+                        add_meta_row(deck=deck_name, spec_type="Exact", val=(count / total_import_players) * 100.0 if total_import_players > 0 else 0.0, is_locked=True)
+                    st.success(f"✅ Successfully imported {len(parsed_meta)} recognized decks ({total_import_players} total players).")
+                    if wildcard_players > 0: st.warning(f"⚠️ {wildcard_players} players were using unrecognized/rogue decks. Handled via rescaling.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to parse file: {e}")
 
-    st.header("📊 Declare Known Meta")
-
-    # Dynamic deck input
-    if "deck_inputs" not in st.session_state:
-        st.session_state.deck_inputs = []
-
-    # Add Deck button at TOP-LEFT
-    if st.button("➕ Add Deck", key="add_deck_top"):
-        st.session_state.deck_inputs.append({})
-
-    deck_names = get_valid_deck_names()
     user_meta: UserMetaSpec = {}
-    total_min = total_max = 0.0
+    total_min = 0.0
+    deck_names = get_valid_deck_names()
     seen_decks = set()
 
-    # Build dynamic inputs
-    for idx in range(len(st.session_state.deck_inputs)):
-        with st.container():
-            st.divider()
-            cols = st.columns([2, 1, 1])
-            with cols[0]:
-                available = [d for d in deck_names if d not in seen_decks]
-                if not available:
-                    st.warning("No more decks to add.")
-                    break
-                deck = st.selectbox(
-                    "Deck", options=available, key=f"deck_{idx}", label_visibility="collapsed"
-                )
-                seen_decks.add(deck)
+    with st.expander("🛠️ Active Custom Constraints", expanded=True):
+        c1, c2 = st.columns([1, 4])
+        with c1:
+            if st.button("➕ Add Constraint"): add_meta_row()
+        with c2:
+            if st.button("🗑️ Clear All"): clear_all_rows(); st.rerun()
+                
+        st.markdown("<br>", unsafe_allow_html=True)
+        constraint_cols = st.columns(2)
+        
+        for idx, row in enumerate(st.session_state.meta_rows):
+            row_id = row["id"]
+            target_col = constraint_cols[idx % 2]
+            with target_col:
+                with st.container(border=True):
+                    cols = st.columns([3, 2, 3, 0.5])
+                    with cols[0]:
+                        available = [d for d in deck_names if d not in seen_decks or d == row.get("deck")]
+                        if not available: break
+                        default_idx = available.index(row["deck"]) if row.get("deck") in available else 0
+                        deck = st.selectbox("Deck", options=available, index=default_idx, key=f"deck_{row_id}", label_visibility="collapsed")
+                        seen_decks.add(deck)
+                        st.session_state.meta_rows[idx]["deck"] = deck
+                    with cols[1]:
+                        spec_type = st.radio("Type", ["Exact", "Range"], index=0 if row.get("spec_type")=="Exact" else 1, key=f"type_{row_id}", horizontal=True, label_visibility="collapsed")
+                        st.session_state.meta_rows[idx]["spec_type"] = spec_type
+                    with cols[2]:
+                        if spec_type == "Exact":
+                            if is_raw:
+                                default_val = int(row.get("val", 10.0)) if not row.get("is_locked") else int((row.get("val", 10)/100)*players)
+                                val_ui = st.number_input("Players", min_value=0, max_value=int(players), value=min(default_val, int(players)), step=1, key=f"val_{row_id}")
+                                prop = val_ui / players if players > 0 else 0.0
+                            else:
+                                val_ui = st.number_input("Percent (%)", min_value=0.0, max_value=100.0, value=float(row.get("val", 10.0)), step=0.1, format="%.2f", key=f"val_{row_id}")
+                                prop = val_ui / 100.0
+                            if prop > 0: user_meta[deck] = prop; total_min += prop
+                        else:
+                            if is_raw:
+                                val = st.slider("Range (Players)", 0, int(players), (0, min(15, int(players))), key=f"slider_{row_id}")
+                                min_prop, max_prop = val[0] / players if players > 0 else 0.0, val[1] / players if players > 0 else 0.0
+                            else:
+                                val = st.slider("Range (%)", 0.0, 100.0, (0.0, 15.0), step=0.1, format="%.1f%%", key=f"slider_{row_id}")
+                                min_prop, max_prop = val[0] / 100.0, val[1] / 100.0
+                            user_meta[deck] = {"min": min_prop, "max": max_prop}; total_min += min_prop
+                    with cols[3]:
+                        st.button("🗑️", key=f"del_{row_id}", on_click=delete_meta_row, args=(row_id,))
 
-            with cols[1]:
-                spec_type = st.radio(
-                    "Type", ["Exact", "Min/Max"], key=f"type_{idx}", horizontal=True, label_visibility="collapsed"
-                )
+    if total_min > 1.0: st.error(f"❌ Minimum total across all constraints ({total_min:.1%}) exceeds 100%. Please adjust your values before predicting."); st.stop()
 
-            with cols[2]:
-                if input_mode == "Players":
-                    max_val = players
-                    step = 1
-                    suffix = " players"
-                else:
-                    max_val = 1.0
-                    step = 0.01
-                    suffix = "%"
+    st.divider()
 
-                if spec_type == "Exact":
-                    if input_mode == "Players":
-                        val = st.number_input(
-                            f"Exact{suffix}",
-                            min_value=0,
-                            max_value=max_val,
-                            value=min(2, max_val),
-                            step=step,
-                            key=f"val_{idx}",
-                            format="%d" if step == 1 else "%.3f",
-                        )
-                        prop = val / players if players > 0 else 0.0
-                    else:
-                        val = st.number_input(
-                            f"Exact{suffix}",
-                            min_value=0.0,
-                            max_value=1.0,
-                            value=0.1,
-                            step=step,
-                            key=f"val_{idx}",
-                            format="%.3f"
-                        )
-                        prop = val
-                    if prop > 0:
-                        user_meta[deck] = prop
-                        total_min += prop
-                        total_max += prop
-
-                else:  # Min/Max
-                    c1, c2 = st.columns(2)
-                    if input_mode == "Players":
-                        min_ui = c1.number_input("Min", min_value=0, max_value=max_val, value=0, step=step,
-                                                 key=f"min_{idx}", format="%d")
-                        max_ui = c2.number_input("Max", min_value=0, max_value=max_val, value=min(3, max_val),
-                                                 step=step, key=f"max_{idx}", format="%d")
-                        min_prop = min_ui / players if players > 0 else 0.0
-                        max_prop = max_ui / players if players > 0 else 0.0
-                    else:
-                        min_ui = c1.number_input("Min", min_value=0.0, max_value=1.0, value=0.05, step=step,
-                                                 key=f"min_{idx}", format="%.3f")
-                        max_ui = c2.number_input("Max", min_value=0.0, max_value=1.0, value=0.15, step=step,
-                                                 key=f"max_{idx}", format="%.3f")
-                        min_prop = min_ui
-                        max_prop = max_ui
-
-                    if min_prop >= max_prop:
-                        st.error("Min must be < Max")
-                    else:
-                        user_meta[deck] = {"min": min_prop, "max": max_prop}
-                        total_min += min_prop
-                        total_max += max_prop
-
-            # Delete button
-            if st.button("🗑️", key=f"del_{idx}"):
-                st.session_state.deck_inputs.pop(idx)
-                st.rerun()
-
-    if total_min > 1.0:
-        st.error(f"❌ Minimum total ({total_min:.1%}) > 100%")
-        st.stop()
-
-    if st.button("🔍 Get Recommendations", type="primary", use_container_width=True):
-
-        # <--- OPTIMIZATION: Get the cached "pro" meta if needed
-        fallback_pro = None
-        if inference_mode == "pro":
-            with st.spinner("Loading 'Pro' meta... (runs simulation on first load)"):
-                fallback_pro = get_pro_meta()
-        # --- End of Optimization ---
-
-        with st.spinner("Analyzing metagame..."):
+    # ==========================================
+    # EXECUTION & DATAFRAME RESULTS
+    # ==========================================
+    if st.button("🚀 Generate Metagame & Predict", type="primary", width="stretch", disabled=(total_min > 1.0)):
+        with st.status("⚙️ Initializing Engine...", expanded=True) as status:
             try:
-                result = predict_best_decks(
-                    user_meta_spec=user_meta,
-                    total_players=players,
-                    min_sample_threshold=10,
-                    inference_mode=cast(InferenceMode, inference_mode),
-                    fallback_meta_pro=fallback_pro  # <--- Pass the cached meta
-                )
-            except Exception as e:
-                st.exception(e)
-                st.stop()
+                full_deck_names, full_win_matrix = load_full_win_matrix()
+                res = predict_best_decks(user_meta_spec=user_meta, total_players=players, min_sample_threshold=min_sample_threshold, match_format=cast(MatchFormat, match_format))
+                
+                mc_progress = st.progress(0, text="Dispatching parallel workers...")
+                def mc_progress_callback(completed, total):
+                    pct = int((completed / total) * 100)
+                    mc_progress.progress(completed / total, text=f"Processing Monte Carlo brackets... {pct}% ({completed}/{total} cores complete)")
 
-        # Load full data for matchup details
+                mc_res = run_monte_carlo_analytics(
+                    deck_names=full_deck_names, win_matrix=full_win_matrix, meta_distribution=res["full_meta"],
+                    d1_rounds=d1_rounds, cut_points=cut_points, d2_rounds=d2_rounds, top_cut=top_cut,
+                    players=players, iterations=mc_iterations, match_format=match_format,
+                    progress_callback=mc_progress_callback, use_tie_convergence=use_tie_convergence, global_tie_rate=global_tie_rate
+                )
+                
+                res = calculate_ultimate_score(res, mc_res, d2_rounds, top_cut)
+                status.update(label="✅ Simulation Complete!", state="complete", expanded=False)
+                
+                st.session_state.prediction_result = res
+                st.session_state.mc_result = mc_res
+                st.session_state.rec_limit = 3
+                st.session_state.avoid_limit = 3
+            except Exception as e:
+                status.update(label="❌ Simulation Failed", state="error", expanded=True); st.exception(e); st.stop()
+
+    # --- Render Results if Available ---
+    if st.session_state.prediction_result is not None and st.session_state.mc_result is not None:
+        res = st.session_state.prediction_result
+        mc_res = st.session_state.mc_result
+        
         full_deck_names, full_win_matrix = load_full_win_matrix()
         deck_to_idx = {name: i for i, name in enumerate(full_deck_names)}
 
-        # Tabs
-        tab1, tab2, tab3 = st.tabs(["🎯 Recommendations", "🚫 Decks to Avoid", "🔍 Full Metagame"])
+        data = []
+        all_decks = sorted(full_deck_names, key=lambda x: res["metrics_per_deck"][x]["composite_score"], reverse=True)
+        active_decks = [d for d in all_decks if res["metrics_per_deck"][d]["meta_share"] >= 0.001]
+        
+        st.subheader("📊 Interactive Dashboard & Tournament Odds")
+        
+        view_col1, view_col2 = st.columns([1, 3])
+        with view_col1:
+            odds_view = st.radio("Odds Perspective", ["Archetype (Macro Field)", "Player (Individual)"], index=0, help="Switch between macro archetype performance (% of the bracket) and individual player odds (If I play this deck...).")
+        
+        for i, deck in enumerate(active_decks, 1):
+            metrics = res["metrics_per_deck"][deck]
+            mc_metrics = mc_res.get(deck, {"day2_conversion": 0, "top_cut_conversion": 0, "win_probability": 0, "day2_share": 0, "top_cut_share": 0})
+            
+            row_data = {
+                "#": i,
+                "Tier": get_tier(metrics["composite_score"]),
+                "Deck": deck,
+                "Score": metrics["composite_score"],
+                "Type": "🔒 User" if deck in user_meta else "📈 Base",
+                "Exp. WR %": metrics["expected_win_rate"] * 100,
+                "SoS %": metrics["sos"] * 100,
+                "OMW %": metrics["omw"] * 100
+            }
+            
+            meta_share = metrics["meta_share"] * 100
+            
+            if odds_view == "Player (Individual)":
+                row_data["Meta Share %"] = meta_share
+                if d2_rounds > 0: row_data["Day 2 (Player) %"] = mc_metrics.get("day2_conversion", 0) * 100
+                if top_cut > 0:
+                    row_data["Top 8 (Player) %"] = mc_metrics.get("top_cut_conversion", 0) * 100
+                    row_data["Win (Player) %"] = mc_metrics.get("win_probability", 0) * 100
+            else:
+                row_data["Day 1 Share %"] = meta_share
+                if d2_rounds > 0: row_data["Day 2 Share %"] = mc_metrics.get("day2_share", 0) * 100
+                if top_cut > 0:
+                    row_data["Top 8 Share %"] = mc_metrics.get("top_cut_share", 0) * 100
+                    row_data["Winner Share %"] = mc_metrics.get("win_probability", 0) * meta_share * players
+                
+            data.append(row_data)
+            
+        df = pd.DataFrame(data)
 
-        with tab1:
-            st.subheader("Top 3 Recommended Decks")
-            for i, r in enumerate(result["recommendations"], 1):
-                deck = r["deck"]
-                st.markdown(f"### {i}. {deck}")
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Expected Win Rate", f"{r['expected_win_rate']:.2%}")
-                col2.metric("Inferred Meta Share", f"{r['meta_share']:.2%}")
-                col3.metric("Confidence", "✅ High" if r["confidence"] >= 0.6 else "⚠️ Low")
-                col4.metric("Avg Match Samples", f"{r['sample_support']:.1f}")
+        col_config = {
+            "#": st.column_config.NumberColumn(width="small"),
+            "Tier": st.column_config.TextColumn(width="small"),
+            "Deck": st.column_config.TextColumn(width="medium"),
+            "Score": st.column_config.NumberColumn(format="%.2f"),
+            "Type": st.column_config.TextColumn(),
+            "Exp. WR %": st.column_config.NumberColumn(format="%.2f %%"),
+            "SoS %": st.column_config.NumberColumn(format="%.2f %%"),
+            "OMW %": st.column_config.NumberColumn(format="%.2f %%")
+        }
+        
+        if odds_view == "Player (Individual)":
+            col_config["Meta Share %"] = st.column_config.NumberColumn(format="%.2f %%")
+            if d2_rounds > 0: col_config["Day 2 (Player) %"] = st.column_config.NumberColumn(format="%.2f %%")
+            if top_cut > 0:
+                col_config["Top 8 (Player) %"] = st.column_config.NumberColumn(format="%.2f %%")
+                col_config["Win (Player) %"] = st.column_config.NumberColumn(format="%.2f %%")
+        else:
+            col_config["Day 1 Share %"] = st.column_config.NumberColumn(format="%.2f %%")
+            if d2_rounds > 0: col_config["Day 2 Share %"] = st.column_config.NumberColumn(format="%.2f %%")
+            if top_cut > 0:
+                col_config["Top 8 Share %"] = st.column_config.NumberColumn(format="%.2f %%")
+                col_config["Winner Share %"] = st.column_config.NumberColumn(format="%.2f %%")
 
-                # Matchup breakdown (only vs decks with ≥2% meta share)
-                if deck in deck_to_idx:
-                    idx = deck_to_idx[deck]
-                    favorable = []
-                    threats = []
-                    for opp_name in full_deck_names:
-                        if opp_name == deck:
-                            continue
-                        opp_share = result["full_meta"].get(opp_name, 0)
-                        if opp_share < 0.02:  # Only show vs relevant decks
-                            continue
-                        opp_idx = deck_to_idx[opp_name]
-                        wr = full_win_matrix[idx, opp_idx]
-                        if wr >= 0.55:
-                            favorable.append((opp_name, wr))
-                        elif wr <= 0.45:
-                            threats.append((opp_name, wr))
+        st.caption("Click any column header to sort. Hover over headers for detailed metric definitions. Click `#` to reset to default sorting.")
+        st.dataframe(df, width="stretch", hide_index=True, column_config=col_config)
+        st.divider()
 
-                    if favorable:
-                        fav_text = ", ".join([f"{d} ({wr:.0%})" for d, wr in favorable])
-                        st.success(f"✅ Favorable vs: {fav_text}")
-                    if threats:
-                        thr_text = ", ".join([f"{d} ({wr:.0%})" for d, wr in threats])
-                        st.warning(f"⚠️ Threats: {thr_text}")
+        # --- Head-to-Head Field Comparator ---
+        st.subheader("⚔️ Head-to-Head Field Comparator")
+        st.markdown("Compare your exact **Individual Player Odds** between two decks across the predicted field.")
+        
+        valid_meta_decks = [d["Deck"] for d in data]
+        c1, c2 = st.columns(2)
+        deck_a = c1.selectbox("Primary Deck (Baseline)", valid_meta_decks, index=0)
+        deck_b = c2.selectbox("Comparison Deck (Challenger)", valid_meta_decks, index=1 if len(valid_meta_decks)>1 else 0)
 
-            # My Deck Simulation
-            if my_deck and my_deck in result["metrics_per_deck"]:
-                st.divider()
-                st.subheader("🃏 Your Deck Performance")
-                my_metrics = result["metrics_per_deck"][my_deck]
+        if deck_a and deck_b:
+            da_idx, db_idx = deck_to_idx[deck_a], deck_to_idx[deck_b]
+            da_metrics, db_metrics = res["metrics_per_deck"][deck_a], res["metrics_per_deck"][deck_b]
+            da_mc, db_mc = mc_res.get(deck_a, {}), mc_res.get(deck_b, {})
 
-                expected_wr = my_metrics["expected_win_rate"]
-                undefeated_prob = my_metrics["undefeated_probability"]
-                sos = my_metrics["sos"]
-                omw = my_metrics["omw"]
-                sample_support = my_metrics["sample_support"]
+            metrics_cols = st.columns(5)
+            metrics_cols[0].metric("Ultimate Score", f"{da_metrics['composite_score']:.2f}", f"{da_metrics['composite_score'] - db_metrics['composite_score']:.2f} vs {deck_b}")
+            metrics_cols[1].metric("Exp. Win Rate", f"{da_metrics['expected_win_rate']:.2%}", f"{da_metrics['expected_win_rate'] - db_metrics['expected_win_rate']:.2%} vs {deck_b}")
+            
+            if d2_rounds > 0:
+                metrics_cols[2].metric("Individual Day 2 Odds", f"{da_mc.get('day2_conversion',0):.2%}", f"{da_mc.get('day2_conversion',0) - db_mc.get('day2_conversion',0):.2%} vs {deck_b}")
+            if top_cut > 0:
+                metrics_cols[3].metric("Individual Top 8 Odds", f"{da_mc.get('top_cut_conversion',0):.2%}", f"{da_mc.get('top_cut_conversion',0) - db_mc.get('top_cut_conversion',0):.2%} vs {deck_b}")
+                metrics_cols[4].metric("Individual Win Odds", f"{da_mc.get('win_probability',0):.2%}", f"{da_mc.get('win_probability',0) - db_mc.get('win_probability',0):.2%} vs {deck_b}")
 
-                # Display key metrics
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Expected Win Rate", f"{expected_wr:.2%}")
-                col2.metric(f"Chance to Go {result['swiss_rounds']}-0", f"{undefeated_prob:.2%}")
-                col3.metric("Strength of Schedule (SoS)", f"{sos:.2f}")
-                col4.metric("Opponent's Avg Win Rate (OMW)", f"{omw:.2%}")
-
-                # Additional context
-                st.caption(f"Based on {sample_support:.1f} avg match samples against the predicted meta.")
-                if undefeated_prob > 0.1:
-                    st.info(
-                        f"Your deck has a **{undefeated_prob:.2%}** chance of going undefeated in {result['swiss_rounds']} rounds.")
-                elif undefeated_prob > 0.01:
-                    st.warning(
-                        f"Your deck has a **{undefeated_prob:.2%}** chance of going undefeated. A perfect run is unlikely.")
-                else:
-                    st.error(
-                        f"Your deck has a **{undefeated_prob:.2%}** chance of going undefeated. Focus on a strong record instead of perfection.")
-
-        with tab2:
-            st.subheader("Decks to Avoid")
-            for i, r in enumerate(result["avoid"], 1):
-                deck = r["deck"]
-                st.markdown(f"### {i}. {deck}")
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Expected Win Rate", f"{r['expected_win_rate']:.2%}")
-                col2.metric("Inferred Meta Share", f"{r['meta_share']:.2%}")
-                col3.metric("Avg Match Samples", f"{r['sample_support']:.1f}")
-
-                # Matchup breakdown for AVOIDED decks
-                if deck in deck_to_idx:
-                    idx = deck_to_idx[deck]
-                    unfavorable = []
-                    threats = []
-                    for opp_name in full_deck_names:
-                        if opp_name == deck:
-                            continue
-                        opp_share = result["full_meta"].get(opp_name, 0)
-                        if opp_share < 0.02:  # Only show vs relevant decks
-                            continue
-                        opp_idx = deck_to_idx[opp_name]
-                        wr = full_win_matrix[idx, opp_idx]
-                        # For avoided decks, show what *beats them* (their threats)
-                        if wr <= 0.45:  # Opp beats this deck
-                            threats.append((opp_name, wr))
-                        elif wr >= 0.55:  # This deck beats opp (but it's avoided)
-                            unfavorable.append((opp_name, wr))
-
-                    if threats:
-                        thr_text = ", ".join([f"{d} ({wr:.0%})" for d, wr in threats])
-                        st.warning(f"❌ Beaten by: {thr_text}")
-                    if unfavorable:
-                        unfav_text = ", ".join([f"{d} ({wr:.0%})" for d, wr in unfavorable])
-                        st.info(f"🟢 Beats: {unfav_text}")
-
-        with tab3:
-            st.subheader("Full Inferred Metagame")
-            for deck, prop in sorted(result["full_meta"].items(), key=lambda x: -x[1]):
-                if prop > 0.001:
-                    st.text(f"{deck}: {prop:.2%}")
+            st.markdown("#### Matchups vs Top Metagame")
+            
+            top_field = [d for d in data if res["metrics_per_deck"][d["Deck"]]["meta_share"] >= 0.03] 
+            comp_data = []
+            for field_deck in top_field:
+                opp_name = field_deck["Deck"]
+                opp_idx = deck_to_idx[opp_name]
+                wr_a = full_win_matrix[da_idx, opp_idx]
+                wr_b = full_win_matrix[db_idx, opp_idx]
+                comp_data.append({
+                    "Opponent": opp_name,
+                    "Field Share": f"{res['metrics_per_deck'][opp_name]['meta_share']*100:.2f}%",
+                    f"{deck_a} WR": wr_a * 100,
+                    f"{deck_b} WR": wr_b * 100,
+                    "Advantage": f"{deck_a}" if wr_a > wr_b else f"{deck_b}" if wr_b > wr_a else "Tie"
+                })
+            
+            comp_df = pd.DataFrame(comp_data)
+            st.dataframe(
+                comp_df, 
+                width="stretch", 
+                hide_index=True, 
+                column_config={
+                    f"{deck_a} WR": st.column_config.NumberColumn(format="%.2f %%"),
+                    f"{deck_b} WR": st.column_config.NumberColumn(format="%.2f %%")
+                }
+            )
 
         st.divider()
-        st.caption(
-            "Note: Matchups with <10 games are uncertain. "
-            "Favorable: ≥55% WR vs decks with ≥2% meta share. Threats: ≤45% WR."
-        )
 
+        best_day2 = max(active_decks, key=lambda d: mc_res.get(d, {}).get("day2_conversion", 0)) if d2_rounds > 0 else None
+        best_top8 = max(active_decks, key=lambda d: mc_res.get(d, {}).get("top_cut_conversion", 0)) if top_cut > 0 else None
+        best_win = max(active_decks, key=lambda d: mc_res.get(d, {}).get("win_probability", 0)) if top_cut > 0 else None
+        best_wr = max(active_decks, key=lambda d: res["metrics_per_deck"][d]["expected_win_rate"])
+
+        # --- Recommendations & Avoids ---
+        col_rec, col_avoid = st.columns(2)
+        with col_rec:
+            st.markdown("### 🔥 Top Recommendations")
+            visible_recs = res["recommendations"][:st.session_state.rec_limit]
+            
+            for i, r in enumerate(visible_recs, 1):
+                deck = r["deck"]
+                
+                tags = []
+                if deck == best_win: tags.append("🏆 Best to Win Event")
+                elif deck == best_top8: tags.append("🏅 Best for Top 8")
+                elif deck == best_day2: tags.append("🛡️ Safest Day 2")
+                if deck == best_wr: tags.append("📈 Highest Raw Win Rate")
+                
+                with st.container(border=True):
+                    st.markdown(f"#### {i}. {deck}")
+                    if tags:
+                        st.markdown(" ".join([f"`{t}`" for t in tags]))
+                        
+                    if deck in deck_to_idx:
+                        idx = deck_to_idx[deck]
+                        favorable, threats = [], []
+                        for opp_name, opp_share in res["full_meta"].items():
+                            if opp_name == deck or opp_share < 0.02: 
+                                continue
+                            wr = full_win_matrix[idx, deck_to_idx[opp_name]]
+                            if wr >= 0.55: favorable.append((opp_name, wr))
+                            elif wr <= 0.45: threats.append((opp_name, wr))
+
+                        if favorable: 
+                            st.success(f"✅ Favored vs: {', '.join([f'{d} ({wr:.0%})' for d, wr in favorable])}")
+                        if threats: 
+                            st.error(f"⚠️ Weak vs: {', '.join([f'{d} ({wr:.0%})' for d, wr in threats])}")
+
+            if st.session_state.rec_limit < len(res["recommendations"]):
+                st.button("⬇️ Load more...", key="btn_load_recs", on_click=load_more_recs, width="stretch")
+
+        with col_avoid:
+            st.markdown("### 🚫 Decks to Avoid")
+            visible_avoids = res["avoid"][:st.session_state.avoid_limit]
+            
+            for i, r in enumerate(visible_avoids, 1):
+                deck = r["deck"]
+                with st.container(border=True):
+                    st.markdown(f"#### {i}. {deck}")
+                    if deck in deck_to_idx:
+                        idx = deck_to_idx[deck]
+                        favorable, threats = [], []
+                        for opp_name, opp_share in res["full_meta"].items():
+                            if opp_name == deck or opp_share < 0.02: 
+                                continue
+                            wr = full_win_matrix[idx, deck_to_idx[opp_name]]
+                            if wr >= 0.55: favorable.append((opp_name, wr))
+                            elif wr <= 0.45: threats.append((opp_name, wr))
+
+                        if threats: 
+                            st.error(f"⚠️ Weak vs: {', '.join([f'{d} ({wr:.0%})' for d, wr in threats])}")
+                        if favorable: 
+                            st.success(f"✅ Favored vs: {', '.join([f'{d} ({wr:.0%})' for d, wr in favorable])}")
+
+            if st.session_state.avoid_limit < len(res["avoid"]):
+                st.button("⬇️ Load more...", key="btn_load_avoids", on_click=load_more_avoids, width="stretch")
 
 if __name__ == "__main__":
     main()

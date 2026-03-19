@@ -53,3 +53,6 @@ temp/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+
+# Tests
+test_engine.py
