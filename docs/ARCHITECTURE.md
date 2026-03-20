@@ -8,7 +8,26 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 
 ---
 
-## Core Modules
+## Directory Structure
+
+The codebase utilizes a domain-driven layout to strictly separate long-term evolutionary mechanics from immediate tournament equity evaluation:
+
+```text
+pokemon-tcg-metagame-simulator/
+├── data/                       # Raw and processed JSON/CSV data
+├── output/                     # Simulation results, interactive HTML plots, and logs
+└── src/                        # Source code
+    ├── main.py                 # Top-level CLI orchestrator
+    ├── scraper.py              # Limitless TCG HTML data ingestion
+    ├── core/                   # Shared infrastructure and truths
+    ├── evolution/              # Engine 1: Long-term Metagame Evolution (Game Theory)
+    ├── tournament/             # Engine 2: Immediate Tournament Solver (Monte Carlo)
+    └── interfaces/             # User entry points (Streamlit & CLI args)
+```
+
+---
+
+## Top-Level Orchestrators (`src/`)
 
 ### `main.py`
 
@@ -29,98 +48,6 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 *   `run_batch_experiments(args: Args)`: Manages running multiple simulation experiments with different configurations.
 *   `main()`: The top-level entry point that delegates to single/batch runners or the CLI prediction mode.
 
----
-
-### `app.py`
-
-**Purpose:** The primary interactive web dashboard built with Streamlit. It allows users to define custom metagame constraints, ingest real-world Limitless TCG data, and evaluate tournament equity (Expected Value) from both an individual player's perspective and a macro-metagame impact perspective.
-
-**Key Functions & UI Elements:**
-
-*   `parse_limitless_html(html_str: str, valid_decks: List[str])`: A native HTML parser that extracts recognized deck archetypes and player counts directly from Limitless Labs exports to pre-populate custom constraints.
-*   `calculate_ultimate_score(res, mc_res, d2_rounds, top_cut)`: The core evaluation engine. It merges base win rates with Monte Carlo results, applying a strict **Z-Score Standardization** mapped to a sigmoid curve (`np.tanh`). It calculates *two* scores simultaneously: `score_player` (Individual EV) and `score_archetype` (Macro Metagame Impact).
-*   **Dual-Perspective Dashboard:** A dynamic UI component that seamlessly swaps data sorting, tier assignments, and top recommendations based on the user's selected POV without re-triggering the Monte Carlo engine.
-*   **Head-to-Head Comparator:** An interactive `st.dataframe` utilizing Pandas `Styler` to color-code favorable ($\ge 55\%$) and unfavorable ($\le 45\%$) matchups between a primary and challenger deck across the predicted field.
-
----
-
-### `predictor.py`
-
-**Purpose:** Contains the core logic for the static recommendation engine. It takes a user-defined metagame, calculates a plausible meta utilizing real-world empirical smoothing, and computes advanced baseline performance metrics for all decks.
-
-**Key Functions:**
-
-*   `resolve_meta_constraints` **(Vectorized Water-Filling Algorithm)**: Strictly enforces user-defined constraints (Exact or Range). Utilizing high-performance pure NumPy boolean masking, it distributes the remaining tournament mass proportionally based on Laplace-smoothed empirical data.
-*   `swiss_rounds_from_players(n_players: int) -> int`: Calculates the number of Swiss rounds based on `math.ceil(math.log2(n))`.
-*   `predict_best_decks(user_meta_spec: UserMetaSpec, ...) -> PredictionResult`: Orchestrates the baseline calculation. It applies the water-filling constraints and generates foundational Swiss metrics (SoS, OMW, Expected Win Rate) before passing the results to the Monte Carlo engine for bracket execution.
-
----
-
-### `data.py`
-
-**Purpose:** Handles loading, cleaning, validating, and preprocessing the metagame matchup data. Also provides utilities for clustering and diagnostics.
-
-**Key Functions:**
-
-*   `safe_normalize(vec: np.ndarray) -> np.ndarray`: Normalizes a vector to sum to 1.0, returning a uniform distribution if the sum is zero.
-*   `load_matchup_data(file_path: str, min_matches_required: int) -> Tuple[List[str], np.ndarray, Dict]`: Loads matchup data from a JSON file, filters decks by match volume, and returns reliable deck names, a **non-symmetric** win-rate matrix, and raw matchup details.
-*   `cluster_decks_by_matchup_profile(win_matrix: np.ndarray, deck_names: List[str], n_clusters: int | str, method: str)`: Groups decks into strategic families based on their matchup profile "shape." It applies `StandardScaler` to normalize raw win-rate magnitudes and supports `"auto"` dynamic Silhouette Score optimization to find the mathematically optimal number of tiers/clusters.
-*   `compute_deck_dominance(win_matrix: np.ndarray, deck_names: List[str]) -> np.ndarray`: Computes and logs the most dominant deck based on its expected win rate against an even field.
-
----
-
-## `monte_carlo.py`
-
-**Purpose:** High-performance computational core of the `app.py`. It uses parallelized NumPy workers to simulate thousands of complete tournament brackets to determine individual and archetype equity.
-
-**Key Components:**
-
-*   `_mc_worker:` The parallelized worker function. It pairs players based on current match points and executes seeded Top Cut brackets. It features an optimized **Parabolic Tie Convergence (BETA)** model utilizing an inverted boolean mask (`~(p1_wins | p2_wins)`) to efficiently simulate match-point decay in BO3 Swiss rounds.
-*   `run_monte_carlo_analytics:` The primary entry point for simulations. It manages the multiprocessing pool, aggregates raw conversion counts, and calculates Win Probability and conversion shares (Day 2 / Top 8).
-
----
-
-### `simulation.py`
-
-**Purpose:** Contains the core engine for simulating metagame evolution over generations.
-
-**Key Functions:**
-
-*   `get_variant_5_structure`: Implements the official Play! Pokémon Handbook standards. It dynamically maps player volume to specific Day 1/Day 2 round counts and match-point advancement thresholds (e.g., 16 or 19 points).
-*   `_championship_series_worker`: Simulates a 2-day event and scales performance into "Win-Equivalents" for the engine.
-*   `_pure_swiss_worker`: Simulates a standard, fast, single-phase Swiss tournament for faster evolutionary scaling when Championship structures aren't required.
-*   `run_tournament_generation(current_freq: np.ndarray, ...) -> np.ndarray`: Runs one generation of stochastic tournaments (using workers optionally in parallel) and returns the new metagame frequency vector based on `selection_pressure`.
-*   `update_replicator_dynamics(current_freq: np.ndarray, win_matrix: np.ndarray, rng: np.random.Generator, noise_scale: float) -> np.ndarray`: Implements the Replicator Dynamics equation with optional Gaussian noise, using a passed-in RNG for reproducibility.
-*   `find_evolutionary_stable_state(deck_names: List[str], win_matrix: np.ndarray, matchup_details: Dict, config: SimulationConfig, history_file_path: Optional[str]) -> Tuple[List[Dict], List[np.ndarray], List[Optional[int]]]`: The core evolutionary loop. It iterates generations via either tournament simulation or replicator dynamics, manages deck extinctions and reintroductions, handles incremental CSV history logging, and detects when stability thresholds have been achieved.
-
----
-
-### `analysis.py`
-
-**Purpose:** Performs post-simulation analysis to generate insights like tier lists, convergence metrics, and cycle detection.
-
-**Key Functions:**
-
-*   `compute_convergence_metrics(history: List[np.ndarray], stability_threshold: float) -> Dict[str, Any]`: Quantifies how quickly and stably the metagame converged by analyzing the history of frequency changes.
-*   `generate_final_state_tier_list(deck_names: List[str], metagame_history: List[np.ndarray], win_matrix: np.ndarray, ...) -> Dict[str, List[Dict]]`: Generates a tier list (S, A, B, C, D) based on the final state of the metagame, prioritizing meta-weighted win rate and presence.
-*   `generate_all_time_tier_list(deck_names: List[str], metagame_history: List[np.ndarray], win_matrix: np.ndarray) -> Dict[str, List[Dict]]`: Generates a tier list based on a deck's overall performance, consistency, and impact across the entire simulation history. **This function is highly optimized using vectorized NumPy operations.**
-*   `compute_matchup_cycles(win_matrix: np.ndarray, deck_names: List[str], cycle_length: int) -> List[List[str]]`: Identifies unique Rock-Paper-Scissors (RPS) cycles in the matchup graph utilizing efficient `itertools.combinations`.
-*   `compute_deck_similarity(win_matrix: np.ndarray, deck_names: List[str], final_active_mask: Optional[List[bool]]) -> np.ndarray`: Computes pairwise cosine similarity between decks based on their matchup profiles. Filters out extinct decks and performs K-Means clustering on the active subset utilizing the new `"auto"` Silhouette optimization.
-
----
-
-### `plotting.py`
-
-**Purpose:** Generates interactive visualizations using Plotly for the simulation results.
-
-**Key Functions:**
-
-*   `plot_metagame_evolution_interactive(history: List[np.ndarray], deck_names: List[str], ...) -> Optional[go.Figure]`: Creates an interactive line plot showing the metagame share of top decks over time.
-*   `plot_matchup_heatmap_interactive(win_matrix: np.ndarray, deck_names: List[str], ...) -> Optional[go.Figure]`: Creates an interactive heatmap of the win-rate matrix, optionally sorted by tier.
-*   `plot_matchup_network(win_matrix: np.ndarray, deck_names: List[str], cycles: List[List[str]], ...) -> Optional[go.Figure]`: Creates an interactive network graph visualizing significant win-rate edges and highlighting detected RPS cycles. Nodes scale dynamically based on the deck's all-time presence.
-
----
-
 ### `scraper.py`
 
 **Purpose:** A utility script to scrape and aggregate matchup data from HTML files (specifically from Limitless TCG) and convert it into the required JSON format (`ea_input.json`). It enforces strict data hygiene before passing the matrix to the core simulation engine.
@@ -136,7 +63,9 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 
 ---
 
-## Configuration Modules
+## Domain: Core (`src/core/`)
+
+Shared data, configurations, and typing definitions used by both engines.
 
 ### `config.py`
 
@@ -150,9 +79,18 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 *   `DYNAMIC_DECK_INTRO_PROB`, `MUTATION_FLOOR`, `NOISE_SCALE`, `SELECTION_PRESSURE`: Simulation enhancement defaults.
 *   `TIER_S_THRESHOLD`, `CONSISTENCY_MEAN_EPSILON`, `COMPOSITE_SCORE_WR_WEIGHT`: Post-analysis thresholds and weights.
 
----
+### `data.py`
 
-### `simulation_config.py`
+**Purpose:** Handles loading, cleaning, validating, and preprocessing the metagame matchup data. Also provides utilities for clustering and diagnostics.
+
+**Key Functions:**
+
+*   `safe_normalize(vec: np.ndarray) -> np.ndarray`: Normalizes a vector to sum to 1.0, returning a uniform distribution if the sum is zero.
+*   `load_matchup_data(file_path: str, min_matches_required: int) -> Tuple[List[str], np.ndarray, Dict]`: Loads matchup data from a JSON file, filters decks by match volume, and returns reliable deck names, a **non-symmetric** win-rate matrix, and raw matchup details.
+*   `cluster_decks_by_matchup_profile(win_matrix: np.ndarray, deck_names: List[str], n_clusters: int | str, method: str)`: Groups decks into strategic families based on their matchup profile "shape." It applies `StandardScaler` to normalize raw win-rate magnitudes and supports `"auto"` dynamic Silhouette Score optimization to find the mathematically optimal number of tiers/clusters.
+*   `compute_deck_dominance(win_matrix: np.ndarray, deck_names: List[str]) -> np.ndarray`: Computes and logs the most dominant deck based on its expected win rate against an even field.
+
+### `types.py`
 
 **Purpose:** Defines the `SimulationConfig` dataclass, which bundles all parameters required for the core simulation engine into a single, typed object.
 
@@ -161,6 +99,86 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 *   `SimulationConfig(dataclass)`: A mutable configuration object constructed directly from the CLI parsed arguments. Its fields include `mode`, `max_generations`, `min_generations`, `extinction_threshold`, `stability_threshold`, `convergence_window`, `max_inactive_generations`, `use_bayesian_winrates`, `tournament_size`, `num_tournaments_per_gen`, `num_rounds`, `use_multiproc`, `seed`, `dynamic_deck_intro_prob`, `mutation_floor`, `noise_scale`, `selection_pressure`, and the newly added `tournament_style`.
 
 ---
+## Domain: Evolution (`src/evolution/`)
+
+The theoretical game-theory engine designed to predict the Evolutionary Stable State (ESS) over thousands of generations.
+
+### `analysis.py`
+
+**Purpose:** Performs post-simulation analysis to generate insights like tier lists, convergence metrics, and cycle detection.
+
+**Key Functions:**
+
+*   `compute_convergence_metrics(history: List[np.ndarray], stability_threshold: float) -> Dict[str, Any]`: Quantifies how quickly and stably the metagame converged by analyzing the history of frequency changes.
+*   `generate_final_state_tier_list(deck_names: List[str], metagame_history: List[np.ndarray], win_matrix: np.ndarray, ...) -> Dict[str, List[Dict]]`: Generates a tier list (S, A, B, C, D) based on the final state of the metagame, prioritizing meta-weighted win rate and presence.
+*   `generate_all_time_tier_list(deck_names: List[str], metagame_history: List[np.ndarray], win_matrix: np.ndarray) -> Dict[str, List[Dict]]`: Generates a tier list based on a deck's overall performance, consistency, and impact across the entire simulation history. **This function is highly optimized using vectorized NumPy operations.**
+*   `compute_matchup_cycles(win_matrix: np.ndarray, deck_names: List[str], cycle_length: int) -> List[List[str]]`: Identifies unique Rock-Paper-Scissors (RPS) cycles in the matchup graph utilizing efficient `itertools.combinations`.
+*   `compute_deck_similarity(win_matrix: np.ndarray, deck_names: List[str], final_active_mask: Optional[List[bool]]) -> np.ndarray`: Computes pairwise cosine similarity between decks based on their matchup profiles. Filters out extinct decks and performs K-Means clustering on the active subset utilizing the new `"auto"` Silhouette optimization.
+
+### `engine.py`
+
+**Purpose:** Contains the core engine for simulating metagame evolution over generations.
+
+**Key Functions:**
+
+*   `get_variant_5_structure`: Implements the official Play! Pokémon Handbook standards. It dynamically maps player volume to specific Day 1/Day 2 round counts and match-point advancement thresholds (e.g., 16 or 19 points).
+*   `_championship_series_worker`: Simulates a 2-day event and scales performance into "Win-Equivalents" for the engine.
+*   `_pure_swiss_worker`: Simulates a standard, fast, single-phase Swiss tournament for faster evolutionary scaling when Championship structures aren't required.
+*   `run_tournament_generation(current_freq: np.ndarray, ...) -> np.ndarray`: Runs one generation of stochastic tournaments (using workers optionally in parallel) and returns the new metagame frequency vector based on `selection_pressure`.
+*   `update_replicator_dynamics(current_freq: np.ndarray, win_matrix: np.ndarray, rng: np.random.Generator, noise_scale: float) -> np.ndarray`: Implements the Replicator Dynamics equation with optional Gaussian noise, using a passed-in RNG for reproducibility.
+*   `find_evolutionary_stable_state(deck_names: List[str], win_matrix: np.ndarray, matchup_details: Dict, config: SimulationConfig, history_file_path: Optional[str]) -> Tuple[List[Dict], List[np.ndarray], List[Optional[int]]]`: The core evolutionary loop. It iterates generations via either tournament simulation or replicator dynamics, manages deck extinctions and reintroductions, handles incremental CSV history logging, and detects when stability thresholds have been achieved.
+
+### `plotting.py`
+
+**Purpose:** Generates interactive visualizations using Plotly for the simulation results.
+
+**Key Functions:**
+
+*   `plot_metagame_evolution_interactive(history: List[np.ndarray], deck_names: List[str], ...) -> Optional[go.Figure]`: Creates an interactive line plot showing the metagame share of top decks over time.
+*   `plot_matchup_heatmap_interactive(win_matrix: np.ndarray, deck_names: List[str], ...) -> Optional[go.Figure]`: Creates an interactive heatmap of the win-rate matrix, optionally sorted by tier.
+*   `plot_matchup_network(win_matrix: np.ndarray, deck_names: List[str], cycles: List[List[str]], ...) -> Optional[go.Figure]`: Creates an interactive network graph visualizing significant win-rate edges and highlighting detected RPS cycles. Nodes scale dynamically based on the deck's all-time presence.
+
+---
+
+## Domain: Tournament (`src/tournament/`)
+
+The practical, immediate predictive engine designed to evaluate individual Expected Value (EV) for upcoming events.
+
+## `monte_carlo.py`
+
+**Purpose:** High-performance computational core of the `app.py`. It uses parallelized NumPy workers to simulate thousands of complete tournament brackets to determine individual and archetype equity.
+
+**Key Components:**
+
+*   `_mc_worker:` The parallelized worker function. It pairs players based on current match points and executes seeded Top Cut brackets. It features an optimized **Parabolic Tie Convergence (BETA)** model utilizing an inverted boolean mask (`~(p1_wins | p2_wins)`) to efficiently simulate match-point decay in BO3 Swiss rounds.
+*   `run_monte_carlo_analytics:` The primary entry point for simulations. It manages the multiprocessing pool, aggregates raw conversion counts, and calculates Win Probability and conversion shares (Day 2 / Top 8).
+
+### `solver.py`
+
+**Purpose:** Contains the core logic for the static recommendation engine. It takes a user-defined metagame, calculates a plausible meta utilizing real-world empirical smoothing, and computes advanced baseline performance metrics for all decks.
+
+**Key Functions:**
+
+*   `resolve_meta_constraints` **(Vectorized Water-Filling Algorithm)**: Strictly enforces user-defined constraints (Exact or Range). Utilizing high-performance pure NumPy boolean masking, it distributes the remaining tournament mass proportionally based on Laplace-smoothed empirical data.
+*   `swiss_rounds_from_players(n_players: int) -> int`: Calculates the number of Swiss rounds based on `math.ceil(math.log2(n))`.
+*   `predict_best_decks(user_meta_spec: UserMetaSpec, ...) -> PredictionResult`: Orchestrates the baseline calculation. It applies the water-filling constraints and generates foundational Swiss metrics (SoS, OMW, Expected Win Rate) before passing the results to the Monte Carlo engine for bracket execution.
+
+---
+
+## Domain: Interfaces (`src/interfaces/`)
+
+UI and argument definitions. These files contain no core math and exist purely to bridge the user and the engines.
+
+### `app.py`
+
+**Purpose:** The primary interactive web dashboard built with Streamlit. It allows users to define custom metagame constraints, ingest real-world Limitless TCG data, and evaluate tournament equity (Expected Value) from both an individual player's perspective and a macro-metagame impact perspective.
+
+**Key Functions & UI Elements:**
+
+*   `parse_limitless_html(html_str: str, valid_decks: List[str])`: A native HTML parser that extracts recognized deck archetypes and player counts directly from Limitless Labs exports to pre-populate custom constraints.
+*   `calculate_ultimate_score(res, mc_res, d2_rounds, top_cut)`: The core evaluation engine. It merges base win rates with Monte Carlo results, applying a strict **Z-Score Standardization** mapped to a sigmoid curve (`np.tanh`). It calculates *two* scores simultaneously: `score_player` (Individual EV) and `score_archetype` (Macro Metagame Impact).
+*   **Dual-Perspective Dashboard:** A dynamic UI component that seamlessly swaps data sorting, tier assignments, and top recommendations based on the user's selected POV without re-triggering the Monte Carlo engine.
+*   **Head-to-Head Comparator:** An interactive `st.dataframe` utilizing Pandas `Styler` to color-code favorable ($\ge 55\%$) and unfavorable ($\le 45\%$) matchups between a primary and challenger deck across the predicted field.
 
 ### `cli_args.py`
 
@@ -189,4 +207,4 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 
 **Purpose:** Lists the Python package dependencies required to run the project (e.g., `numpy`, `scipy`, `scikit-learn`, `plotly`, `tqdm`, `beautifulsoup4`, `streamlit`).
 
-Last Edited: 19.03.2026, 06:59 UTC+2
+Last Edited: 20.03.2026, 02:00 UTC+2

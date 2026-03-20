@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# plotting.py — Interactive metagame visualisations using Plotly.
+# plotting.py | Interactive metagame visualisations using Plotly
 
 from __future__ import annotations
 import logging

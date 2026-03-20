@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-# cli_args.py
+# cli_args.py | argparse definitions
 import argparse
 import os
 from typing import NamedTuple
-from .config import *
+from src.core.config import *
 
 
 class Args(NamedTuple):

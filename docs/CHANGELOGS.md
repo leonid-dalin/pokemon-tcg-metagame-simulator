@@ -1,4 +1,28 @@
-## Latest Commit `?` (Mar 19, 2026)
+## Latest Commit `?` (Mar 20, 2026)
+### refactor: domain-driven restructure, massive performance optimization, and mathematical fidelity overhaul
+
+Another major update that introduces a new strict domain-driven directory structure to separate the evolutionary engine from the tournament solver engine, alongside critical bug fixes that drastically increase simulation speed and mathematical purity. At least on paper.
+
+#### **Architectural Restructure**
+* **Domain-Driven Layout:** Reorganized `src/` into distinct domains: `core/`, `evolution/`, `tournament/`, and `interfaces/`. This physically separates the long-term game theory mechanics from the static Monte Carlo bracket predictor, preventing cross-contamination and clarifying the codebase's dual purpose. The classes should be easier to follow and understand as a result.
+* **Unified Entry Points:** `app.py` and `cli_args.py` moved to `interfaces/`. `main.py` and `scraper.py` remain at the root as top-level orchestrators for accessibility reasons. Imports have been globally updated to support absolute pathing.
+
+#### **Performance & Optimization (1,000,000 gens in ~18s)**
+* **Vectorized Array Splicing:** Completely replaced the slow double `for` loops in `analysis.py`'s similarity matrix reconstruction with a single, highly-optimized NumPy index slice (`np.ix_`).
+* **Swiss Worker Array Slicing:** Replaced sequential `np.where` boolean checks in the `_pure_swiss_worker` with high-speed `[0::2]` vs `[1::2]` array slicing for pairing logic.
+* **Multiprocessing Pool Leak Fixed:** Fixed a critical memory leak in `evolution/engine.py` where a new `mp.Pool()` was instantiated and destroyed every generation. The pool is now initialized exactly once per simulation run and passed down safely.
+
+#### **Mathematical Purity & Bug Fixes**
+* **Parabolic Tie Convergence:** The `_championship_series_worker` now accurately executes the advertised BO3 match-point bleed via the formula $P_{tie} = T_{global} \times 4P(1-P)$, properly awarding 1 point for ties and accurately suppressing global OMW% by ~1–1.5 points.
+* **Purged Phantom Confidence:** Fixed `data.py` assigning a default `match_count` of 100 to missing matchups. Missing data now defaults to 0, preventing the Bayesian beta distribution from inventing false statistical confidence. This was initially done for EGT where not enough matchups were recorded.
+* **Restored Replicator Purity:** Removed the global `mutation_floor` broadcast in `reintroduce_extinct_decks`. Decks now naturally decay to a true `0.0` frequency unless explicitly selected for reintroduction, allowing the engine to find mathematically perfect Nash Equilibriums.
+* **Removed Win-Equivalent Distortions:** Stripped arbitrary float modifiers from tournament placements in the evolutionary engine. Fitness is now derived purely from mathematically normalized match points.
+* **Removed Data Falsification:** Deleted the `gaussian_filter1d` block at the end of the simulation loop, ensuring all post-analysis tools evaluate the raw, genuine stochastic output of the engine.
+* **Synchronized Tier Thresholds:** `generate_final_state_tier_list` now dynamically imports the global `TIER_*_THRESHOLD` variables, preventing conflicting tier assignments between the final state and all-time lists. Forgot about this hardcode.
+
+---
+
+## Latest Commit `04a47ba` (Mar 19, 2026)
 ### refactor(core): fix Ultimate Score math, vectorize engine, optimize clustering, and overhaul UI POV
 
 #### **Mathematical & Logic Fixes**

@@ -158,7 +158,7 @@ python -m src.main -i data/input/ea_input.json -g 1_000_000 --mode replicator
 The easiest way to use the predictor is via the Streamlit app.
 
 ```bash
-streamlit run src/app.py
+streamlit run src/interfaces/app.py
 ```
 
 This will launch a local web server and open the app in your browser, allowing you to get recommendations and analyze the meta interactively.

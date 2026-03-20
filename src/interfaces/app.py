@@ -1,3 +1,4 @@
+# app.py | Streamlit dashboard
 import streamlit as st
 import os
 import sys
@@ -7,16 +8,20 @@ import re
 import numpy as np
 import pandas as pd
 from typing import List, cast, Tuple, Dict, Any
+from pathlib import Path
 
-# Ensure project root is in path
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
+# Resolve the project root
+project_root = str(Path(__file__).resolve().parents[2])
 
-from src.predictor import predict_best_decks, UserMetaSpec, MatchFormat, swiss_rounds_from_players
-from src.data import load_matchup_data
-from src.config import INPUT_DIR, MIN_GAMES, TIER_S_THRESHOLD, TIER_A_THRESHOLD, TIER_B_THRESHOLD, TIER_C_THRESHOLD
-from src.simulation import get_variant_5_structure
-from src.monte_carlo import run_monte_carlo_analytics
+# Inject it into the system path so Python can find the 'src' module
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from src.core.data import load_matchup_data
+from src.core.config import INPUT_DIR, MIN_GAMES, TIER_S_THRESHOLD, TIER_A_THRESHOLD, TIER_B_THRESHOLD, TIER_C_THRESHOLD
+from src.evolution.engine import get_variant_5_structure
+from src.tournament.monte_carlo import run_monte_carlo_analytics
+from src.tournament.solver import predict_best_decks, UserMetaSpec, MatchFormat, swiss_rounds_from_players
 
 @st.cache_data(show_spinner=False)
 def get_valid_deck_names() -> List[str]:
@@ -137,10 +142,10 @@ def get_tier(score: float) -> str:
 
 # --- Main Application ---
 def main():
-    st.set_page_config(page_title="TCG Metagame Predictor", page_icon="🏆", layout="wide")
+    st.set_page_config(page_title="TCG Metagame Solver", page_icon="🏆", layout="wide")
     init_session_state()
     
-    st.title("🏆 TCG Metagame Predictor")
+    st.title("🏆 TCG Metagame Solver")
     st.markdown("Predict meta-weighted performance using real-world empirical data and strict Monte Carlo bracket simulations.")
 
     # ==========================================

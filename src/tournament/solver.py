@@ -1,10 +1,10 @@
-# src/predictor.py
+# solver.py | Water-filling constraints & Swiss metrics (formerly predictor.py)
 import os
 import math
 import numpy as np
-from typing import Dict, List, Any, TypedDict, Literal, Union, cast, Tuple
-from .config import INPUT_DIR, MIN_GAMES
-from .data import load_matchup_data, safe_normalize
+from typing import Dict, List, Any, TypedDict, Union, cast, Tuple
+from src.core.config import INPUT_DIR, MIN_GAMES, MatchFormat
+from src.core.data import load_matchup_data, safe_normalize
 
 # === Input Types ===
 class ExactSpec(TypedDict):
@@ -16,7 +16,6 @@ class RangeSpec(TypedDict):
 
 MetaValue = Union[float, ExactSpec, RangeSpec]
 UserMetaSpec = Dict[str, MetaValue]
-MatchFormat = Literal["BO1", "BO3"]
 
 # === Output Types ===
 class DeckRecommendation(TypedDict):

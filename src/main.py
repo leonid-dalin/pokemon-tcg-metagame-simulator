@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# main.py — CLI entry point, experiment batching, logging control, reproducibility.
+# main.py | CLI entry point, experiment batching, logging control, reproducibility.
 
 from __future__ import annotations
 import json
@@ -9,28 +9,29 @@ import os
 from typing import cast, Dict, Any, Optional, Literal, TextIO
 
 # Local modules
-from .data import (
+from src.core.config import *
+from src.core.types import SimulationConfig
+from src.core.data import (
     load_matchup_data,
     cluster_decks_by_matchup_profile,
     compute_deck_dominance,
 )
-from .simulation import find_evolutionary_stable_state
-from .analysis import (
+from src.evolution.engine import find_evolutionary_stable_state
+from src.evolution.analysis import (
     compute_convergence_metrics,
     generate_final_state_tier_list,
     generate_all_time_tier_list,
     compute_matchup_cycles,
     compute_deck_similarity,
 )
-from .plotting import (
+from src.evolution.plotting import (
     plot_metagame_evolution_interactive,
     plot_matchup_heatmap_interactive,
     plot_matchup_network,
 )
-from .config import *
-from .cli_args import parse_args, Args
-from .predictor import predict_best_decks
-from .simulation_config import SimulationConfig
+from src.interfaces.cli_args import parse_args, Args
+from src.tournament.solver import predict_best_decks
+
 
 
 # ----------------------------

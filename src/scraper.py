@@ -6,7 +6,7 @@ import re
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from typing import List, Dict, Tuple, Set, Any
-from .config import MATCHUP_DIR, INPUT_DIR
+from src.core.config import MATCHUP_DIR, INPUT_DIR
 
 
 def normalize_archetype(name):

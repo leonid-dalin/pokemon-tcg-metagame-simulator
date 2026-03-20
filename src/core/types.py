@@ -1,4 +1,4 @@
-# simulation_config.py
+# types.py | Dataclasses and TypedDicts (formerly simulation_config.py)
 from dataclasses import dataclass
 from typing import Literal
 

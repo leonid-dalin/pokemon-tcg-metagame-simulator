@@ -1,4 +1,4 @@
-# config.py
+# config.py | Global constants
 from typing import Literal
 
 # ----------------------------
@@ -12,6 +12,7 @@ EXTINCTION_THRESHOLD = 1e-10 # 0.005
 STABILITY_THRESHOLD = 1e-8 # 0.01
 CONVERGENCE_WINDOW = 100
 RNG_SEED = 1312
+MatchFormat = Literal["BO1", "BO3"]
 
 # ----------------------------
 # Tournament Defaults

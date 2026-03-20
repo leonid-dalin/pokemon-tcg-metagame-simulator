@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# monte_carlo.py | High-speed static bracket execution
 import numpy as np
 import multiprocessing as mp
 from typing import Dict, List, Tuple, Any, Optional, Callable
@@ -40,7 +41,7 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                 
                 win_probs = win_matrix[p1_decks, p2_decks]
                 
-                # --- NEW: BETA TIE CONVERGENCE LOGIC ---
+                # --- !!! BETA !!! TIE CONVERGENCE LOGIC ---
                 if use_tie_convergence:
                     # Parabolic Tie Formula: T_global * 4 * P * (1-P)
                     tie_probs = global_tie_rate * 4.0 * win_probs * (1.0 - win_probs)
