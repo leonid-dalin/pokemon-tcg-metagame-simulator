@@ -35,6 +35,14 @@ _STRUCTURE_RESULTS = (
     (8, 16, 5, 8),   # <= 2048
     (8, 16, 6, 8),   # > 2048 (Default)
 )
+aggressive_colorscale = [
+    [0.0, "rgb(178, 34, 34)"],  # 0% - Firebrick
+    [0.45, "rgb(255, 153, 153)"],  # ~45% - Light red
+    [0.49, "rgb(255, 255, 224)"],  # ~49% - Light Yellow
+    [0.51, "rgb(255, 255, 224)"],  # ~51% - Light Yellow
+    [0.55, "rgb(159, 218, 169)"],  # ~55% - Light Green
+    [1.0, "rgb(0, 68, 27)"],  # 100% - Very Dark Green
+]
 
 # ----------------------------
 # Simulation Enhancements

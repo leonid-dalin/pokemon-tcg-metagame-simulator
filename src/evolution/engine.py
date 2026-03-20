@@ -5,7 +5,6 @@ import time
 import logging
 import numpy as np
 import csv
-import bisect
 from typing import List, Tuple, Dict, Any, Optional, Iterable
 
 # Optional modules — gracefully degrade
@@ -26,6 +25,7 @@ except ImportError:
 from src.core.config import *
 from src.core.data import safe_normalize
 from src.core.types import SimulationConfig
+from src.tournament.solver import get_variant_5_structure
 
 # ----------------------------
 # Tournament Simulation Workers
@@ -84,12 +84,6 @@ def _pure_swiss_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
     np.add.at(matches_per_deck, field_indices, num_rounds)
 
     return wins_per_deck, matches_per_deck
-
-def get_variant_5_structure(players: int) -> Tuple[int, int, int, int]:
-    """Returns: (Day1_Rounds, Match_Point_Cutoff, Day2_Rounds, Top_Cut) based on official handbook."""
-    from .config import _STRUCTURE_RESULTS, _STRUCTURE_THRESHOLDS
-    index = bisect.bisect_left(_STRUCTURE_THRESHOLDS, players)
-    return _STRUCTURE_RESULTS[index]
 
 def _championship_series_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
     """

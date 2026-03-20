@@ -9,7 +9,7 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 import networkx as nx
-
+from src.core.config import aggressive_colorscale
 
 # ----------------------------
 # Metagame Evolution Plot (Interactive)
@@ -149,14 +149,7 @@ def plot_matchup_heatmap_interactive(
         sorted_win_matrix = win_matrix * 100
         sorted_names = deck_names
 
-    aggressive_colorscale = [
-        [0.0, "rgb(178, 34, 34)"],  # 0% - Firebrick (a good rouge)
-        [0.45, "rgb(255, 153, 153)"],  # ~45% - Light red
-        [0.49, "rgb(255, 255, 224)"],  # ~49% - Light Yellow
-        [0.51, "rgb(255, 255, 224)"],  # ~51% - Light Yellow
-        [0.55, "rgb(159, 218, 169)"],  # ~55% - Light Green
-        [1.0, "rgb(0, 68, 27)"],  # 100% - Very Dark Green
-    ]
+
 
     fig = go.Figure(
         data=go.Heatmap(

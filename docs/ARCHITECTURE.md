@@ -8,6 +8,17 @@ The project simulates the long-term evolutionary dynamics of a competitive Poké
 
 ---
 
+## Simulation Assumptions & Limitations
+
+To maintain high-speed parallel performance and prevent statistical noise from overwhelming the signal, the `IRL Tournament Engine` and `Evolution Engine` operate under a specific set of constrained assumptions:
+
+1. **Perfect Equal Skill (Flat Elo):** The simulator assumes all pilots(/players) are of perfectly equal, "average" skill level. The engine pulls statically from the provided win-rate matrix (e.g., Limitless TCG data) and does not inject Elo-style distributions. A Top-10 global player and a Day 1 casual are treated identically by the math. If there's interest, I can implement `elo` as an arg for Advanced Users to tweak over, but as it stands it does **not** cover the scope of this project at this stage.
+2. **Matchup Determinism:** Basically, **no luck.** While the tournament bracket pairings are stochastic (RNG-driven), the actual match results are resolved purely as a weighted coin flip based on the archetype matchup data. There is no simulation of bricked hands, dead draws, or top-decks. We make the assumption that the winrate and data we already gathered are **absolute** in their nature.
+3. **Speed-Agnostic Tie Convergence:** The Parabolic Tie Convergence feature forces match-point bleed (ties) based purely on the mathematical closeness of the matchup (e.g., a 50/50 matchup ties more than an 80/20 matchup). It is entirely blind to deck archetype speed. I don't want to insert more *magic numbers* on which archetypes I consider 'easy' to pilot and which I don't. Do they time waste because they're a `Gholdengho` player, because they're versing a difficult match-up, or because that's the *right* decision to do Competitively by leading first game 1-0? Nobody knows. And **ignorance is bliss.** 
+4. **No Mid-Tournament Teching:** I won't cover the JP Tournament system. A deck's strategic profile remains frozen for the duration of the tournament or generation. The engine does not account for players altering tech cards (e.g., adding a specific counter-card) in response to expected Day 2 shifts. *If only I had data on Mulligan WR, Draw WR, Played WR, etc. ...*
+
+---
+
 ## Directory Structure
 
 The codebase utilizes a domain-driven layout to strictly separate long-term evolutionary mechanics from immediate tournament equity evaluation:
@@ -121,7 +132,6 @@ The theoretical game-theory engine designed to predict the Evolutionary Stable S
 
 **Key Functions:**
 
-*   `get_variant_5_structure`: Implements the official Play! Pokémon Handbook standards. It dynamically maps player volume to specific Day 1/Day 2 round counts and match-point advancement thresholds (e.g., 16 or 19 points).
 *   `_championship_series_worker`: Simulates a 2-day event and scales performance into "Win-Equivalents" for the engine.
 *   `_pure_swiss_worker`: Simulates a standard, fast, single-phase Swiss tournament for faster evolutionary scaling when Championship structures aren't required.
 *   `run_tournament_generation(current_freq: np.ndarray, ...) -> np.ndarray`: Runs one generation of stochastic tournaments (using workers optionally in parallel) and returns the new metagame frequency vector based on `selection_pressure`.
@@ -159,6 +169,7 @@ The practical, immediate predictive engine designed to evaluate individual Expec
 
 **Key Functions:**
 
+*   `get_variant_5_structure`: Implements the official Play! Pokémon Handbook standards. It dynamically maps player volume to specific Day 1/Day 2 round counts and match-point advancement thresholds (e.g., 16 or 19 points).
 *   `resolve_meta_constraints` **(Vectorized Water-Filling Algorithm)**: Strictly enforces user-defined constraints (Exact or Range). Utilizing high-performance pure NumPy boolean masking, it distributes the remaining tournament mass proportionally based on Laplace-smoothed empirical data.
 *   `swiss_rounds_from_players(n_players: int) -> int`: Calculates the number of Swiss rounds based on `math.ceil(math.log2(n))`.
 *   `predict_best_decks(user_meta_spec: UserMetaSpec, ...) -> PredictionResult`: Orchestrates the baseline calculation. It applies the water-filling constraints and generates foundational Swiss metrics (SoS, OMW, Expected Win Rate) before passing the results to the Monte Carlo engine for bracket execution.
@@ -207,4 +218,4 @@ UI and argument definitions. These files contain no core math and exist purely t
 
 **Purpose:** Lists the Python package dependencies required to run the project (e.g., `numpy`, `scipy`, `scikit-learn`, `plotly`, `tqdm`, `beautifulsoup4`, `streamlit`).
 
-Last Edited: 20.03.2026, 02:00 UTC+2
+Last Edited: 20.03.2026, 06:00 UTC+2

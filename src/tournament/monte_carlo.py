@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # monte_carlo.py | High-speed static bracket execution
+import time
 import numpy as np
 import multiprocessing as mp
-from typing import Dict, List, Tuple, Any, Optional, Callable
-import time
+from typing import Dict, List, Tuple, Optional, Callable
 
-def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    iterations, players, meta_distribution, win_matrix, d1_rounds, cut_points, d2_rounds, top_cut, seed, use_tie_convergence, global_tie_rate = args
+def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    iterations, players, meta_distribution, win_matrix, d1_rounds, cut_points, d2_rounds, top_cut, seed, use_tie_convergence, global_tie_rate, use_drop_feature = args
     rng = np.random.default_rng(seed)
     n_decks = win_matrix.shape[0]
     
@@ -24,7 +24,8 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
         
         match_points.fill(0)
         opponents_history = [[] for _ in range(players)]
-        
+        losses = np.zeros(players, dtype=int)
+
         def play_rounds(rounds, current_active):
             for _ in range(rounds):
                 if len(current_active) < 2: break
@@ -36,21 +37,27 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                 p2s = sorted_active[1::2]
                 if len(p1s) > len(p2s): p1s = p1s[:-1]
                 
+                # --- HEURISTIC REMATCH PREVENTION ---
+                for idx in range(len(p1s)):
+                    p1, p2 = p1s[idx], p2s[idx]
+                    if p2 in opponents_history[p1]:
+                        if idx + 1 < len(p2s):
+                            next_p2 = p2s[idx + 1]
+                            if next_p2 not in opponents_history[p1] and p2 not in opponents_history[p1s[idx+1]]:
+                                p2s[idx], p2s[idx+1] = p2s[idx+1], p2s[idx]
+                
                 p1_decks = field_indices[p1s]
                 p2_decks = field_indices[p2s]
-                
                 win_probs = win_matrix[p1_decks, p2_decks]
                 
-                # --- !!! BETA !!! TIE CONVERGENCE LOGIC ---
+                # --- TIE CONVERGENCE LOGIC ---
                 if use_tie_convergence:
-                    # Parabolic Tie Formula: T_global * 4 * P * (1-P)
                     tie_probs = global_tie_rate * 4.0 * win_probs * (1.0 - win_probs)
                     rolls = rng.random(len(p1s))
                     
                     p1_win_thresh = win_probs - (tie_probs / 2.0)
                     tie_thresh = p1_win_thresh + tie_probs
                     
-                    # Micro-optimized boolean evaluation
                     p1_wins = rolls < p1_win_thresh
                     p2_wins = rolls >= tie_thresh
                     ties = ~(p1_wins | p2_wins)
@@ -59,39 +66,52 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                     match_points[p2s[p2_wins]] += 3
                     match_points[p1s[ties]] += 1
                     match_points[p2s[ties]] += 1
+
+                    losses[p1s[p2_wins]] += 1
+                    losses[p2s[p1_wins]] += 1
                 else:
                     p1_wins = rng.random(len(p1s)) < win_probs
                     match_points[p1s[p1_wins]] += 3
                     match_points[p2s[~p1_wins]] += 3
+                    losses[p1s[~p1_wins]] += 1
+                    losses[p2s[p1_wins]] += 1
                 
                 for p1, p2 in zip(p1s, p2s):
                     opponents_history[p1].append(p2)
                     opponents_history[p2].append(p1)
 
+                # --- X-3 DROP LOGIC ---
+                if use_drop_feature:
+                    current_active = current_active[losses[current_active] < 3]
+
+        # 1. Play Day 1
         play_rounds(d1_rounds, active)
         
         day2_players = np.where(match_points >= cut_points)[0]
         if len(day2_players) > 0 and d2_rounds > 0:
             total_day2 += np.bincount(field_indices[day2_players], minlength=n_decks)
         
+        # 2. Play Day 2
         if d2_rounds > 0 and len(day2_players) > 1:
             play_rounds(d2_rounds, day2_players)
             
+        # 3. Calculate OWP (Top Cut sorting)
         top_players = []
         if top_cut > 0:
-            pool = day2_players if (d2_rounds > 0 and len(day2_players) > 0) else active
-            if len(pool) > 0:
-                owp = np.zeros(players)
-                for i in pool:
+            owp = np.zeros(players)
+            pool_for_owp = day2_players if d2_rounds > 0 else active
+            if len(pool_for_owp) > 0:
+                for i in pool_for_owp:
                     opps = opponents_history[i]
                     if not opps: continue
                     opp_win_pcts = np.clip([match_points[o] / (max(1, len(opponents_history[o])) * 3) for o in opps], 0.25, 1.0)
                     owp[i] = np.mean(opp_win_pcts)
-                    
-                top_order = np.lexsort((-owp[pool], -match_points[pool]))
-                top_players = pool[top_order][:top_cut]
+
+                top_order = np.lexsort((-owp[pool_for_owp], -match_points[pool_for_owp]))
+                top_players = pool_for_owp[top_order][:top_cut]
                 total_topcut += np.bincount(field_indices[top_players], minlength=n_decks)
             
+        # 4. Playoffs
         if len(top_players) > 0:
             standings = list(top_players)
             while len(standings) > 1:
@@ -103,7 +123,6 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                 
                 p1_decks = field_indices[p1s]
                 p2_decks = field_indices[p2s]
-                # Top cut is single elimination; no ties allowed
                 p1_wins = rng.random(len(p1s)) < win_matrix[p1_decks, p2_decks]
                 
                 next_round = []
@@ -114,7 +133,7 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
             if standings:
                 total_champ[field_indices[standings[0]]] += 1
 
-    return total_initial, total_day2, total_topcut, total_champ
+    return total_initial, total_day2, total_topcut, total_champ, np.zeros(n_decks), np.zeros(n_decks)
 
 def run_monte_carlo_analytics(
     deck_names: List[str],
@@ -128,8 +147,9 @@ def run_monte_carlo_analytics(
     iterations: int = 1000,
     match_format: str = "BO3",
     progress_callback: Optional[Callable[[int, int], None]] = None,
-    use_tie_convergence: bool = False,
-    global_tie_rate: float = 0.15
+    use_tie_convergence: bool = True,
+    global_tie_rate: float = 0.15,
+    use_drop_feature: bool = False
 ) -> Dict[str, Dict[str, float]]:
     
     n_decks = len(deck_names)
@@ -152,7 +172,7 @@ def run_monte_carlo_analytics(
         alloc = min(iters_per_core, remaining_iters)
         if i == n_cores - 1: alloc = remaining_iters 
         if alloc > 0:
-            tasks.append((alloc, players, meta_vec, working_matrix, d1_rounds, cut_points, d2_rounds, top_cut, base_seed + i, use_tie_convergence, global_tie_rate))
+            tasks.append((alloc, players, meta_vec, working_matrix, d1_rounds, cut_points, d2_rounds, top_cut, base_seed + i, use_tie_convergence, global_tie_rate, use_drop_feature))
             remaining_iters -= alloc
         
     total_initial = np.zeros(n_decks, dtype=int)
@@ -162,12 +182,12 @@ def run_monte_carlo_analytics(
     
     completed_cores = 0
     with mp.Pool(n_cores) as pool:
-        for res_init, res_day2, res_top, res_champ in pool.imap_unordered(_mc_worker, tasks):
+        for res_init, res_day2, res_top, res_champ, _, _ in pool.imap_unordered(_mc_worker, tasks):
             total_initial += res_init
             total_day2 += res_day2
             total_topcut += res_top
             total_champ += res_champ
-            
+   
             completed_cores += 1
             if progress_callback:
                 progress_callback(completed_cores, len(tasks))
@@ -188,7 +208,7 @@ def run_monte_carlo_analytics(
                 "top_cut_conversion": float(topcut_conv[i]),
                 "win_probability": float(win_conv[i]),
                 "day2_share": float(day2_share[i]),
-                "top_cut_share": float(topcut_share[i])
+                "top_cut_share": float(topcut_share[i]),
             }
             
     return results

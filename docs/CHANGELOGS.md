@@ -1,4 +1,27 @@
 ## Latest Commit `?` (Mar 20, 2026)
+### refactor: implement vS Meta Score, overhaul Swiss bracket engine, and redesign the app dashboard to be more intelligent
+
+This update fundamentally shifts how the static baseline is evaluated, moving away from fabricating Swiss tiebreakers (SoS/OMW) before the bracket runs, and instead adopting the rigorous data philosophies already pioneered by [Vicious Syndicate](https://www.vicioussyndicate.com/).
+
+* **Adopted vS Meta Score Logic:** `solver.py` now evaluates the Day 1 baseline using Vicious Syndicate's 2D coordinate system. 
+    * **Power Score (0-100):** A normalized measure of a deck's Expected Win Rate against the field.
+    * **Meta Score (0-100):** The simple average of a deck's Power Score and its Frequency Score (Popularity).
+* **Strict Win-Rate Tiers:** Abandoned 0-100 normalized composite scores for tier assignments. Tiers are now ruthlessly assigned based on raw Expected Win Rate against the predicted field (S-Tier $\ge$ 52%, A-Tier $\ge$ 50%, B-Tier $\ge$ 47%).
+* *Credit:* I'd like to extend a massive thank you to the [Vicious Syndicate](https://www.vicioussyndicate.com/drr/faq-data-reaper-report/) team for providing the gold standard in TCG data analytics. Their methodology for mapping "format dominance" versus "pilot profitability" directly inspired this refactor. It was long due, but I wanted to experiment on my own before I'd adopt a proven logic.
+
+#### **Monte Carlo Engine Optimizations**
+* **1-Deep Lookahead Heuristic:** Fixed a critical flaw in the Swiss pairing logic. Basically, there was a possibility for identical re-pairings (I observed it in ties). The engine now checks `opponents_history` and performs adjacent-table swaps to prevent players from immediately rematching the same opponent, without the crippling $O(N^3)$ performance cost of a full Blossom algorithm.
+* **BETA: X-3 Drop Simulation:** Added a UI toggle to simulate real-world player attrition. If enabled, the engine will purge players from the active bracket once they accumulate 3 losses, accurately altering the tiebreaker math for the bubble.
+* **Performance Boost:** Stripped redundant Opponent's Match Win (OMW) array aggregations out of the Day 1 Swiss loops. OWP is now only calculated exactly when needed (Top Cut sorting), significantly reducing NumPy overhead.
+
+#### **UI/UX Intelligence Dashboard**
+* **Tabbed Actionable Intelligence:** Replaced the flat recommendation list with a 3-tab layout: **🔥 Top Recommendations** (Sorted by Power Score), **🚨 Top Threats** (Sorted by Meta Score), and **🚫 Decks to Avoid** (Negative EV).
+* **Threat Cross-Referencing:** Recommended decks now explicitly display a color-coded matrix showing exactly how they fare against the Top 3 "Meta Dictator" threats.
+* **Day 2 Expected Win Rate:** The UI now calculates a completely isolated Expected Win Rate against the *condensed* Day 2 meta-share, identifying "Day 2 Predators" that farm the top tables.
+
+---
+
+## Commit `?` (Mar 20, 2026)
 ### refactor: domain-driven restructure, massive performance optimization, and mathematical fidelity overhaul
 
 Another major update that introduces a new strict domain-driven directory structure to separate the evolutionary engine from the tournament solver engine, alongside critical bug fixes that drastically increase simulation speed and mathematical purity. At least on paper.

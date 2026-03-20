@@ -1,9 +1,9 @@
-# solver.py | Water-filling constraints & Swiss metrics (formerly predictor.py)
+# solver.py | Water-filling constraints & Base Meta Scoring
 import os
 import math
 import numpy as np
 from typing import Dict, List, Any, TypedDict, Union, cast, Tuple
-from src.core.config import INPUT_DIR, MIN_GAMES, MatchFormat
+from src.core.config import INPUT_DIR, MIN_GAMES, MatchFormat, _STRUCTURE_RESULTS, _STRUCTURE_THRESHOLDS
 from src.core.data import load_matchup_data, safe_normalize
 
 # === Input Types ===
@@ -25,10 +25,9 @@ class DeckRecommendation(TypedDict):
     sample_support: float
     meta_share: float
     is_user_specified: bool
-    sos: float
-    omw: float
-    undefeated_probability: float
-    composite_score: float
+    power_score: float
+    frequency_score: float
+    base_meta_score: float
 
 class PredictionResult(TypedDict):
     recommendations: List[DeckRecommendation]
@@ -38,6 +37,12 @@ class PredictionResult(TypedDict):
     swiss_rounds: int
     total_players: int
     frontrunners: List[str]
+
+def get_variant_5_structure(players: int) -> Tuple[int, int, int, int]:
+    """Returns: (Day1_Rounds, Match_Point_Cutoff, Day2_Rounds, Top_Cut) based on official handbook."""
+    import bisect
+    index = bisect.bisect_left(_STRUCTURE_THRESHOLDS, players)
+    return _STRUCTURE_RESULTS[index]
 
 def swiss_rounds_from_players(n_players: int) -> int:
     if n_players <= 1:
@@ -66,10 +71,7 @@ def calculate_empirical_baseline(
     if total_matches == 0:
         return np.ones(n) / n
 
-    # Distribute actual matches
     empirical_share = match_counts / total_matches
-    
-    # Inject random mass to prevent 0% baselines
     smoothed_share = empirical_share * (1.0 - random_mass_fraction) + (random_mass_fraction / n)
     return safe_normalize(smoothed_share)
 
@@ -86,7 +88,6 @@ def resolve_meta_constraints(
     max_bounds = np.ones(n)
     is_locked = np.zeros(n, dtype=bool)
 
-    # 1. Parse Specs (O(N) - Fast enough to keep as a simple loop)
     for deck, spec in user_spec.items():
         if deck not in deck_to_idx:
             continue
@@ -106,12 +107,10 @@ def resolve_meta_constraints(
             elif "min" in spec and "max" in spec:
                 min_bounds[i] = float(spec["min"])
                 max_bounds[i] = float(spec["max"])
-
-    # 2. Pure Vectorized Water-Filling
+    # Pure Vectorized Water-Filling
     max_iterations = 100
-    
     for iterations in range(max_iterations):
-        remaining_mass = 1.0 - np.sum(final_meta[is_locked])
+        remaining_mass = max(0.0, 1.0 - np.sum(final_meta[is_locked]))
         
         if remaining_mass <= 1e-8:
             break
@@ -120,7 +119,6 @@ def resolve_meta_constraints(
         if not np.any(unlocked_mask):
             break
             
-        # Proportional baseline for unlocked decks
         unlocked_baseline = baseline_meta[unlocked_mask]
         baseline_sum = np.sum(unlocked_baseline)
         
@@ -130,37 +128,31 @@ def resolve_meta_constraints(
             
         proposed_alloc = (unlocked_baseline / baseline_sum) * remaining_mass
         
-        # Vectorized bounds checking
         over_mask = proposed_alloc > max_bounds[unlocked_mask]
         under_mask = proposed_alloc < min_bounds[unlocked_mask]
         
         if not (np.any(over_mask) or np.any(under_mask)):
             final_meta[unlocked_mask] = proposed_alloc
-            break # All unlocked decks fit beautifully
+            break
             
-        # Map the local unlocked masks back to global indices to apply locks
         unlocked_indices = np.where(unlocked_mask)[0]
-        
         over_global = unlocked_indices[over_mask]
         under_global = unlocked_indices[under_mask]
         
-        # Apply the bounds and lock them
         final_meta[over_global] = max_bounds[over_global]
         is_locked[over_global] = True
         
         final_meta[under_global] = min_bounds[under_global]
         is_locked[under_global] = True
-
     if iterations == max_iterations - 1:
         print("⚠️ Warning: Vectorized water-filling hit max iterations. Precision loss likely.")
-
     return safe_normalize(final_meta)
 
 def predict_best_decks(
     user_meta_spec: UserMetaSpec,
     total_players: int = 32,
     min_sample_threshold: int = 10,
-    match_format: MatchFormat = "BO1"
+    match_format: MatchFormat = "BO3"
 ) -> PredictionResult:
     
     input_path = os.path.join(INPUT_DIR, "ea_input.json")
@@ -171,14 +163,10 @@ def predict_best_decks(
     n = len(deck_names)
     deck_to_idx = {name: i for i, name in enumerate(deck_names)}
 
-    # Apply Format Transformation
     if match_format == "BO3":
         win_matrix = apply_bo3_conversion(win_matrix)
 
-    # 1. Calculate Empirical Baseline ("Live" Mode)
     live_baseline = calculate_empirical_baseline(deck_names, matchup_details)
-
-    # 2. Apply Custom Bounds via Water-Filling
     meta_vec = resolve_meta_constraints(live_baseline, user_meta_spec, deck_to_idx)
 
     # --- Compute performance metrics ---
@@ -190,37 +178,27 @@ def predict_best_decks(
     expected_wr = win_matrix @ meta_vec
     weighted_samples = np.array([np.sum(meta_vec * sample_matrix[i]) for i in range(n)])
     confidence = np.clip(weighted_samples / (weighted_samples + min_sample_threshold), 0.2, 1.0)
-
-    # --- Enhanced Swiss Metrics ---
-    sos_values = 1.0 - meta_vec
-    total_weighted_wr = np.sum(meta_vec * expected_wr)
-    opponent_wr_sums = total_weighted_wr - (meta_vec * expected_wr)
-    denominators = 1.0 - meta_vec
-
-    global_avg_wr = np.mean(expected_wr)
-    omw_values = np.full_like(meta_vec, global_avg_wr)
-    safe_mask = denominators > 1e-6
-    omw_values[safe_mask] = opponent_wr_sums[safe_mask] / denominators[safe_mask]
-
     swiss_rounds = swiss_rounds_from_players(total_players)
-    undefeated_probabilities = np.power(expected_wr, swiss_rounds)
 
-    # Composite Score
-    raw_composite = (
-        0.4 * expected_wr -
-        0.1 * sos_values -
-        0.1 * omw_values +
-        0.4 * undefeated_probabilities
-    )
-
-    # Normalize to 0-100 scale to match Tier Thresholds (S: 90, A: 70, B: 50, C: 30)
-    raw_min = np.min(raw_composite)
-    raw_max = np.max(raw_composite)
+    # --- Meta Score Analytics ---
+    # Power Score (0-100 normalization of Win Rate against the field)
+    max_wr = np.max(expected_wr)
+    min_wr_floor = 1.0 - max_wr  # Derived from VS fixed value definition
     
-    if raw_max > raw_min:
-        composite_scores = ((raw_composite - raw_min) / (raw_max - raw_min)) * 100.0
+    power_scores = np.zeros(n)
+    if max_wr > min_wr_floor:
+        power_scores = np.clip((expected_wr - min_wr_floor) / (max_wr - min_wr_floor) * 100.0, 0.0, 100.0)
     else:
-        composite_scores = np.full_like(raw_composite, 50.0)
+        power_scores = np.full(n, 50.0) # Failsafe for perfectly flat 50/50 meta
+
+    # Frequency Score (0-100 normalization of Prevalence)
+    max_freq = np.max(meta_vec)
+    freq_scores = np.zeros(n)
+    if max_freq > 0:
+        freq_scores = (meta_vec / max_freq) * 100.0
+
+    # Base Meta Score (Relative standing distance to theoretical best deck)
+    base_meta_scores = (power_scores + freq_scores) / 2.0
 
     metrics_per_deck: Dict[str, Any] = {}
     for i, name in enumerate(deck_names):
@@ -230,17 +208,16 @@ def predict_best_decks(
             "sample_support": float(weighted_samples[i]),
             "meta_share": float(meta_vec[i]),
             "is_user_specified": name in user_meta_spec,
-            "sos": float(sos_values[i]),
-            "omw": float(omw_values[i]),
-            "undefeated_probability": float(undefeated_probabilities[i]),
-            "composite_score": float(composite_scores[i]), # Now a 0-100 float
+            "power_score": float(power_scores[i]),
+            "frequency_score": float(freq_scores[i]),
+            "base_meta_score": float(base_meta_scores[i]),
         }
 
-    all_decks_sorted = sorted(deck_names, key=lambda d: metrics_per_deck[d]["composite_score"], reverse=True)
+    all_decks_sorted = sorted(deck_names, key=lambda d: metrics_per_deck[d]["base_meta_score"], reverse=True)
 
     frontrunners = [
         d for d in all_decks_sorted[:5]
-        if composite_scores[deck_to_idx[d]] > 0.6 and metrics_per_deck[d]["meta_share"] > 0.03
+        if metrics_per_deck[d]["base_meta_score"] > 60.0 and metrics_per_deck[d]["meta_share"] > 0.03
     ][:2]
 
     recommendations = [cast(DeckRecommendation, {**metrics_per_deck[d], "deck": d}) for d in all_decks_sorted]
