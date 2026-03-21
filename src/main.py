@@ -20,7 +20,6 @@ from src.evolution.engine import find_evolutionary_stable_state
 from src.evolution.analysis import (
     compute_convergence_metrics,
     generate_final_state_tier_list,
-    generate_all_time_tier_list,
     compute_matchup_cycles,
     compute_deck_similarity,
 )
@@ -31,7 +30,6 @@ from src.evolution.plotting import (
 )
 from src.interfaces.cli_args import parse_args, Args
 from src.tournament.solver import predict_best_decks
-
 
 
 # ----------------------------
@@ -101,6 +99,7 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
         mutation_floor=args.mutation_floor,
         noise_scale=args.noise,
         selection_pressure=args.selection_pressure,
+        tournament_style=args.tournament_style,
     )
     logging.debug(f"Simulation Config: {sim_config}")
 
@@ -149,14 +148,15 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
 
     # Rename the directory
     try:
-        if os.path.exists(final_output_dir):
-            # If final dir somehow exists, add a counter
-            counter = 1
-            while os.path.exists(f"{final_output_dir}_{counter}"):
-                counter += 1
-            final_output_dir = f"{final_output_dir}_{counter}"
-        os.rename(base_output_dir, final_output_dir)
-        logging.info(f"✅ Output directory renamed to: {final_output_dir}")
+        if base_output_dir != final_output_dir:
+            if os.path.exists(final_output_dir):
+                # If final dir somehow exists, add a counter
+                counter = 1
+                while os.path.exists(f"{final_output_dir}_{counter}"):
+                    counter += 1
+                final_output_dir = f"{final_output_dir}_{counter}"
+            os.rename(base_output_dir, final_output_dir)
+            logging.info(f"✅ Output directory renamed to: {final_output_dir}")
     except Exception as e:
         logging.error(f"Failed to rename output directory: {e}")
         final_output_dir = base_output_dir  # Fallback to original
@@ -188,18 +188,14 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
 
     # Tier lists
     final_tiers = generate_final_state_tier_list(deck_names, history, win_matrix)
-    all_time_tiers = generate_all_time_tier_list(deck_names, history, win_matrix)
     with open(os.path.join(output_dir, "final_tiers.json"), "w", encoding="utf-8") as f:
         json.dump(final_tiers, cast(TextIO, f), indent=2)
-    with open(os.path.join(output_dir, "all_time_tiers.json"), "w", encoding="utf-8") as f:
-        json.dump(all_time_tiers, cast(TextIO, f), indent=2)
+
+    final_active_mask = [r["is_active"] for r in results]
 
     # Matchup analysis
-    cycles = compute_matchup_cycles(win_matrix, deck_names)
+    cycles = compute_matchup_cycles(win_matrix, deck_names, final_active_mask=final_active_mask)
 
-    # Create and pass final_active_mask to compute_deck_similarity
-    # Create a list indicating if deck is active in the FINAL state
-    final_active_mask = [r["is_active"] for r in results]
     similarity = compute_deck_similarity(win_matrix, deck_names, final_active_mask=final_active_mask)
     with open(os.path.join(output_dir, "deck_similarity.json"), "w", encoding="utf-8") as f:
         json.dump(similarity.tolist(), cast(TextIO,f), indent=2)
@@ -213,8 +209,9 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
             save_path=os.path.join(output_dir, "metagame_evolution.html"),
         )
         tier_order = []
-        for tier in "SABCD":
+        for tier in TIER_ORDER:
             tier_order.extend([deck["deck"] for deck in final_tiers.get(tier, [])])
+            
         plot_matchup_heatmap_interactive(
             win_matrix,
             deck_names,
