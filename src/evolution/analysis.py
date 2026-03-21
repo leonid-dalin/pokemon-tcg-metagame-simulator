@@ -17,6 +17,7 @@ from src.core.config import (
     COMPOSITE_SCORE_CONSISTENCY_WEIGHT,
     WIN_THRESHOLD,
     CONVERGENCE_WINDOW,
+    TIER_ORDER,
     tier_thresholds
 )
 from src.core.data import cluster_decks_by_matchup_profile
@@ -24,8 +25,6 @@ from src.core.data import cluster_decks_by_matchup_profile
 # ----------------------------
 # Module-Level Constants (analysis.py)
 # ----------------------------
-TIER_ORDER: Tuple[str, ...] = ("S", "A", "B", "C", "D")
-
 COMPOSITE_WEIGHTS: Tuple[float, float, float] = (
     COMPOSITE_SCORE_WR_WEIGHT,
     COMPOSITE_SCORE_PRESENCE_WEIGHT,
@@ -146,15 +145,11 @@ def generate_final_state_tier_list(
             "presence": float(final_freqs[i]), 
         }
         
-        # ruthless tier assignment based on RAW expected Win Rate
-        assigned = False
+        # tier assignment based on RAW expected Win Rate
         for tier, threshold in tier_thresholds.items():
             if expected_wr[i] >= threshold: 
                 tiers[tier].append(deck_data)
-                assigned = True
                 break
-        if not assigned:
-            tiers["D"].append(deck_data)
             
     for tier in tiers:
         # sort internal tiers by the newly calculated Meta Score
@@ -219,14 +214,10 @@ def generate_all_time_tier_list(
         }
         score = composite_score[i]
         
-        assigned = False
         for tier, threshold in tier_thresholds.items():
             if score >= threshold:
                 tiers[tier].append(deck_data)
-                assigned = True
                 break
-        if not assigned:
-            tiers["D"].append(deck_data)
 
     for tier in tiers:
         tiers[tier].sort(key=lambda x: x["composite_score"], reverse=True)

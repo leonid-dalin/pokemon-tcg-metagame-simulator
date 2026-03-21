@@ -18,7 +18,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.core.data import load_matchup_data
-from src.core.config import INPUT_DIR, MIN_GAMES, aggressive_colorscale, tier_thresholds
+from src.core.config import INPUT_DIR, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, tier_thresholds
 from src.tournament.monte_carlo import run_monte_carlo_analytics
 from src.tournament.solver import predict_best_decks, UserMetaSpec, MatchFormat, swiss_rounds_from_players, get_variant_5_structure
 
@@ -87,15 +87,11 @@ def load_more_avoids(): st.session_state.avoid_limit += 3
 def get_tier(expected_wr: float) -> str:
     """
     Tier assignments based on rigorous TCG win-rate thresholds.
-    S-Tier: > 52% | A-Tier: > 50% | B-Tier: > 47% | C-Tier: < 47%
+    S-Tier: > 52.5% | A-Tier: > 50% | B-Tier: > 47.5% | C-Tier: > 45% | D-Tier: > 42.5% | E-Tier: >= 0
     """
-    assigned = False
     for tier, threshold in tier_thresholds.items():
         if expected_wr >= threshold: 
             return tier
-            break
-    if not assigned:
-        return "D"
 
 # --- Main Application ---
 def main():
@@ -331,7 +327,7 @@ def main():
 
         col_config = {
             "#": st.column_config.NumberColumn(width="small"),
-            "Tier": st.column_config.TextColumn(width="small", help="S-Tier (≥52% WR), A-Tier (≥50% WR), B-Tier (≥47% WR), C-Tier (≥44% WR)."),
+            "Tier": st.column_config.TextColumn(width="small", help="S-Tier (≥52.5% WR), A-Tier (≥50% WR), B-Tier (≥47.5% WR), C-Tier (≥45% WR), D-Tier (≥42.5 WR), E-Tier (≥0 WR)."),
             "Deck": st.column_config.TextColumn(width="medium"),
             "Meta Score": st.column_config.NumberColumn(format="%.1f", help="Average of Power and Popularity. High scores mean heavily dominant."),
             "Power Score": st.column_config.NumberColumn(format="%.1f", help="0-100 normalization of Win Rate. 100 is the best performing deck."),
@@ -467,8 +463,8 @@ def main():
                     for opp_name in active_decks:
                         if opp_name == deck: continue
                         wr = full_win_matrix[idx, deck_to_idx[opp_name]]
-                        if wr >= 0.55: favorable.append(opp_name)
-                        elif wr <= 0.45: threats.append(opp_name)
+                        if wr >= WIN_THRESHOLD: favorable.append(opp_name)
+                        elif wr <= WIN_THRESHOLD: threats.append(opp_name)
                     
                     st.error(f"**This deck pushes these out of the meta:** {', '.join(favorable[:5])}...")
                     st.success(f"**It is heavily countered by:** {', '.join(threats[:5])}...")
@@ -489,7 +485,7 @@ def main():
                 if deck == best_wr: tags.append("📈 Highest Raw Win Rate")
                 if deck == best_day2_predator: tags.append("🧱 Day 2 Predator")
                 if metrics["meta_share"] >= 0.10 and metrics["expected_win_rate"] < 0.49: tags.append("🪤 Overplayed Trap")
-                if deck not in top_threats and full_win_matrix[deck_to_idx[deck], deck_to_idx[top_threats[0]]] > 0.55:
+                if deck not in top_threats and full_win_matrix[deck_to_idx[deck], deck_to_idx[top_threats[0]]] > WIN_THRESHOLD:
                     tags.append(f"💡 Rogue Meta Breaker (Beats {top_threats[0]})")
                         
                 with st.container(border=True):

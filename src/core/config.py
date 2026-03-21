@@ -1,29 +1,53 @@
 # config.py | Global constants
-from typing import Literal
+from typing import Literal, Dict, Tuple
 
 # ----------------------------
-# Core Simulation Defaults
+# Type Definitions
 # ----------------------------
-SIMULATION_MODE: Literal["replicator", "tournament"] = "replicator"
+MatchFormat = Literal["BO1", "BO3"]
+SimulationMode = Literal["replicator", "tournament"]
+
+# ----------------------------
+# I/O Defaults
+# ----------------------------
+INPUT_DIR = "data/input/"
+MATCHUP_DIR = "data/matchups/"
+INPUT_DATA = "data/input/ea_input.json"
+OUTPUT_DIR = "output/"
+
+# ----------------------------
+# Global Setup
+# ----------------------------
+SIMULATION_MODE: SimulationMode = "replicator"
+RNG_SEED = 1312
+MIN_GAMES = 100
+
+# ----------------------------
+# Evolutionary Dynamics (Replicator Engine)
+# ----------------------------
 MAX_GENERATIONS = 1000
 MIN_GENERATIONS_PROP = 0.2
-MIN_GAMES = 100
-EXTINCTION_THRESHOLD = 1e-10 # 0.005
-STABILITY_THRESHOLD = 1e-8 # 0.01
+STABILITY_THRESHOLD = 1e-8       # 0.01
 CONVERGENCE_WINDOW = 100
-RNG_SEED = 1312
-MatchFormat = Literal["BO1", "BO3"]
+EXTINCTION_THRESHOLD = 1e-10     # 0.005
+MAX_INACTIVE_GENERATIONS = 1_000_000
+DYNAMIC_DECK_INTRO_PROB = 0      # 1e-4
+MUTATION_FLOOR = 0               # 1e-4
+NOISE_SCALE = 0                  # 1e-4
+SELECTION_PRESSURE = 6
 
 # ----------------------------
-# Tournament Defaults
+# Tournament Agent Engine (Monte Carlo)
 # ----------------------------
 USE_BAYESIAN_WINRATES = True
+USE_MULTIPROC = True
 TOURNAMENT_SIZE = 32
 NUM_TOURNAMENTS_PER_GEN = 16
 NUM_ROUNDS = 5
-USE_MULTIPROC = True
-_STRUCTURE_THRESHOLDS = (8, 16, 32, 64, 128, 256, 512, 1024, 2048)
-_STRUCTURE_RESULTS = (
+
+# TPCi Variant #5 Official Structure Logic (Day 1, Cut, Day 2, Top Cut)
+_STRUCTURE_THRESHOLDS: Tuple[int, ...] = (8, 16, 32, 64, 128, 256, 512, 1024, 2048)
+_STRUCTURE_RESULTS: Tuple[Tuple[int, int, int, int], ...] = (
     (3, 99, 0, 0),   # <= 8
     (4, 99, 0, 2),   # <= 16
     (6, 99, 0, 4),   # <= 32
@@ -35,48 +59,44 @@ _STRUCTURE_RESULTS = (
     (8, 16, 5, 8),   # <= 2048
     (8, 16, 6, 8),   # > 2048 (Default)
 )
-aggressive_colorscale = [
-    [0.0, "rgb(178, 34, 34)"],  # 0% - Firebrick
-    [0.45, "rgb(255, 153, 153)"],  # ~45% - Light red
-    [0.49, "rgb(255, 255, 224)"],  # ~49% - Light Yellow
-    [0.51, "rgb(255, 255, 224)"],  # ~51% - Light Yellow
-    [0.55, "rgb(159, 218, 169)"],  # ~55% - Light Green
-    [1.0, "rgb(0, 68, 27)"],  # 100% - Very Dark Green
-]
 
 # ----------------------------
-# Simulation Enhancements
+# Analytics & Post-Simulation
 # ----------------------------
-DYNAMIC_DECK_INTRO_PROB = 0 # 1e-4
-MUTATION_FLOOR = 0 # 1e-4
-MAX_INACTIVE_GENERATIONS = 1_000_000
-NOISE_SCALE = 0 # 1e-4
-SELECTION_PRESSURE = 6
+WIN_THRESHOLD = 0.6
+CONSISTENCY_MEAN_EPSILON = 1e-6
+CONSISTENCY_STD_EPSILON = 1e-9
 
-# ----------------------------
-# Analysis.py Constants
-# ----------------------------
+# Composite Scoring Weights [LEGACY]
+COMPOSITE_SCORE_WR_WEIGHT = 0.50
+COMPOSITE_SCORE_PRESENCE_WEIGHT = 0.30
+COMPOSITE_SCORE_CONSISTENCY_WEIGHT = 0.20
+
+# Meta Score / Win Rate Tier Thresholds
 TIER_S_THRESHOLD = 0.525
 TIER_A_THRESHOLD = 0.50
 TIER_B_THRESHOLD = 0.475
 TIER_C_THRESHOLD = 0.45
-tier_thresholds = {
+TIER_D_THRESHOLD = 0.425
+TIER_E_THRESHOLD = 0
+TIER_ORDER: Tuple[str, ...] = ("S", "A", "B", "C", "D", "E")
+tier_thresholds: Dict[str, float] = {
     "S": TIER_S_THRESHOLD,
     "A": TIER_A_THRESHOLD,
     "B": TIER_B_THRESHOLD,
     "C": TIER_C_THRESHOLD,
+    "D": TIER_D_THRESHOLD,
+    "E": TIER_E_THRESHOLD
 }
-CONSISTENCY_MEAN_EPSILON = 1e-6
-CONSISTENCY_STD_EPSILON = 1e-9
-COMPOSITE_SCORE_WR_WEIGHT = 0.50
-COMPOSITE_SCORE_PRESENCE_WEIGHT = 0.30
-COMPOSITE_SCORE_CONSISTENCY_WEIGHT = 0.20
-WIN_THRESHOLD = 0.6
 
 # ----------------------------
-# I/O Defaults
+# Plotting & UI Defaults
 # ----------------------------
-INPUT_DATA = "data/input/ea_input.json"
-OUTPUT_DIR = "output/"
-MATCHUP_DIR = "data/matchups/"
-INPUT_DIR = "data/input/"
+aggressive_colorscale = [
+    [0.0, "rgb(178, 34, 34)"],      # Tier E (Firebrick)
+    [0.45, "rgb(255, 69, 0)"],      # Tier C (Red-Orange)
+    [0.475, "rgb(255, 215, 0)"],    # Tier B (Gold/Yellow)
+    [0.50, "rgb(50, 205, 50)"],     # Tier A (Lime Green)
+    [0.525, "rgb(0, 100, 0)"],      # Tier S (Dark Green)
+    [1.0, "rgb(0, 30, 0)"],         # Tier S+ (Very Dark Green)
+]
