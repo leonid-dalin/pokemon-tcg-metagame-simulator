@@ -1,4 +1,4 @@
-## Latest Commit `?` (Mar 20, 2026)
+## Latest Commit `6401713` (Mar 20, 2026)
 ### refactor: implement vS Meta Score, overhaul Swiss bracket engine, and redesign the app dashboard to be more intelligent
 
 This update fundamentally shifts how the static baseline is evaluated, moving away from fabricating Swiss tiebreakers (SoS/OMW) before the bracket runs, and instead adopting the rigorous data philosophies already pioneered by [Vicious Syndicate](https://www.vicioussyndicate.com/).
@@ -21,7 +21,7 @@ This update fundamentally shifts how the static baseline is evaluated, moving aw
 
 ---
 
-## Commit `?` (Mar 20, 2026)
+## Commit `4820359` (Mar 20, 2026)
 ### refactor: domain-driven restructure, massive performance optimization, and mathematical fidelity overhaul
 
 Another major update that introduces a new strict domain-driven directory structure to separate the evolutionary engine from the tournament solver engine, alongside critical bug fixes that drastically increase simulation speed and mathematical purity. At least on paper.

@@ -54,15 +54,13 @@ def load_matchup_data(
                 except (ValueError, TypeError):
                     wr = 0.5
             
-            match_count = max(0, match_count) # FIX: No longer forcing a minimum of 1
+            match_count = max(0, match_count)
             matchup_details[(a, b)] = {"win_rate": wr, "match_count": match_count}
 
     # Compute total matches per deck
     deck_total_matches = defaultdict(int)
     for (d1, d2), rec in matchup_details.items():
         deck_total_matches[d1] += rec["match_count"]
-        if d1 != d2:
-            deck_total_matches[d2] += rec["match_count"]
 
     # Filter decks
     reliable_decks = [d for d in archetypes if deck_total_matches[d] >= min_matches_required]
@@ -119,16 +117,15 @@ def cluster_decks_by_matchup_profile(
         logging.warning("⚠️  scikit-learn not installed. Clustering unavailable.")
         return {"labels": [0] * len(deck_names), "centroids": None, "distances": None}
 
-    X = win_matrix.copy()
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_scaled = scaler.fit_transform(win_matrix)
     distances = pairwise_distances(X_scaled, metric="euclidean")
 
     n_samples = len(deck_names)
     max_possible_k = min(6, n_samples - 1) if n_samples > 2 else 2
 
     if method == "kmeans":
-        best_k = 5 if isinstance(n_clusters, str) else n_clusters
+        best_k = min(5, n_samples) if isinstance(n_clusters, str) else n_clusters
         best_labels, best_centroids = None, None
 
         if n_clusters == "auto" and n_samples > 2:
