@@ -46,7 +46,9 @@ def _pure_swiss_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
     use_bayesian = config["use_bayesian_winrates"]
     deck_names = config["deck_names"]
     n_decks = len(deck_names)
-
+    wins_per_deck = np.zeros(n_decks, dtype=float)
+    matches_per_deck = np.zeros(n_decks, dtype=float)
+    
     for _ in range(num_rounds):
         # Fast Swiss pairing logic
         local_rng.shuffle(active_players)
@@ -55,7 +57,10 @@ def _pure_swiss_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
 
         p1s = sorted_active[0::2]
         p2s = sorted_active[1::2]
-        if len(p1s) > len(p2s): p1s = p1s[:-1]
+        if len(p1s) > len(p2s):
+            p1s = p1s[:-1]
+        if len(p1s) == 0:
+            continue
 
         p1_indices = field_indices[p1s]
         p2_indices = field_indices[p2s]
@@ -77,11 +82,10 @@ def _pure_swiss_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
         p1_wins = local_rng.random(len(p1s)) < win_probs
         player_wins[p1s[p1_wins]] += 1
         player_wins[p2s[~p1_wins]] += 1
+        np.add.at(matches_per_deck, p1_indices, 1)
+        np.add.at(matches_per_deck, p2_indices, 1)
 
-    wins_per_deck = np.zeros(n_decks, dtype=float)
-    matches_per_deck = np.zeros(n_decks, dtype=float)
     np.add.at(wins_per_deck, field_indices, player_wins)
-    np.add.at(matches_per_deck, field_indices, num_rounds)
 
     return wins_per_deck, matches_per_deck
 
@@ -460,8 +464,8 @@ def reintroduce_extinct_decks(
         mutation_floor: float = MUTATION_FLOOR,
         current_generation: int = 0,
 ) -> np.ndarray:
-    
-    active_mask = np.array([g is None for g in extinction_gens])
+
+    active_mask = np.array([g is None for g in extinction_gens], dtype=bool)
     extinct_indices = np.where(~active_mask)[0]
 
     # Purged the global mutation_floor application that broke Replicator purity.
