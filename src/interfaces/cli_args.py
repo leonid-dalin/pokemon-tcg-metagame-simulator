@@ -222,8 +222,8 @@ def parse_args() -> Args:
         help="Disable plotting of simulation results",
     )
     parser.add_argument(
-        "-C",
         "--cluster",
+        "-C",
         action="store_true",
         help="Enable post-simulation deck clustering analysis",
     )
@@ -246,7 +246,14 @@ def parse_args() -> Args:
         default="",
         help="User-specified meta for prediction (e.g., 'DeckA:0.2,DeckB:0.1')"
     )
-
+    parser.add_argument(
+        "--tournament-style",
+        "--t-style",
+        type=str,
+        choices=["pure_swiss", "championship_series"],
+        default="pure_swiss",
+        help="Tournament bracket style: 'pure_swiss' (fast) or 'championship_series' (BO3 with tie convergence)."
+    )
     args = parser.parse_args()
 
     # === VALIDATION ===

@@ -131,8 +131,8 @@ def _championship_series_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
             tie_probs = global_tie_rate * 4.0 * win_probs * (1.0 - win_probs)
             rolls = local_rng.random(len(p1s))
             
-            p1_win_thresh = win_probs - (tie_probs / 2.0)
-            tie_thresh = p1_win_thresh + tie_probs
+            p1_win_thresh = np.clip(win_probs - (tie_probs / 2.0), 0.0, 1.0)
+            tie_thresh = np.clip(p1_win_thresh + tie_probs, 0.0, 1.0)
             
             p1_wins_mask = rolls < p1_win_thresh
             p2_wins_mask = rolls >= tie_thresh

@@ -56,3 +56,4 @@ temp/
 
 # Tests
 test_engine.py
+tests/

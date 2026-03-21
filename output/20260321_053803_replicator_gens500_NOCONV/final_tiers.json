@@ -1,0 +1,66 @@
+{
+  "S": [
+    {
+      "deck": "Gardevoir",
+      "score": 75.71833665528524,
+      "power_score": 93.48907299557342,
+      "frequency_score": 57.94760031499706,
+      "win_rate": 0.6954256274879163,
+      "presence": 0.35512081988269123
+    }
+  ],
+  "A": [],
+  "B": [
+    {
+      "deck": "Dragapult Dusknoir",
+      "score": 23.193411989829695,
+      "power_score": 46.21492309081847,
+      "frequency_score": 0.1719008888409178,
+      "win_rate": 0.4829911060614671,
+      "presence": 0.0010534618215752287
+    }
+  ],
+  "C": [],
+  "D": [
+    {
+      "deck": "Crustle",
+      "score": 62.537989375965914,
+      "power_score": 25.075978751931828,
+      "frequency_score": 100.0,
+      "win_rate": 0.38799962481560235,
+      "presence": 0.6128309333816963
+    },
+    {
+      "deck": "Kangaskhan Bouffalant",
+      "score": 20.12874671113039,
+      "power_score": 37.85161169998083,
+      "frequency_score": 2.4058817222799496,
+      "win_rate": 0.4454091282483819,
+      "presence": 0.014743987414707843
+    },
+    {
+      "deck": "Grimmsnarl Froslass",
+      "score": 18.71484879969349,
+      "power_score": 34.77900904634459,
+      "frequency_score": 2.6506885530423885,
+      "win_rate": 0.4316018598876832,
+      "presence": 0.016244239400651447
+    },
+    {
+      "deck": "Mega Venusaur",
+      "score": 17.34559685846202,
+      "power_score": 34.69050851749208,
+      "frequency_score": 0.0006851994319666256,
+      "win_rate": 0.4312041675435448,
+      "presence": 4.199114074447152e-06
+    },
+    {
+      "deck": "Gholdengo Lunatone",
+      "score": 12.448231633159581,
+      "power_score": 24.896078855880955,
+      "frequency_score": 0.00038441043820942785,
+      "win_rate": 0.38719121369876086,
+      "presence": 2.3557860764955052e-06
+    }
+  ]
+}

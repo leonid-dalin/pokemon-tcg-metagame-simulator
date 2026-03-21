@@ -1,0 +1,11 @@
+2026-03-21 05:38:03,320 - INFO - 🚀 Starting experiment 'default'. Output: output/20260321_053803_replicator_gens500
+2026-03-21 05:38:03,320 - INFO - Parameters: mode=replicator, gens=500, noise=0
+2026-03-21 05:38:03,320 - INFO - 📂 Loading matchup data from: data/input/ea_input.json
+2026-03-21 05:38:03,331 - INFO - 📊 Loaded 29 archetypes.
+2026-03-21 05:38:03,331 - INFO - ✅ 29 meet minimum match threshold (100).
+2026-03-21 05:38:03,331 - INFO - ✅ Win matrix built: 29x29. Diagonal enforced to 0.5.
+2026-03-21 05:38:03,332 - INFO - 👑 Deck with highest initial growth potential: Gardevoir (Meta-Weighted WR: 55.96%)
+2026-03-21 05:38:03,397 - INFO - ⏱️  Simulation took 0.06 seconds
+2026-03-21 05:38:03,397 - INFO - ⏱️  Simulation completed in 0.07 seconds
+2026-03-21 05:38:03,398 - INFO - 📈 Convergence at gen N/A | Avg post-conv change: 0.00e+00
+2026-03-21 05:38:03,398 - INFO - 📈 Convergence at generation: Not Converged

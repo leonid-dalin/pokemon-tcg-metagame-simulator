@@ -12,27 +12,18 @@ from src.core.config import (
     STABILITY_THRESHOLD,
     CONSISTENCY_MEAN_EPSILON,
     CONSISTENCY_STD_EPSILON,
-    TIER_S_THRESHOLD,
-    TIER_A_THRESHOLD,
-    TIER_B_THRESHOLD,
-    TIER_C_THRESHOLD,
     COMPOSITE_SCORE_WR_WEIGHT,
     COMPOSITE_SCORE_PRESENCE_WEIGHT,
     COMPOSITE_SCORE_CONSISTENCY_WEIGHT,
     WIN_THRESHOLD,
-    CONVERGENCE_WINDOW
+    CONVERGENCE_WINDOW,
+    tier_thresholds
 )
 from src.core.data import cluster_decks_by_matchup_profile
 
 # ----------------------------
 # Module-Level Constants (analysis.py)
 # ----------------------------
-tier_thresholds = {
-    "S": TIER_S_THRESHOLD,
-    "A": TIER_A_THRESHOLD,
-    "B": TIER_B_THRESHOLD,
-    "C": TIER_C_THRESHOLD,
-}
 TIER_ORDER: Tuple[str, ...] = ("S", "A", "B", "C", "D")
 
 COMPOSITE_WEIGHTS: Tuple[float, float, float] = (
@@ -114,17 +105,31 @@ def generate_final_state_tier_list(
         metagame_history: List[np.ndarray],
         win_matrix: np.ndarray,
         presence_weight: float = 0.4,
-        winrate_weight: float = 0.6,
+        winrate_weight: float = WIN_THRESHOLD,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Generate tier list based on final metagame state, synced with global thresholds."""
+    """Generate tier list based on final metagame state using Meta Score logic."""
     if not metagame_history:
         return {tier: [] for tier in TIER_ORDER}
         
     final_freqs = metagame_history[-1]
-    meta_weighted_win_rate = win_matrix.dot(final_freqs)
+    expected_wr = win_matrix.dot(final_freqs)
     n = len(deck_names)
     
-    score = (rankdata(meta_weighted_win_rate) / n * winrate_weight + rankdata(final_freqs) / n * presence_weight)
+    max_wr = np.max(expected_wr)
+    min_wr_floor = 1.0 - max_wr
+    
+    power_scores = np.zeros(n)
+    if max_wr > min_wr_floor:
+        power_scores = np.clip((expected_wr - min_wr_floor) / (max_wr - min_wr_floor) * 100.0, 0.0, 100.0)
+    else:
+        power_scores = np.full(n, 50.0) # Failsafe for perfectly flat 50/50 meta
+        
+    max_freq = np.max(final_freqs)
+    freq_scores = np.zeros(n)
+    if max_freq > 0:
+        freq_scores = (final_freqs / max_freq) * 100.0
+        
+    meta_scores = (power_scores + freq_scores) / 2.0
     
     tiers = {tier: [] for tier in TIER_ORDER}
     
@@ -134,14 +139,17 @@ def generate_final_state_tier_list(
             
         deck_data = {
             "deck": deck_names[i],
-            "score": float(score[i]),
-            "win_rate": float(meta_weighted_win_rate[i]),
+            "score": float(meta_scores[i]), # Now mapped to vS Meta Score (0-100)
+            "power_score": float(power_scores[i]),
+            "frequency_score": float(freq_scores[i]),
+            "win_rate": float(expected_wr[i]),
             "presence": float(final_freqs[i]), 
         }
         
+        # ruthless tier assignment based on RAW expected Win Rate
         assigned = False
         for tier, threshold in tier_thresholds.items():
-            if score[i] >= threshold:
+            if expected_wr[i] >= threshold: 
                 tiers[tier].append(deck_data)
                 assigned = True
                 break
@@ -149,9 +157,10 @@ def generate_final_state_tier_list(
             tiers["D"].append(deck_data)
             
     for tier in tiers:
+        # sort internal tiers by the newly calculated Meta Score
         tiers[tier].sort(key=lambda x: x["score"], reverse=True)
         
-    logging.info("🏆 Final State Tier List Generated")
+    logging.info("🏆 Final State Tier List Generated (vS Logic)")
     for tier in TIER_ORDER:
         if tiers[tier]:
             top_deck = tiers[tier][0]["deck"]

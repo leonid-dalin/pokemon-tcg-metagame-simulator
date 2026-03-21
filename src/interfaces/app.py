@@ -18,7 +18,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.core.data import load_matchup_data
-from src.core.config import INPUT_DIR, MIN_GAMES, aggressive_colorscale
+from src.core.config import INPUT_DIR, MIN_GAMES, aggressive_colorscale, tier_thresholds
 from src.tournament.monte_carlo import run_monte_carlo_analytics
 from src.tournament.solver import predict_best_decks, UserMetaSpec, MatchFormat, swiss_rounds_from_players, get_variant_5_structure
 
@@ -89,11 +89,13 @@ def get_tier(expected_wr: float) -> str:
     Tier assignments based on rigorous TCG win-rate thresholds.
     S-Tier: > 52% | A-Tier: > 50% | B-Tier: > 47% | C-Tier: < 47%
     """
-    if expected_wr >= 0.52: return "S"
-    if expected_wr >= 0.50: return "A"
-    if expected_wr >= 0.47: return "B"
-    if expected_wr >= 0.44: return "C"
-    return "D"
+    assigned = False
+    for tier, threshold in tier_thresholds.items():
+        if expected_wr >= threshold: 
+            return tier
+            break
+    if not assigned:
+        return "D"
 
 # --- Main Application ---
 def main():
