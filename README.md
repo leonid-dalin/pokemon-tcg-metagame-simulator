@@ -169,24 +169,24 @@ This will launch a local web server and open the app in your browser, allowing y
 | ---------- | ----------------------- | --------------------------------------------------------------------------- | ------------------- | ------- |
 | `-i`       | `--input`               | Path to the matchup data JSON file (e.g., `input/ea_input.json`).           | `input/ea_input.json` | `str`   |
 | `-o`       | `--output`              | Directory to save simulation results, plots, and logs. Created if missing.   | `output/`            | `str`   |
-| `-m`       | `--mode`                | Simulation dynamics mode: `replicator` (default) or `tournament`.           | `replicator`        | `str`   |
-| `-g`       | `--gens`                | Maximum number of generations to simulate. Must be > 0.                     | `100`               | `int`   |
-| `-M`       | `--min-games`           | Min games required to include a deck in the simulation.         			 | `700`              | `int` |
-| `-e`       | `--extinction-threshold`| Deck frequency threshold for extinction (decks below this may vanish).      | `0.005`             | `float` |
-| `-N`       | `--noise`               | Scale of stochastic noise injected into replicator dynamics. ≥ 0.0.         | `0.02`              | `float` |
-| `-p`       | `--intro-prob`          | Probability per generation to reintroduce a previously extinct deck.        | `0.002`             | `float` |
-| `-s`       | `--seed`                | RNG seed for reproducible simulations.                                      | `1312`              | `int`   |
-| `-P`       | `--no-plot`             | Disable generation of interactive HTML plots (e.g., for headless runs).     | `False`             | `bool`  |
-| `-C`       | `--cluster`             | Enable post-simulation deck archetype clustering analysis.                  | `False`             | `bool`  |
-| `-l`       | `--log-level`           | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`.                  | `INFO`              | `str`   |
-| `-b`       | `--batch`               | Run batch experiments (requires `--batch-config`).                          | `False`             | `bool`  |
-| `-c`       | `--batch-config`        | Path to JSON file defining batch experiment parameters.                     | `None`              | `str`   |
-|			 | `--predict`			   | Run metagame prediction instead of simulation.								 | `False`			   | `bool`	 |
-|			 | `--players`			   | Expected tournament size for prediction mode.								 | `32`			   	   | `int`	 |
-|			 | `--meta`			   	   | User-specified meta for prediction (e.g., "DeckA:0.2").					 | `""`			   	   | `str`	 |
+| `-M`       | `--mode`                | Simulation dynamics engine: `replicator` (ESS) or `tournament` (Agent).     | `replicator`        | `str`   |
+| `-g`       | `--gens`                | Maximum number of generations/epochs to simulate.                           | `1000`              | `int`   |
+| `-m`       | `--min-games`           | Minimum required match volume to include an archetype in the baseline.      | `100`               | `int`   |
+| `-e`       | `--extinction-threshold`| Metagame frequency drop-off point where a deck is considered mathematically dead. | `1e-10`             | `float` |
+| `-N`       | `--noise`               | Scale of Gaussian noise injected into generation payoffs.                   | `0.0`               | `float` |
+| `-I`       | `--intro-prob`          | Stochastic probability per generation of a rogue/extinct deck re-entering.  | `0.0`               | `float` |
+| `-s`       | `--seed`                | Fixed RNG seed for perfectly reproducible experiments.                      | `1312`              | `int`   |
+|            | `--tournament-style`    | Bracket execution logic: `pure_swiss` (fast) or `championship_series` (BO3).| `pure_swiss`        | `str`   |
+|            | `--no-plot`             | Suppress generation of interactive HTML Plotly graphs (headless runs).      | `False`             | `bool`  |
+| `-C`       | `--cluster`             | Enable Silhouette-optimized K-Means strategic archetype clustering.         | `False`             | `bool`  |
+| `-l`       | `--log-level`           | Terminal logging verbosity: `DEBUG`, `INFO`, `WARNING`, or `ERROR`.         | `INFO`              | `str`   |
+| `-b`       | `--batch`               | Enable batch execution mode for automated parameter sweeping.               | `False`             | `bool`  |
+| `-c`       | `--batch-config`        | Path to the JSON configuration file defining batch parameters.              | `None`              | `str`   |
+|            | `--predict`             | Bypass evolution entirely and run the static Monte Carlo EV solver.         | `False`             | `bool`  |
+| `-P`       | `--players`             | Expected total field size for the upcoming event (Prediction Mode).         | `32`                | `int`   |
+|            | `--meta`                | Comma-separated custom field constraints (e.g., "DeckA:0.2").               | `""`                | `str`   |
 
-
-> **🚫 Validation:** Invalid values (e.g., `--intro-prob 1.5`) will cause immediate, descriptive errors. 
+> **🚫 Validation:** Invalid values (e.g., `--intro-prob 1.5` or negative `--noise`) will cause immediate, descriptive `argparse` errors.
      
 
 ---

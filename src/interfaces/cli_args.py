@@ -2,7 +2,7 @@
 # cli_args.py | argparse definitions
 import argparse
 import os
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 from src.core.config import *
 
 
@@ -26,234 +26,217 @@ class Args(NamedTuple):
     use_multiproc: bool
     mutation_floor: float
     selection_pressure: float
-
     log_level: str
     batch: bool
-    batch_config: str | None
+    batch_config: Optional[str]
     no_plot: bool
     cluster: bool
     predict: bool
     players: int
     meta: str
+    tournament_style: str
 
 
 def parse_args() -> Args:
     parser = argparse.ArgumentParser(
-        description="Pokémon TCG Metagame Evolution Simulator",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="Pokémon TCG Metagame Simulator & Predictor",
+        formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    # Data and Output
-    parser.add_argument(
-        "-i",
-        "--input",
+    # 📁 Data & I/O
+    io_group = parser.add_argument_group("📁 Data & I/O")
+    io_group.add_argument(
+        "-i", "--input",
         type=str,
-        default=INPUT_DATA,  # 'data/input/ea_input.json'
+        default=INPUT_DATA,
         metavar="FILE",
-        help="Path to matchup data JSON file",
+        help="Path to the JSON matchup matrix file. (default: %(default)s)",
     )
-    parser.add_argument(
-        "-o",
-        "--output",
+    io_group.add_argument(
+        "-o", "--output",
         type=str,
-        default=OUTPUT_DIR,  # 'output/'
+        default=OUTPUT_DIR,
         metavar="DIR",
-        help="Output directory for results",
+        help="Directory where simulation logs and interactive plots will be saved. (default: %(default)s)",
+    )
+    io_group.add_argument(
+        "-m", "--min-games",
+        type=int,
+        default=MIN_GAMES,
+        help="Minimum required match volume to include an archetype in the baseline field. (default: %(default)s)",
     )
 
-    # Core Simulation Parameters
-    parser.add_argument(
-        "-M",
-        "--mode",
+    # ⚙️ Core Simulation Setup
+    sim_group = parser.add_argument_group("⚙️ Core Simulation Setup")
+    sim_group.add_argument(
+        "-M", "--mode",
         type=str,
         choices=["replicator", "tournament"],
         default=SIMULATION_MODE,
-        help="Simulation mode (default: %(default)s)",
+        help="Select the simulation engine. 'replicator' for ESS, 'tournament' for agent brackets. (default: %(default)s)",
     )
-    parser.add_argument(
-        "-g",
-        "--gens",
+    sim_group.add_argument(
+        "-g", "--gens",
         type=int,
         default=MAX_GENERATIONS,
-        help="Maximum number of generations to run (default: %(default)s)",
+        help="Maximum number of generations/epochs to simulate. (default: %(default)s)",
     )
-    parser.add_argument(
-        "--min-games",
-        "-min",
-        type=int,
-        default=MIN_GAMES,
-        help="Minimum required game count for matchup data (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--extinction-threshold",
-        "-E",
-        type=float,
-        default=EXTINCTION_THRESHOLD,
-        help="Deck share below which it is considered extinct (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--noise",
-        "-N",
-        type=float,
-        default=NOISE_SCALE,
-        help="Scale of random noise added to payoffs each generation (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--intro-prob",
-        "-intro",
-        type=float,
-        default=DYNAMIC_DECK_INTRO_PROB,
-        help="Probability of re-introducing an extinct deck (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--seed",
-        "-s",
+    sim_group.add_argument(
+        "-s", "--seed",
         type=int,
         default=RNG_SEED,
-        help="Random seed for reproducibility (default: %(default)s)",
+        help="Fixed RNG seed for perfectly reproducible experiments. (default: %(default)s)",
     )
 
-    # Stability Parameters
-    parser.add_argument(
-        "--stability-threshold",
-        "-S",
+    # 🧬 Evolutionary Dynamics
+    evo_group = parser.add_argument_group("🧬 Evolutionary Dynamics (Replicator Mode)")
+    evo_group.add_argument(
+        "-e", "--extinction-threshold",
+        type=float,
+        default=EXTINCTION_THRESHOLD,
+        help="Metagame frequency drop-off point where a deck is considered mathematically dead. (default: %(default)s)",
+    )
+    evo_group.add_argument(
+        "-N", "--noise",
+        type=float,
+        default=NOISE_SCALE,
+        help="Scale of Gaussian noise injected into generation payoffs to simulate pilot error/luck. (default: %(default)s)",
+    )
+    evo_group.add_argument(
+        "-I", "--intro-prob",
+        type=float,
+        default=DYNAMIC_DECK_INTRO_PROB,
+        dest="intro_prob",
+        help="Stochastic probability per generation of a rogue/extinct deck re-entering the meta. (default: %(default)s)",
+    )
+    evo_group.add_argument(
+        "-S", "--stability-threshold",
         type=float,
         default=STABILITY_THRESHOLD,
-        help="Threshold for metagame stability (default: %(default)s)",
+        help="Delta threshold below which the metagame is considered to have reached Nash Equilibrium. (default: %(default)s)",
     )
-    parser.add_argument(
-        "--conv-window",
-        "-convergence",
-        "-conv",
+    evo_group.add_argument(
+        "-W", "--convergence-window",
         type=int,
         default=CONVERGENCE_WINDOW,
         dest="convergence_window",
-        help="Generations window for stability check (default: %(default)s)",
+        help="Consecutive generations required below the stability threshold to halt simulation. (default: %(default)s)",
     )
-    parser.add_argument(
-        "--max-inactive-gens",
-        "-inactive",
+    evo_group.add_argument(
+        "-X", "--max-inactive-gens",
         type=int,
         default=MAX_INACTIVE_GENERATIONS,
         dest="max_inactive_generations",
-        help="Generations to stop if no changes detected (default: %(default)s)",
+        help="Generations a deck must remain extinct before being permanently culled from memory. (default: %(default)s)",
+    )
+    evo_group.add_argument(
+        "--mutation-floor",
+        type=float,
+        default=MUTATION_FLOOR,
+        help="Absolute frequency floor applied when a deck is randomly reintroduced. (default: %(default)s)",
+    )
+    evo_group.add_argument(
+        "--selection-pressure",
+        type=float,
+        default=SELECTION_PRESSURE,
+        help="Exponent weight scaling how aggressively player populations migrate to winning decks. (default: %(default)s)",
     )
 
-    # Tournament Parameters
-    parser.add_argument(
-        "--use-bayesian",
-        "-B",
-        action="store_true",
-        default=USE_BAYESIAN_WINRATES,
-        dest="use_bayesian_winrates",
-        help="Use Bayesian-adjusted win rates for tournament mode (default: %(default)s)",
+    # 🎲 Tournament Agent Engine
+    trn_group = parser.add_argument_group("🎲 Tournament Agent Engine (Tournament Mode)")
+    trn_group.add_argument(
+        "--tournament-style",
+        type=str,
+        choices=["pure_swiss", "championship_series"],
+        default="pure_swiss",
+        help="Bracket execution logic: 'pure_swiss' (fast) or 'championship_series' (BO3 Tie Convergence). (default: %(default)s)",
     )
-    parser.add_argument(
-        "--t-size",
-        "-size",
+    trn_group.add_argument(
+        "-T", "--tournament-size",
         type=int,
         default=TOURNAMENT_SIZE,
-        dest="tournament_size",
-        help="Tournament size per generation (default: %(default)s)",
+        help="Number of agent pilots spawned per tournament iteration. (default: %(default)s)",
     )
-    parser.add_argument(
-        "--t-per-gen",
-        "-tpg",
+    trn_group.add_argument(
+        "--tournaments-per-gen",
         type=int,
         default=NUM_TOURNAMENTS_PER_GEN,
         dest="num_tournaments_per_gen",
-        help="Number of tournaments per generation (default: %(default)s)",
+        help="Total parallel tournaments executed to calculate the average generation payoff. (default: %(default)s)",
     )
-    parser.add_argument(
-        "--rounds",
-        "-r",
+    trn_group.add_argument(
+        "-r", "--rounds",
         type=int,
         default=NUM_ROUNDS,
         dest="num_rounds",
-        help="Rounds per tournament (default: %(default)s)",
+        help="Number of Swiss rounds played per tournament (Overridden by Championship Series). (default: %(default)s)",
     )
-    parser.add_argument(
+    trn_group.add_argument(
+        "-B", "--use-bayesian",
+        action="store_true",
+        default=USE_BAYESIAN_WINRATES,
+        dest="use_bayesian_winrates",
+        help="Sample matchup win rates from a Beta distribution derived from match volume confidence.",
+    )
+
+    # 🔮 Static Predictor
+    prd_group = parser.add_argument_group("🔮 Static Predictor (Prediction Mode)")
+    prd_group.add_argument(
+        "--predict",
+        action="store_true",
+        help="Bypass evolutionary simulation and run the static Monte Carlo tournament EV solver.",
+    )
+    prd_group.add_argument(
+        "-P", "--players",
+        type=int,
+        default=32,
+        help="Expected total field size for the upcoming event. (default: %(default)s)",
+    )
+    prd_group.add_argument(
+        "--meta",
+        type=str,
+        default="",
+        help="Comma-separated custom field constraints (e.g., 'Gholdengo:0.10,Joltik Box:0.15').",
+    )
+
+    # 💻 System Utility
+    sys_group = parser.add_argument_group("💻 System & Execution Utility")
+    sys_group.add_argument(
+        "-l", "--log-level",
+        type=str,
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="Set terminal logging verbosity. (default: %(default)s)",
+    )
+    sys_group.add_argument(
+        "-b", "--batch",
+        action="store_true",
+        help="Enable batch execution mode for automated parameter sweeping.",
+    )
+    sys_group.add_argument(
+        "-c", "--batch-config",
+        type=str,
+        default=None,
+        help="Path to the JSON configuration file defining batch parameters.",
+    )
+    sys_group.add_argument(
+        "--no-plot",
+        action="store_true",
+        help="Suppress generation of interactive HTML Plotly graphs.",
+    )
+    sys_group.add_argument(
+        "-C", "--cluster",
+        action="store_true",
+        help="Enable Silhouette-optimized K-Means strategic archetype clustering.",
+    )
+    sys_group.add_argument(
         "--no-multiproc",
         action="store_false",
         default=USE_MULTIPROC,
         dest="use_multiproc",
-        help="Disable multiprocessing for tournament mode",
+        help="Force the tournament engine to execute on a single thread (disables multiprocessing).",
     )
 
-    # Enhancement Parameters
-    parser.add_argument(
-        "--mutation-floor",
-        "-MF",
-        type=float,
-        default=MUTATION_FLOOR,
-        help="Minimum mutation rate (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--selection-pressure",
-        "-SP",
-        type=float,
-        default=SELECTION_PRESSURE,
-        help="Exponent for selection pressure (default: %(default)s)",
-    )
-
-    # Utility
-    parser.add_argument(
-        "--log-level",
-        type=str,
-        default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="Set the logging verbosity (default: %(default)s)",
-    )
-    parser.add_argument(
-        "-b",
-        "--batch",
-        action="store_true",
-        help="Run simulation in batch mode (for parameter sweep)",
-    )
-    parser.add_argument(
-        "--batch-config",
-        type=str,
-        default=None,
-        help="Path to JSON file with batch parameters",
-    )
-    parser.add_argument(
-        "--no-plot",
-        action="store_true",
-        help="Disable plotting of simulation results",
-    )
-    parser.add_argument(
-        "--cluster",
-        "-C",
-        action="store_true",
-        help="Enable post-simulation deck clustering analysis",
-    )
-
-    parser.add_argument(
-        "--predict",
-        action="store_true",
-        help="Run metagame prediction instead of simulation",
-    )
-    parser.add_argument(
-        "--players",
-        "-p",
-        type=int,
-        default=32,
-        help="Expected total players in the tournament (used for --predict mode only) (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--meta",
-        type=str,
-        default="",
-        help="User-specified meta for prediction (e.g., 'DeckA:0.2,DeckB:0.1')"
-    )
-    parser.add_argument(
-        "--tournament-style",
-        "--t-style",
-        type=str,
-        choices=["pure_swiss", "championship_series"],
-        default="pure_swiss",
-        help="Tournament bracket style: 'pure_swiss' (fast) or 'championship_series' (BO3 with tie convergence)."
-    )
     args = parser.parse_args()
 
     # === VALIDATION ===
@@ -270,7 +253,6 @@ def parse_args() -> Args:
     if args.noise < 0.0:
         parser.error("❌ --noise scale cannot be negative.")
 
-    # Convert args to the NamedTuple for immutability
     return Args(
         input=args.input,
         output=args.output,
@@ -299,4 +281,5 @@ def parse_args() -> Args:
         use_multiproc=args.use_multiproc,
         mutation_floor=args.mutation_floor,
         selection_pressure=args.selection_pressure,
+        tournament_style=args.tournament_style,
     )
