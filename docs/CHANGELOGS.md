@@ -1,4 +1,4 @@
-## Latest Commit `6401713` (Mar 20, 2026)
+## Commit `6401713` (Mar 20, 2026)
 ### refactor: implement vS Meta Score, overhaul Swiss bracket engine, and redesign the app dashboard to be more intelligent
 
 This update fundamentally shifts how the static baseline is evaluated, moving away from fabricating Swiss tiebreakers (SoS/OMW) before the bracket runs, and instead adopting the rigorous data philosophies already pioneered by [Vicious Syndicate](https://www.vicioussyndicate.com/).

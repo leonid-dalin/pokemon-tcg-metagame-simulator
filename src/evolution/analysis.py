@@ -57,7 +57,7 @@ def compute_convergence_metrics(
         
         if convergence_gen >= len(history):
             convergence_gen = None
-            post_conv_changes = np.array([])
+            post_conv_changes = changes
         else:
             post_conv_changes = changes[last_unstable_idx + 1:]
 
@@ -206,6 +206,9 @@ def compute_deck_similarity(
     """Compute pairwise strategic similarity using Pearson Correlation (TCG Accurate)."""
     n = len(deck_names)
     
+    if n < 2:
+            return np.ones((n, n))
+
     if final_active_mask is not None and len(final_active_mask) == n:
         active_mask = np.array(final_active_mask)
     elif extinction_gens is not None and len(extinction_gens) == n:
@@ -214,18 +217,20 @@ def compute_deck_similarity(
         active_mask = np.array([True] * n) 
 
     similarity = np.zeros((n, n))
-    
-    if np.any(active_mask) and len(np.where(active_mask)[0]) >= 2:
-        active_indices = np.where(active_mask)[0]
-        active_deck_profiles = win_matrix[active_indices, :]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        if np.any(active_mask) and len(np.where(active_mask)[0]) >= 2:
+            active_indices = np.where(active_mask)[0]
+            active_deck_profiles = win_matrix[active_indices, :]
 
-        active_similarity = np.corrcoef(active_deck_profiles)
-        
-        similarity[np.ix_(active_indices, active_indices)] = active_similarity
-        np.fill_diagonal(similarity, 1.0)
-    else:
-        similarity = np.corrcoef(win_matrix)
-        np.fill_diagonal(similarity, 1.0)
+            active_similarity = np.corrcoef(active_deck_profiles)
+            active_similarity = np.nan_to_num(active_similarity, nan=0.0)
+            
+            similarity[np.ix_(active_indices, active_indices)] = active_similarity
+            np.fill_diagonal(similarity, 1.0)
+        else:
+            similarity = np.corrcoef(win_matrix)
+            similarity = np.nan_to_num(similarity, nan=0.0)
+            np.fill_diagonal(similarity, 1.0)
 
     pairs = []
     for r in range(n):
