@@ -91,11 +91,10 @@ def load_matchup_data(
 
     asymmetry = np.abs(win_matrix + win_matrix.T - 1.0)
     max_asymmetry = np.max(asymmetry)
-    if max_asymmetry > 0.2:
+    if max_asymmetry >= 0.2 - 1e-5:
         logging.warning(
             f"⚠️  High asymmetry detected in data (max: {max_asymmetry:.2f}). This is normal for real-world data."
         )
-
     logging.info(f"✅ Win matrix built: {n}x{n}. Diagonal enforced to 0.5.")
     return reliable_decks, win_matrix, matchup_details
 
@@ -109,6 +108,17 @@ def cluster_decks_by_matchup_profile(
     method: str = "kmeans",
 ) -> Dict[str, Any]:
     """Group decks into clusters based on similarity of their matchup vectors."""
+    n_samples = len(deck_names)
+    
+    if n_samples < 2:
+        return {
+            "labels": [0] * n_samples,
+            "centroids": None,
+            "distances": None,
+            "method": method,
+            "n_clusters": 1 if n_samples == 1 else 0,
+        }
+
     try:
         from sklearn.cluster import KMeans, AgglomerativeClustering
         from sklearn.metrics import pairwise_distances, silhouette_score
@@ -121,7 +131,7 @@ def cluster_decks_by_matchup_profile(
     X_scaled = scaler.fit_transform(win_matrix)
     distances = pairwise_distances(X_scaled, metric="euclidean")
 
-    n_samples = len(deck_names)
+
     max_possible_k = min(6, n_samples - 1) if n_samples > 2 else 2
 
     if method == "kmeans":
