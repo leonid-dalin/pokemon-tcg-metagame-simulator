@@ -119,7 +119,13 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                 p1s = np.array(standings[:half])
                 p2s = np.array(standings[half:][::-1]) 
                 
-                if len(p1s) > len(p2s): p1s = p1s[:-1]
+                unpaired = []
+                if len(p2s) > len(p1s):
+                    unpaired.append(p2s[-1])
+                    p2s = p2s[:-1]
+                elif len(p1s) > len(p2s):
+                    unpaired.append(p1s[-1])
+                    p1s = p1s[:-1]
                 
                 p1_decks = field_indices[p1s]
                 p2_decks = field_indices[p2s]
@@ -128,6 +134,8 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                 next_round = []
                 for i, p1_won in enumerate(p1_wins):
                     next_round.append(p1s[i] if p1_won else p2s[i])
+                
+                next_round.extend(unpaired)  # advancing the player with the bye
                 standings = next_round
                 
             if standings:
@@ -153,6 +161,8 @@ def run_monte_carlo_analytics(
 ) -> Dict[str, Dict[str, float]]:
     
     n_decks = len(deck_names)
+    if n_decks == 0:
+        return {}
     meta_vec = np.zeros(n_decks)
     for i, name in enumerate(deck_names):
         meta_vec[i] = meta_distribution.get(name, 0.0)
