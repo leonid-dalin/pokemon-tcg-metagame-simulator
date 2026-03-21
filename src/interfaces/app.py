@@ -18,7 +18,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.core.data import load_matchup_data
-from src.core.config import INPUT_DIR, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, tier_thresholds
+from src.core.config import INPUT_DIR, MIN_GAMES, WIN_THRESHOLD, TIER_ORDER, aggressive_colorscale, TIER_THRESHOLDS
 from src.tournament.monte_carlo import run_monte_carlo_analytics
 from src.tournament.solver import predict_best_decks, UserMetaSpec, MatchFormat, swiss_rounds_from_players, get_variant_5_structure
 
@@ -87,11 +87,12 @@ def load_more_avoids(): st.session_state.avoid_limit += 3
 def get_tier(expected_wr: float) -> str:
     """
     Tier assignments based on rigorous TCG win-rate thresholds.
-    S-Tier: > 52.5% | A-Tier: > 50% | B-Tier: > 47.5% | C-Tier: > 45% | D-Tier: > 42.5% | E-Tier: >= 0
+    T0 (≥52.5%), T0.5 (≥50%), T1 (≥47.5%), T2 (≥45%), T3 (≥42.5%), T4 (≥0%).
     """
-    for tier, threshold in tier_thresholds.items():
+    for tier, threshold in TIER_THRESHOLDS.items():
         if expected_wr >= threshold: 
             return tier
+    return "T4" 
 
 # --- Main Application ---
 def main():
@@ -125,7 +126,7 @@ def main():
 
         st.header("⚙️ Engine Parameters")
         with st.container(border=True):
-            mc_iterations = st.selectbox("Monte Carlo Iterations", options=[1000, 10000, 100000, 1000000], format_func=lambda x: f"{x:,}", index=1)
+            mc_iterations = st.selectbox("Monte Carlo Iterations", options=[1000, 10_000, 100_000, 1_000_000], format_func=lambda x: f"{x:,}", index=1)
             match_format = st.radio("Match Format", ["BO1", "BO3"], index=1)
             
             min_sample_threshold = st.slider("Matchup Minimum Games", min_value=1, max_value=100, value=10, step=1)
@@ -255,7 +256,7 @@ def main():
         full_deck_names, full_win_matrix = load_full_win_matrix()
         deck_to_idx = {name: i for i, name in enumerate(full_deck_names)}
 
-        st.subheader("📊 Interactive Dashboard & Tournament Odds")
+        st.subheader("📊 Dashboard & Tournament Odds")
 
         st.info("""
         **How to read the Scores:**
@@ -324,10 +325,9 @@ def main():
             data.append(row_data)
 
         df = pd.DataFrame(data)
-
         col_config = {
             "#": st.column_config.NumberColumn(width="small"),
-            "Tier": st.column_config.TextColumn(width="small", help="S-Tier (≥52.5% WR), A-Tier (≥50% WR), B-Tier (≥47.5% WR), C-Tier (≥45% WR), D-Tier (≥42.5 WR), E-Tier (≥0 WR)."),
+            "Tier": st.column_config.TextColumn(width="small", help="T0 (≥52.5%), T0.5 (≥50%), T1 (≥47.5%), T2 (≥45%), T3 (≥42.5%), T4 (≥0%)."), 
             "Deck": st.column_config.TextColumn(width="medium"),
             "Meta Score": st.column_config.NumberColumn(format="%.1f", help="Average of Power and Popularity. High scores mean heavily dominant."),
             "Power Score": st.column_config.NumberColumn(format="%.1f", help="0-100 normalization of Win Rate. 100 is the best performing deck."),
@@ -500,7 +500,7 @@ def main():
                     threat_cols = st.columns(len(top_threats))
                     for t_idx, threat_deck in enumerate(top_threats):
                         wr_vs_threat = full_win_matrix[deck_to_idx[deck], deck_to_idx[threat_deck]]
-                        color = "🟢" if wr_vs_threat >= 0.55 else "🔴" if wr_vs_threat <= 0.45 else "🟡"
+                        color = "🟢" if wr_vs_threat >= WIN_THRESHOLD else "🔴" if wr_vs_threat <= (1 - WIN_THRESHOLD) else "🟡"
                         threat_cols[t_idx].markdown(f"{color} **{threat_deck}**: `{wr_vs_threat:.0%}`")
 
             if st.session_state.rec_limit < len(recommendations):

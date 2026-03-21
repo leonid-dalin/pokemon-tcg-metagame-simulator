@@ -73,21 +73,24 @@ COMPOSITE_SCORE_PRESENCE_WEIGHT = 0.30
 COMPOSITE_SCORE_CONSISTENCY_WEIGHT = 0.20
 
 # Meta Score / Win Rate Tier Thresholds
-TIER_S_THRESHOLD = 0.525
-TIER_A_THRESHOLD = 0.50
-TIER_B_THRESHOLD = 0.475
-TIER_C_THRESHOLD = 0.45
-TIER_D_THRESHOLD = 0.425
-TIER_E_THRESHOLD = 0
-TIER_ORDER: Tuple[str, ...] = ("S", "A", "B", "C", "D", "E")
-tier_thresholds: Dict[str, float] = {
-    "S": TIER_S_THRESHOLD,
-    "A": TIER_A_THRESHOLD,
-    "B": TIER_B_THRESHOLD,
-    "C": TIER_C_THRESHOLD,
-    "D": TIER_D_THRESHOLD,
-    "E": TIER_E_THRESHOLD
+TIER_0_THRESHOLD = 0.525     # Dominant
+TIER_0_5_THRESHOLD = 0.50    # Top Contender
+TIER_1_THRESHOLD = 0.475     # Competitive
+TIER_2_THRESHOLD = 0.45      # Niche
+TIER_3_THRESHOLD = 0.425     # Struggling
+TIER_4_THRESHOLD = 0.0       # Unviable
+
+TIER_THRESHOLDS: Dict[str, float] = {
+    "T0": TIER_0_THRESHOLD,
+    "T0.5": TIER_0_5_THRESHOLD,
+    "T1": TIER_1_THRESHOLD,
+    "T2": TIER_2_THRESHOLD,
+    "T3": TIER_3_THRESHOLD,
+    "T4": TIER_4_THRESHOLD
 }
+
+# Dynamically derive the order from the dictionary keys
+TIER_ORDER: Tuple[str, ...] = tuple(TIER_THRESHOLDS.keys())
 
 # ----------------------------
 # Plotting & UI Defaults

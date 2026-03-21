@@ -18,7 +18,7 @@ from src.core.config import (
     WIN_THRESHOLD,
     CONVERGENCE_WINDOW,
     TIER_ORDER,
-    tier_thresholds
+    TIER_THRESHOLDS
 )
 from src.core.data import cluster_decks_by_matchup_profile
 
@@ -146,7 +146,7 @@ def generate_final_state_tier_list(
         }
         
         # tier assignment based on RAW expected Win Rate
-        for tier, threshold in tier_thresholds.items():
+        for tier, threshold in TIER_THRESHOLDS.items():
             if expected_wr[i] >= threshold: 
                 tiers[tier].append(deck_data)
                 break
@@ -214,7 +214,7 @@ def generate_all_time_tier_list(
         }
         score = composite_score[i]
         
-        for tier, threshold in tier_thresholds.items():
+        for tier, threshold in TIER_THRESHOLDS.items():
             if score >= threshold:
                 tiers[tier].append(deck_data)
                 break
