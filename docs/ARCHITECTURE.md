@@ -88,7 +88,9 @@ Shared data, configurations, and typing definitions used by both engines.
 *   `MAX_GENERATIONS`, `MIN_GAMES`, `EXTINCTION_THRESHOLD`, `STABILITY_THRESHOLD`, `CONVERGENCE_WINDOW`, `MAX_INACTIVE_GENERATIONS`, `RNG_SEED`: Core simulation defaults.
 *   `USE_BAYESIAN_WINRATES`, `TOURNAMENT_SIZE`, `NUM_TOURNAMENTS_PER_GEN`, `NUM_ROUNDS`, `USE_MULTIPROC`, `_STRUCTURE_THRESHOLDS`, `_STRUCTURE_RESULTS`: Tournament simulation defaults and official TPCi tier logic.
 *   `DYNAMIC_DECK_INTRO_PROB`, `MUTATION_FLOOR`, `NOISE_SCALE`, `SELECTION_PRESSURE`: Simulation enhancement defaults.
-*   `TIER_S_THRESHOLD`, `CONSISTENCY_MEAN_EPSILON`, `COMPOSITE_SCORE_WR_WEIGHT`: Post-analysis thresholds and weights.
+*   `TIER_THRESHOLDS`, `TIER_ORDER`, `WIN_THRESHOLD`: Post-analysis thresholds defining the strict T0 through T4 tiering system.
+
+> Note: Older composite score weights like `COMPOSITE_SCORE_WR_WEIGHT` are now retained only as `[LEGACY]`.
 
 ### `data.py`
 
@@ -120,11 +122,10 @@ The theoretical game-theory engine designed to predict the Evolutionary Stable S
 
 **Key Functions:**
 
-*   `compute_convergence_metrics(history: List[np.ndarray], stability_threshold: float) -> Dict[str, Any]`: Quantifies how quickly and stably the metagame converged by analyzing the history of frequency changes.
-*   `generate_final_state_tier_list(deck_names: List[str], metagame_history: List[np.ndarray], win_matrix: np.ndarray, ...) -> Dict[str, List[Dict]]`: Generates a tier list (S, A, B, C, D) based on the final state of the metagame, prioritizing meta-weighted win rate and presence.
-*   `generate_all_time_tier_list(deck_names: List[str], metagame_history: List[np.ndarray], win_matrix: np.ndarray) -> Dict[str, List[Dict]]`: Generates a tier list based on a deck's overall performance, consistency, and impact across the entire simulation history. **This function is highly optimized using vectorized NumPy operations.**
-*   `compute_matchup_cycles(win_matrix: np.ndarray, deck_names: List[str], cycle_length: int) -> List[List[str]]`: Identifies unique Rock-Paper-Scissors (RPS) cycles in the matchup graph utilizing efficient `itertools.combinations`.
-*   `compute_deck_similarity(win_matrix: np.ndarray, deck_names: List[str], final_active_mask: Optional[List[bool]]) -> np.ndarray`: Computes pairwise cosine similarity between decks based on their matchup profiles. Filters out extinct decks and performs K-Means clustering on the active subset utilizing the new `"auto"` Silhouette optimization.
+*   `compute_convergence_metrics(history: List[np.ndarray], stability_threshold: float) -> Dict[str, Any]`: Quantifies how quickly and stably the metagame converged by analysing the history of frequency changes.
+*   `generate_final_state_tier_list(deck_names: List[str], metagame_history: List[np.ndarray], win_matrix: np.ndarray) -> Dict[str, List[Dict]]`: Generates a tier list (T0, T0.5, T1, T2, T3, T4) based on the final state of the metagame. It uses the updated Meta Score logic, evaluating a deck's Power Score (win rate against the field) and Frequency Score (presence).
+*   `compute_matchup_cycles(win_matrix: np.ndarray, deck_names: List[str], cycle_length: int) -> List[List[str]]`: Identifies unique Rock-Paper-Scissors (RPS) cycles in the matchup graph utilising efficient `itertools.combinations`.
+*   `compute_deck_similarity(win_matrix: np.ndarray, deck_names: List[str], final_active_mask: Optional[List[bool]]) -> np.ndarray`: Computes pairwise cosine similarity between decks based on their matchup profiles. Filters out extinct decks and performs K-Means clustering on the active subset utilising `"auto"` Silhouette optimisation.
 
 ### `engine.py`
 
@@ -160,8 +161,9 @@ The practical, immediate predictive engine designed to evaluate individual Expec
 
 **Key Components:**
 
-*   `_mc_worker:` The parallelized worker function. It pairs players based on current match points and executes seeded Top Cut brackets. It features an optimized **Parabolic Tie Convergence (BETA)** model utilizing an inverted boolean mask (`~(p1_wins | p2_wins)`) to efficiently simulate match-point decay in BO3 Swiss rounds.
+*   `_mc_worker:` The parallelised worker function. It pairs players based on current match points and executes seeded Top Cut brackets. It features an optimised **Parabolic Tie Convergence (BETA)** model utilising an inverted boolean mask (`~(p1_wins | p2_wins)`) to efficiently simulate match-point decay in BO3 Swiss rounds. It now also integrates **Heuristic Rematch Prevention** (stopping players from facing the same opponent twice) and **X-3 Drop Logic** (simulating realistic tournament attrition).
 *   `run_monte_carlo_analytics:` The primary entry point for simulations. It manages the multiprocessing pool, aggregates raw conversion counts, and calculates Win Probability and conversion shares (Day 2 / Top 8).
+
 
 ### `solver.py`
 
@@ -169,10 +171,9 @@ The practical, immediate predictive engine designed to evaluate individual Expec
 
 **Key Functions:**
 
-*   `get_variant_5_structure`: Implements the official Play! Pokémon Handbook standards. It dynamically maps player volume to specific Day 1/Day 2 round counts and match-point advancement thresholds (e.g., 16 or 19 points).
-*   `resolve_meta_constraints` **(Vectorized Water-Filling Algorithm)**: Strictly enforces user-defined constraints (Exact or Range). Utilizing high-performance pure NumPy boolean masking, it distributes the remaining tournament mass proportionally based on Laplace-smoothed empirical data.
-*   `swiss_rounds_from_players(n_players: int) -> int`: Calculates the number of Swiss rounds based on `math.ceil(math.log2(n))`.
-*   `predict_best_decks(user_meta_spec: UserMetaSpec, ...) -> PredictionResult`: Orchestrates the baseline calculation. It applies the water-filling constraints and generates foundational Swiss metrics (SoS, OMW, Expected Win Rate) before passing the results to the Monte Carlo engine for bracket execution.
+*   `get_variant_5_structure`: Implements the official Play! Pokémon Handbook standards. It dynamically maps player volume to specific Day 1/Day 2 round counts and match-point advancement thresholds.
+*   `resolve_meta_constraints` **(Vectorised Water-Filling Algorithm)**: Strictly enforces user-defined constraints (Exact or Range). Utilising high-performance pure NumPy boolean masking, it distributes the remaining tournament mass proportionally based on Laplace-smoothed empirical data.
+*   `predict_best_decks(user_meta_spec: UserMetaSpec, ...) -> PredictionResult`: Orchestrates the baseline calculation. It applies the water-filling constraints and generates foundational Swiss metrics. Crucially, it calculates the `power_score` (a 0–100 min-max normalisation of expected win rate), `frequency_score`, and `base_meta_score` directly, passing these refined metrics forward to the UI and Monte Carlo engine.
 
 ---
 
@@ -186,10 +187,9 @@ UI and argument definitions. These files contain no core math and exist purely t
 
 **Key Functions & UI Elements:**
 
-*   `parse_limitless_html(html_str: str, valid_decks: List[str])`: A native HTML parser that extracts recognized deck archetypes and player counts directly from Limitless Labs exports to pre-populate custom constraints.
-*   `calculate_ultimate_score(res, mc_res, d2_rounds, top_cut)`: The core evaluation engine. It merges base win rates with Monte Carlo results, applying a strict **Z-Score Standardization** mapped to a sigmoid curve (`np.tanh`). It calculates *two* scores simultaneously: `score_player` (Individual EV) and `score_archetype` (Macro Metagame Impact).
-*   **Dual-Perspective Dashboard:** A dynamic UI component that seamlessly swaps data sorting, tier assignments, and top recommendations based on the user's selected POV without re-triggering the Monte Carlo engine.
-*   **Head-to-Head Comparator:** An interactive `st.dataframe` utilizing Pandas `Styler` to color-code favorable ($\ge 55\%$) and unfavorable ($\le 45\%$) matchups between a primary and challenger deck across the predicted field.
+*   `parse_limitless_html(html_str: str, valid_decks: List[str])`: A native HTML parser that extracts recognised deck archetypes and player counts directly from Limitless Labs exports to pre-populate custom constraints.
+*   **Dual-Perspective Dashboard:** A dynamic UI component that seamlessly swaps data sorting, tier assignments (T0 through T4), and top recommendations based on the user's selected POV (Individual EV vs. Macro Metagame Impact). It reads these metrics directly from the pre-calculated results in `solver.py` without needing to re-trigger the Monte Carlo engine.
+*   **Head-to-Head Comparator:** An interactive `st.dataframe` utilising Pandas `Styler` to colour-code favourable (≥ 55%) and unfavourable (≤ 45%) matchups between a primary and challenger deck across the predicted field.
 
 ### `cli_args.py`
 
@@ -218,4 +218,4 @@ UI and argument definitions. These files contain no core math and exist purely t
 
 **Purpose:** Lists the Python package dependencies required to run the project (e.g., `numpy`, `scipy`, `scikit-learn`, `plotly`, `tqdm`, `beautifulsoup4`, `streamlit`).
 
-Last Edited: 20.03.2026, 06:00 UTC+2
+Last Edited: 22.03.2026, 03:00 UTC+2
