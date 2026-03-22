@@ -152,7 +152,7 @@ def run_monte_carlo_analytics(
     d2_rounds: int,
     top_cut: int,
     players: int = 256,
-    iterations: int = 1000,
+    iterations: int = 10_000,
     match_format: str = "BO3",
     progress_callback: Optional[Callable[[int, int], None]] = None,
     use_tie_convergence: bool = True,
