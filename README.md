@@ -6,7 +6,13 @@ The simulator bridges rigorous tournament mathematics with evolutionary game the
 - **Monte Carlo Bracket Engine🏆** Evaluates short-term tournament success by simulating up to 1,000,000 iterations. It natively supports official Play! Pokémon Variant #5 structures, seeded Top Cut pairings, and a Parabolic Tie Convergence model that mathematically mirrors real-world BO3 match-point decay.
 - **Replicator Dynamics Engine🧬** Predicts the Evolutionary Stable State (ESS) by iterating through thousands of generations. It identifies the "unexploitable" equilibrium point where deck frequencies stabilize, revealing which archetypes truly define a format over time.
 
-The former is integrated with a Streamlit dashboard, vectorized Swiss metrics, and dynamic Z-score evaluations, it provides deep strategic insights from two perspectives: macro-level archetype dominance and individual Expected Value (EV) for surviving the "Day 2 bubble."
+The former is integrated with a Streamlit dashboard, vectorized Swiss metrics, and dynamic Z-score evaluations, it provides deep strategic insights from two perspectives: macro-level archetype dominance and individual Expected Value (EV) for surviving the "Day 2 bubble"
+
+| Main Dashboard & Controls | Head-to-Head Comparator  |
+| :---: | :---: |
+| ![Main](docs/img/main.png) | ![H2H](docs/img/head-to-head.png) |
+| **Top Recommendations** | **Simulation Diagnostics** |
+| ![Recs](docs/img/top-recommendations.png) | ![Diag](docs/img/simulation_complete.png) |
 
 ---
 
