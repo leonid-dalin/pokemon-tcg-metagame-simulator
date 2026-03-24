@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import logging
 import numpy as np
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 
 from src.core.config import (
     STABILITY_THRESHOLD,
-    CONSISTENCY_MEAN_EPSILON,
-    CONSISTENCY_STD_EPSILON,
     WIN_THRESHOLD,
     CONVERGENCE_WINDOW,
     TIER_ORDER,
@@ -90,7 +88,6 @@ def generate_final_state_tier_list(
     """Generate tier list based on final metagame state using Meta Score logic."""
     n = len(deck_names)
     
-    # Explicit dimension validation
     if win_matrix.shape[0] != n or win_matrix.shape[1] != n:
         raise ValueError(f"win_matrix shape {win_matrix.shape} does not match deck_names length {n}")
         
@@ -105,8 +102,7 @@ def generate_final_state_tier_list(
     
     max_wr = np.max(expected_wr)
     min_wr_floor = 1.0 - max_wr
-    
-    power_scores = np.zeros(n)
+
     if max_wr > min_wr_floor:
         power_scores = np.clip((expected_wr - min_wr_floor) / (max_wr - min_wr_floor) * 100.0, 0.0, 100.0)
     else:
@@ -120,7 +116,7 @@ def generate_final_state_tier_list(
     meta_scores = (power_scores + freq_scores) / 2.0
     
     tiers = {tier: [] for tier in TIER_ORDER}
-    
+
     for i in range(n):
         if final_freqs[i] <= 1e-6:
             continue
@@ -163,7 +159,6 @@ def compute_matchup_cycles(
     """Identify unique rock-paper-scissors cycles strictly within the active metagame."""
     n = len(deck_names)
     
-    # Dimension validation
     if win_matrix.shape[0] != n or win_matrix.shape[1] != n:
         raise ValueError(f"win_matrix shape {win_matrix.shape} does not match deck_names length {n}")
         
@@ -179,12 +174,10 @@ def compute_matchup_cycles(
         if not (active_mask[i] and active_mask[j] and active_mask[k]):
             continue
             
-        # Check standard direction
-        if (win_matrix[i, j] > win_threshold and win_matrix[j, k] > win_threshold and win_matrix[k, i] > win_threshold):
+        if win_matrix[i, j] > win_threshold and win_matrix[j, k] > win_threshold and win_matrix[k, i] > win_threshold:
             cycles.append([deck_names[i], deck_names[j], deck_names[k]])
             
-        # Check reverse direction independently
-        if (win_matrix[i, k] > win_threshold and win_matrix[k, j] > win_threshold and win_matrix[j, i] > win_threshold):
+        if win_matrix[i, k] > win_threshold and win_matrix[k, j] > win_threshold and win_matrix[j, i] > win_threshold:
             cycles.append([deck_names[i], deck_names[k], deck_names[j]])
             
     logging.info(f"🌀 Found {len(cycles)} unique RPS-style 3-cycles in the active matchup graph.")

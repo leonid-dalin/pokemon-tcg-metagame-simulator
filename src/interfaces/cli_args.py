@@ -196,7 +196,7 @@ def parse_args() -> Args:
         "--meta",
         type=str,
         default="",
-        help="Comma-separated custom field constraints (e.g., 'Gholdengo:0.10,Joltik Box:0.15').",
+        help="Comma-separated custom field constraints (e.g., 'Crustle:0.10,Joltik Box:0.15').",
     )
 
     # 💻 System Utility

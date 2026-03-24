@@ -96,21 +96,19 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
             play_rounds(d2_rounds, day2_players)
             
         # 3. Calculate OWP (Top Cut sorting)
-        top_players = []
+        top_players = np.array([], dtype=int)
         if top_cut > 0:
             owp = np.zeros(players)
-            pool_for_owp = day2_players if d2_rounds > 0 else active
+            pool_for_owp = np.array(day2_players if d2_rounds > 0 else active, dtype=int)
             if len(pool_for_owp) > 0:
                 for i in pool_for_owp:
                     opps = opponents_history[i]
                     if not opps: continue
-                    opp_win_pcts = np.clip(
-                        np.array([match_points[o] / (max(1, len(opponents_history[o])) * 3) for o in opps],
-                                 dtype=float), 0.25, 1.0)
+                    opp_win_pcts = np.clip(np.array([match_points[int(o)] / (max(1, len(opponents_history[int(o)])) * 3.0) for o in opps], dtype=float), 0.25, 1.0)
                     owp[i] = np.mean(opp_win_pcts)
 
                 top_order = np.lexsort((-owp[pool_for_owp], -match_points[pool_for_owp]))
-                top_players = pool_for_owp[top_order][:top_cut]
+                top_players = np.array(pool_for_owp[top_order][:top_cut], dtype=int)
                 total_topcut += np.bincount(field_indices[top_players], minlength=n_decks)
             
         # 4. Playoffs
@@ -138,7 +136,7 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                     next_round.append(tc_p1s[i] if p1_won else tc_p2s[i])
                 
                 next_round.extend(unpaired)  # advancing the player with the bye
-                standings = np.array(next_round)
+                standings = np.array(next_round, dtype=int)
                 
             if len(standings) > 0:
                 total_champ[field_indices[int(standings[0])]] += 1

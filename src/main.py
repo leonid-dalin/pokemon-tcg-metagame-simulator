@@ -6,7 +6,8 @@ import json
 import logging
 import time
 import os
-from typing import cast, Dict, Any, Optional, Literal, TextIO
+import csv
+from typing import cast, Any, Optional, Literal
 
 # Local modules
 from src.core.config import *
@@ -31,17 +32,15 @@ from src.evolution.plotting import (
 from src.interfaces.cli_args import parse_args, Args
 from src.tournament.solver import predict_best_decks
 
-
 # ----------------------------
 # Single Experiment Runner
 # ----------------------------
-def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def run_single_experiment(args: Args, config_override: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """Run a single metagame simulation experiment."""
     # Setup logging
     log_level = getattr(logging, args.log_level.upper())
     logging.basicConfig(level=log_level, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    # --- Construct the Unique Output Directory ---
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     mode_str = args.mode
     gen_str = f"gens{args.gens // 1000}K" if args.gens >= 1000 else f"gens{args.gens}"
@@ -49,14 +48,12 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
     base_output_name = f"{timestamp}_{mode_str}_{gen_str}"
     base_output_dir = os.path.join(args.output, base_output_name)
 
-    # Safely get experiment_id
     experiment_id = "default"
     if config_override:
         experiment_id = config_override.get("experiment_id", "default")
         # For batch runs, create a subdirectory for each experiment
         base_output_dir = os.path.join(base_output_dir, experiment_id)
 
-    # Create the initial directory
     os.makedirs(base_output_dir, exist_ok=True)
 
     # Log to file
@@ -66,7 +63,6 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     file_handler.setFormatter(formatter)
 
-    # Avoid adding handlers repeatedly in batch mode
     root_logger = logging.getLogger()
     if root_logger.handlers:
         for handler in root_logger.handlers[:]:
@@ -77,9 +73,9 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
     logging.info(f"🚀 Starting experiment '{experiment_id}'. Output: {base_output_dir}")
     logging.info(f"Parameters: mode={args.mode}, gens={args.gens}, noise={args.noise}")
 
-    # --- Build SimulationConfig directly ---
     min_generations = max(1, int(args.gens * MIN_GENERATIONS_PROP))
     mode_literal = cast(Literal["replicator", "tournament"], args.mode)
+    style_literal = cast(Literal["pure_swiss", "championship_series"], args.tournament_style)
 
     sim_config = SimulationConfig(
         mode=mode_literal,
@@ -99,17 +95,15 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
         mutation_floor=args.mutation_floor,
         noise_scale=args.noise,
         selection_pressure=args.selection_pressure,
-        tournament_style=args.tournament_style,
+        tournament_style=style_literal,
     )
     logging.debug(f"Simulation Config: {sim_config}")
 
-    # Load data
     deck_names, win_matrix, matchup_details = load_matchup_data(args.input, args.min_games)
     if not deck_names:
         logging.error("No reliable decks loaded. Aborting.")
         return {}
 
-    # Dominance diagnostic
     compute_deck_dominance(win_matrix, deck_names)
 
     # Clustering
@@ -138,7 +132,6 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
         conv_status = "NOCONV"
     logging.info(f"📈 Convergence at generation: {final_conv_gen if final_conv_gen is not None else 'Not Converged'}")
 
-    # Construct final directory name
     final_output_name = f"{timestamp}_{mode_str}_{gen_str}_{conv_status}"
     if config_override and experiment_id != "default":
         final_output_name = f"{final_output_name}_{experiment_id}"
@@ -146,7 +139,6 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
     file_handler.close()
     final_output_dir = os.path.join(args.output, final_output_name)
 
-    # Rename the directory
     try:
         if base_output_dir != final_output_dir:
             if os.path.exists(final_output_dir):
@@ -159,18 +151,15 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
             logging.info(f"✅ Output directory renamed to: {final_output_dir}")
     except Exception as e:
         logging.error(f"Failed to rename output directory: {e}")
-        final_output_dir = base_output_dir  # Fallback to original
+        final_output_dir = base_output_dir
 
     output_dir = final_output_dir
 
-    # Save results
     csv_path = os.path.join(output_dir, "ess_equilibrium.csv")
     try:
-        import csv
-
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(
-                cast(TextIO, f),
+                cast(Any, f),
                 fieldnames=[
                     "deck",
                     "frequency",
@@ -189,7 +178,7 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
     # Tier lists
     final_tiers = generate_final_state_tier_list(deck_names, history, win_matrix)
     with open(os.path.join(output_dir, "final_tiers.json"), "w", encoding="utf-8") as f:
-        json.dump(final_tiers, cast(TextIO, f), indent=2)
+        json.dump(final_tiers, cast(Any, f), indent=2)
 
     final_active_mask = [r["is_active"] for r in results]
 
@@ -198,7 +187,7 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
 
     similarity = compute_deck_similarity(win_matrix, deck_names, final_active_mask=final_active_mask)
     with open(os.path.join(output_dir, "deck_similarity.json"), "w", encoding="utf-8") as f:
-        json.dump(similarity.tolist(), cast(TextIO,f), indent=2)
+        json.dump(similarity.tolist(), cast(Any, f), indent=2)
 
     # Plotting
     if not args.no_plot:
@@ -226,7 +215,6 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
             save_path=os.path.join(output_dir, "matchup_network.html"),
         )
 
-    # Return metadata for batch runs
     metadata = {
         "experiment_id": experiment_id,
         "duration_seconds": sim_duration,
@@ -243,7 +231,6 @@ def run_single_experiment(args: Args, config_override: Optional[Dict[str, Any]] 
         },
     }
     return metadata
-
 
 # ----------------------------
 # Batch Experiment Runner
@@ -266,10 +253,8 @@ def run_batch_experiments(args: Args):
         exp_id = exp_config.get("experiment_id", f"exp{i + 1:03d}")
         logging.info(f"--- Starting Batch Experiment {i + 1}/{len(experiments)}: {exp_id} ---")
 
-        # Start with the base arguments from the command line
         args_dict = args._asdict()
 
-        # Update them with any overrides from the current experiment's config
         if exp_config:
             valid_keys = args_dict.keys()
             for key, value in exp_config.items():
@@ -278,19 +263,16 @@ def run_batch_experiments(args: Args):
                 else:
                     logging.warning(f"Ignoring unknown parameter '{key}' in batch config.")
 
-        # Set the main output directory for all batch experiments
         args_dict["output"] = os.path.join(base_output, "batch")
 
-        # Create a new immutable Args object for this specific run
         exp_args = Args(**args_dict)
 
         metadata = run_single_experiment(exp_args, config_override=exp_config)
         results_summary.append(metadata)
 
-    # Save batch summary
     summary_path = os.path.join(base_output, "batch_summary.json")
     with open(summary_path, "w", encoding="utf-8") as f:
-        json.dump(results_summary, cast(TextIO, f), indent=4)
+        json.dump(results_summary, cast(Any, f), indent=4)
     logging.info(f"📊 Batch summary saved to {summary_path}")
 
 
@@ -339,7 +321,6 @@ def main():
         run_batch_experiments(args)
     else:
         run_single_experiment(args)
-
 
 if __name__ == "__main__":
     main()

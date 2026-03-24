@@ -3,7 +3,10 @@ import os
 import math
 import numpy as np
 from typing import Dict, List, Any, TypedDict, Union, cast, Tuple
-from src.core.config import INPUT_DIR, MIN_GAMES, MatchFormat, _STRUCTURE_RESULTS, _STRUCTURE_THRESHOLDS
+import src.core.config as core_config
+_STRUCTURE_THRESHOLDS = getattr(core_config, "_STRUCTURE_THRESHOLDS")
+_STRUCTURE_RESULTS = getattr(core_config, "_STRUCTURE_RESULTS")
+from src.core.config import INPUT_DIR, MIN_GAMES, MatchFormat
 from src.core.data import load_matchup_data, safe_normalize
 
 # === Input Types ===
@@ -109,6 +112,7 @@ def resolve_meta_constraints(
                 max_bounds[i] = float(spec["max"])
     # Pure Vectorized Water-Filling
     max_iterations = 100
+    iterations = 0
     for iterations in range(max_iterations):
         remaining_mass = max(0.0, 1.0 - np.sum(final_meta[is_locked]))
         
@@ -181,17 +185,16 @@ def predict_best_decks(
     swiss_rounds = swiss_rounds_from_players(total_players)
 
     # --- Meta Score Analytics ---
-    # Power Score (0-100 normalization of Win Rate against the field)
+    # Power Score
     max_wr = np.max(expected_wr)
-    min_wr_floor = 1.0 - max_wr  # Derived from VS fixed value definition
+    min_wr_floor = 1.0 - max_wr
     
-    power_scores = np.zeros(n)
     if max_wr > min_wr_floor:
         power_scores = np.minimum((expected_wr - min_wr_floor) / (max_wr - min_wr_floor) * 100.0, 100.0)
     else:
-        power_scores = np.full(n, 50.0) # Failsafe for perfectly flat 50/50 meta
+        power_scores = np.full(n, 50.0)
 
-    # Frequency Score (0-100 normalization of Prevalence)
+    # Frequency Score (0-100)
     max_freq = np.max(meta_vec)
     freq_scores = np.zeros(n)
     if max_freq > 0:

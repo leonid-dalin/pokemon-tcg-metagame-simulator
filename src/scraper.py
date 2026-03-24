@@ -5,9 +5,8 @@ import csv
 import re
 from bs4 import BeautifulSoup
 from bs4.element import Tag
-from typing import List, Dict, Tuple, Set, Any
+from typing import List, Dict, Tuple, Set, Any, cast
 from src.core.config import MATCHUP_DIR, INPUT_DIR
-
 
 def normalize_archetype(name):
     if not name:
@@ -17,7 +16,6 @@ def normalize_archetype(name):
     name = re.sub(r"\s+", " ", name)
     name = re.sub(r"[^\w\s]", "", name)
     return name.strip()
-
 
 def extract_deck_info_from_filename(filename):
     """
@@ -80,15 +78,11 @@ def scrape_matchup_data(file_path: str, deck_archetype: str, format_name: str, c
 
         opponent_archetype = canonical_map[norm_opponent]
 
-        try:
-            matches = int(row.get("data-matches", 0))
-        except (ValueError, TypeError):
-            matches = 0
+        matches_attr = row.get("data-matches")
+        matches = int(matches_attr) if matches_attr is not None else 0
 
-        try:
-            winrate = float(row.get("data-winrate", 0.5))
-        except (ValueError, TypeError):
-            winrate = 0.5
+        winrate_attr = row.get("data-winrate")
+        winrate = float(winrate_attr) if winrate_attr is not None else 0.5
 
         wins = losses = ties = 0
         score_tds = row.find_all("td")
@@ -158,7 +152,7 @@ def save_to_csv(data: List[Dict[str, Any]], input_path: str):
     if not data:
         return
     with open(input_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=data[0].keys())
+        writer = csv.DictWriter(cast(Any, f), fieldnames=data[0].keys())
         writer.writeheader()
         writer.writerows(data)
 
@@ -166,7 +160,7 @@ def save_matrix_to_csv(matrix_data: Dict[str, Any], input_path: str):
     archetypes = matrix_data["archetypes"]
     matrix = matrix_data["matchup_matrix"]
     with open(input_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
+        writer = csv.writer(cast(Any, f))
         writer.writerow([""] + archetypes)
         for a in archetypes:
             row = [a]
@@ -236,7 +230,7 @@ def main():
                         for a in matrix_data["archetypes"]
                     },
                 },
-                f,
+                cast(Any, f),
                 indent=2,
             )
 

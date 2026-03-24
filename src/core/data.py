@@ -128,8 +128,8 @@ def cluster_decks_by_matchup_profile(
         return {"labels": [0] * len(deck_names), "centroids": None, "distances": None}
 
     scaler = StandardScaler()
-    WM_scaled = scaler.fit_transform(win_matrix)
-    distances = pairwise_distances(WM_scaled, metric="euclidean")
+    wm_scaled = scaler.fit_transform(win_matrix)
+    distances = pairwise_distances(wm_scaled, metric="euclidean")
 
 
     max_possible_k = min(6, n_samples - 1) if n_samples > 2 else 2
@@ -142,8 +142,8 @@ def cluster_decks_by_matchup_profile(
             best_score = -1.0
             for k in range(2, max_possible_k + 1):
                 kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-                labels = kmeans.fit_predict(WM_scaled)
-                score = silhouette_score(WM_scaled, labels)
+                labels = kmeans.fit_predict(wm_scaled)
+                score = silhouette_score(wm_scaled, labels)
                 
                 if score > best_score:
                     best_score = score
@@ -154,7 +154,7 @@ def cluster_decks_by_matchup_profile(
             logging.info(f"🔍 Silhouette Optimization selected k={best_k} (Score: {best_score:.3f})")
         else:
             kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
-            best_labels = kmeans.fit_predict(WM_scaled)
+            best_labels = kmeans.fit_predict(wm_scaled)
             best_centroids = kmeans.cluster_centers_
 
         labels, centroids, final_k = best_labels, best_centroids, best_k
@@ -162,7 +162,7 @@ def cluster_decks_by_matchup_profile(
     elif method == "hierarchical":
         final_k = 5 if n_clusters == "auto" else int(n_clusters)
         hc = AgglomerativeClustering(n_clusters=final_k, linkage="ward")
-        labels = hc.fit_predict(WM_scaled)
+        labels = hc.fit_predict(wm_scaled)
         centroids = None
     else:
         raise ValueError(f"Unsupported clustering method: {method}")
