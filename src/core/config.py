@@ -45,8 +45,9 @@ TOURNAMENT_SIZE = 32
 NUM_TOURNAMENTS_PER_GEN = 16
 NUM_ROUNDS = 5
 
-# TPCi Variant #5 Official Structure Logic (Day 1, Cut, Day 2, Top Cut)
+# TPCi Variant #5 Official Structure Logic 
 _STRUCTURE_THRESHOLDS: Tuple[int, ...] = (8, 16, 32, 64, 128, 256, 512, 1024, 2048)
+# (Day 1 Rounds, Cut, Day 2 Rounds, Top Cut)
 _STRUCTURE_RESULTS: Tuple[Tuple[int, int, int, int], ...] = (
     (3, 99, 0, 0),   # <= 8
     (4, 99, 0, 2),   # <= 16
@@ -67,11 +68,6 @@ WIN_THRESHOLD = 0.6
 CONSISTENCY_MEAN_EPSILON = 1e-6
 CONSISTENCY_STD_EPSILON = 1e-9
 
-# Composite Scoring Weights [LEGACY]
-COMPOSITE_SCORE_WR_WEIGHT = 0.50
-COMPOSITE_SCORE_PRESENCE_WEIGHT = 0.30
-COMPOSITE_SCORE_CONSISTENCY_WEIGHT = 0.20
-
 # Meta Score / Win Rate Tier Thresholds
 TIER_0_THRESHOLD = 0.525     # Dominant
 TIER_0_5_THRESHOLD = 0.50    # Top Contender
@@ -91,6 +87,11 @@ TIER_THRESHOLDS: Dict[str, float] = {
 
 # Dynamically derive the order from the dictionary keys
 TIER_ORDER: Tuple[str, ...] = tuple(TIER_THRESHOLDS.keys())
+
+# [LEGACY] Composite Scoring Weights 
+COMPOSITE_SCORE_WR_WEIGHT = 0.50
+COMPOSITE_SCORE_PRESENCE_WEIGHT = 0.30
+COMPOSITE_SCORE_CONSISTENCY_WEIGHT = 0.20
 
 # ----------------------------
 # Plotting & UI Defaults

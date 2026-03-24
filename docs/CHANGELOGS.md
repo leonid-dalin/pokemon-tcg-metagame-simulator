@@ -1,3 +1,29 @@
+## Commit `[???]` (Mar 24, 2026)
+### refactor: formalize tournament EV logic, stabilize UI state, and fix mathematical clipping
+
+This update represents a fundamental shift in the recommendation engine, while resolving several critical stability bugs and mathematical floor errors. Updated the current `INPUT_DATA` to the Limitless TCG's stats of Mar 24, 2026 of ASC format.
+
+#### **1. Tournament EV & Dynamic Logic Overhaul**
+* **Context-Aware EV:** The engine now dynamically switches primary metrics based on player count. Large-scale tournaments (e.g., 2,000+ players) prioritize **Day 2 Conversion** to mitigate Top 8 variance. Smaller events pivot to **Top 8/Top X Conversion**. This is very much still subject to change, and are a direct preference of mine's.
+* **EV Delta Metric:** Introduced a relative performance stat that shows the "Equity Drop-off" compared to the #1 ranked deck, providing better context for the other choices.
+* **Mathematical Floor Fix:** Updated `solver.py` to use `np.minimum(100.0)` instead of a hard `np.clip`. This allows for negative scores in the framework, accurately representing sub-baseline rogue decks.
+
+#### **2. Critical Stability & Crash Prevention**
+* **Variable Alignment:** Fixed a fatal crash where `best_wr` was pointing to the deleted `recs_sorted_by_power` list.
+* **Empty Meta Handling:** Sanitized `tab_rec` logic to prevent `IndexError` and `StreamlitAPIException`. The app no longer crashes if no decks exceed the Meta Score threshold (balanced meta) or if `st.columns()` receives a zero count.
+* **Strict Column Ordering:** Implemented a `final_column_order` array to prevent Streamlit from silently dropping dynamic archetype columns in the Macro view.
+
+#### **3. UI/UX Refinement & Precision**
+* **Bulletproof Formatting:** Enforced **2-decimal precision** (`f"{val:.2f}"`) across all metrics (Power, Freq, Meta) to ensure visual alignment and "column hugging."
+* **Naming Convention:** Renamed "Exp. Avg. WR %" to **"Power Ranking (Day 1)"** to create a logical pair with "Power Ranking (Day 2)."
+* **Noise Reduction:** Added a strict **1% field share cutoff** for threat lists to filter out statistically irrelevant rogue decks.
+* **Default State:** The `Import Limitless Labs HTML` expander now defaults to "Open" instead of `Active Custom Constraints`.
+
+#### **4. Architectural Diagnostics**
+* **Multiprocessing:** Documenting the root cause of the `No runtime found` cache warning. Windows `multiprocessing.Pool` spawns child processes that re-evaluate `app.py`, triggering `@st.cache_data` decorators outside the main Streamlit thread. A problem for future I.
+
+---
+
 ## Commit `6401713` (Mar 20, 2026)
 ### refactor: implement vS Meta Score, overhaul Swiss bracket engine, and redesign the app dashboard to be more intelligent
 

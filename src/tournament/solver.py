@@ -187,7 +187,7 @@ def predict_best_decks(
     
     power_scores = np.zeros(n)
     if max_wr > min_wr_floor:
-        power_scores = np.clip((expected_wr - min_wr_floor) / (max_wr - min_wr_floor) * 100.0, 0.0, 100.0)
+        power_scores = np.minimum((expected_wr - min_wr_floor) / (max_wr - min_wr_floor) * 100.0, 100.0)
     else:
         power_scores = np.full(n, 50.0) # Failsafe for perfectly flat 50/50 meta
 

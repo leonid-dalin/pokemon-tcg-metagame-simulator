@@ -18,7 +18,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.core.data import load_matchup_data
-from src.core.config import INPUT_DIR, MIN_GAMES, WIN_THRESHOLD, TIER_ORDER, aggressive_colorscale, TIER_THRESHOLDS
+from src.core.config import INPUT_DIR, MIN_GAMES, WIN_THRESHOLD, TIER_ORDER, aggressive_colorscale, TIER_THRESHOLDS, TIER_1_THRESHOLD
 from src.tournament.monte_carlo import run_monte_carlo_analytics
 from src.tournament.solver import predict_best_decks, UserMetaSpec, MatchFormat, swiss_rounds_from_players, get_variant_5_structure
 
@@ -145,7 +145,7 @@ def main():
     # ==========================================
     st.subheader("📊 Metagame Constraints")
     
-    with st.expander("📁 Import Limitless Labs HTML", expanded=False):
+    with st.expander("📁 Import Limitless Labs HTML", expanded=True):
         uploaded_file = st.file_uploader("Upload a saved HTML file from Limitless Labs...", type=["html", "htm"])
         if uploaded_file is not None:
             if st.button("Extract Data & Populate Constraints", type="secondary"):
@@ -166,7 +166,7 @@ def main():
     deck_names = get_valid_deck_names()
     seen_decks = set()
 
-    with st.expander("🛠️ Active Custom Constraints", expanded=True):
+    with st.expander("🛠️ Active Custom Constraints", expanded=False):
         c1, c2 = st.columns([1, 4])
         with c1:
             if st.button("➕ Add Constraint"): add_meta_row()
@@ -218,7 +218,7 @@ def main():
     st.divider()
 
     # ==========================================
-    # EXECUTION & DATAFRAME RESULTS
+    # EXECUTION
     # ==========================================
     if st.button("🚀 Generate Metagame & Predict", type="primary", width="stretch", disabled=(total_min > 1.0)):
         with st.status("⚙️ Initializing Engine...", expanded=True) as status:
@@ -248,7 +248,9 @@ def main():
             except Exception as e:
                 status.update(label="❌ Simulation Failed", state="error", expanded=True); st.exception(e); st.stop()
 
-    # --- Render Results if Available ---
+    # ==========================================
+    # DATAFRAME RESULTS
+    # ==========================================
     if st.session_state.prediction_result is not None and st.session_state.mc_result is not None:
         res = st.session_state.prediction_result
         mc_res = st.session_state.mc_result
@@ -260,8 +262,9 @@ def main():
 
         st.info("""
         **How to read the Scores:**
-        * **Power Score (0-100):** A deck's normalized win rate against the field. `100` represents the highest win rate in the format. `0` represents the baseline floor of viability.
-        * **Meta Score (0-100):** The average of a deck's Power Score and its Popularity (Frequency Score). It measures a deck's true dominance and distance to the "theoretical best deck."
+        * **Power Score (≤100):** A deck's normalized win rate against the field. `100` represents the highest win rate. Scores can be negative if a deck performs drastically below the baseline floor of viability.
+        * **Frequency Score (0-100):** A deck's normalized popularity.
+        * **Meta Score (≤100):** The average of Power Score and Frequency Score. It measures a deck's true dominance and distance to the "theoretical best deck."
         """)
         
         view_col1, view_col2 = st.columns([1, 3])
@@ -294,65 +297,70 @@ def main():
             metrics = res["metrics_per_deck"][deck]
             mc_metrics = mc_res.get(deck, {"day2_conversion": 0, "top_cut_conversion": 0, "win_probability": 0, "day2_share": 0, "top_cut_share": 0})
             
+            meta_share = metrics["meta_share"]
+            
             row_data = {
-                "#": i,
-                "Tier": get_tier(metrics["expected_win_rate"]),
+                "#": str(i),
                 "Deck": deck,
-                "Meta Score": metrics["base_meta_score"],
-                "Power Score": metrics["power_score"],
                 "Type": "🔒 User" if deck in user_meta else "📈 Base",
-                "Exp. WR %": metrics["expected_win_rate"] * 100,
+                "Tier": get_tier(metrics["expected_win_rate"]),
+                "Power Score": round(metrics["power_score"], 2),
+                "Freq Score": round(metrics["frequency_score"], 2),
+                "Meta Score": round(metrics["base_meta_score"], 2),
+                "Power Ranking (Day 1)": round(metrics["expected_win_rate"] * 100, 2),
+                "Share % (Day 1)": round(meta_share * 100, 2),
             }
             
             if d2_rounds > 0 and np.sum(day2_share_vec) > 0:
-                row_data["Day 2 Exp. WR %"] = day2_wr_dict[deck] * 100
+                row_data["Power Ranking (Day 2)"] = round(day2_wr_dict[deck] * 100, 2)
             
-            meta_share = metrics["meta_share"] * 100
-            
+            # --- Micro/Macro Odds View ---
             if odds_view == "Player (Micro)":
-                row_data["Day 1 Share %"] = meta_share
-                if d2_rounds > 0: row_data["Day 2 Conv. Rate %"] = mc_metrics.get("day2_conversion", 0) * 100
+                if d2_rounds > 0: row_data["Conv. Rate % (Day 2)"] = round(mc_metrics.get("day2_conversion", 0) * 100, 2)
                 if top_cut > 0:
-                    row_data["Top 8 Conv. Rate %"] = mc_metrics.get("top_cut_conversion", 0) * 100
-                    row_data["Win Event %"] = mc_metrics.get("win_probability", 0) * 100
+                    row_data[f"Conv. Rate % (Top {top_cut})"] = round(mc_metrics.get("top_cut_conversion", 0) * 100, 2)
+                    row_data["Win Event %"] = round(mc_metrics.get("win_probability", 0) * 100, 2)
             else:
-                row_data["Day 1 Share %"] = meta_share
-                if d2_rounds > 0: row_data["Day 2 Meta Share %"] = mc_metrics.get("day2_share", 0) * 100
+                if d2_rounds > 0: row_data["Share % (Day 2)"] = round(mc_metrics.get("day2_share", 0) * 100, 2)
                 if top_cut > 0:
-                    row_data["Top 8 Meta Share %"] = mc_metrics.get("top_cut_share", 0) * 100
-                    row_data["Winner Share %"] = mc_metrics.get("win_probability", 0) * meta_share * players
-                
+                    row_data[f"Share % (Top {top_cut})"] = round(mc_metrics.get("top_cut_share", 0) * 100, 2)
+                    row_data["Share % (Winner)"] = round(mc_metrics.get("win_probability", 0) * meta_share * players * 100, 2)
+            
             data.append(row_data)
 
         df = pd.DataFrame(data)
+
+        base_cols = ["#", "Deck", "Type", "Tier", "Power Score", "Freq Score", "Meta Score", "Power Ranking (Day 1)"]
+        if d2_rounds > 0 and np.sum(day2_share_vec) > 0:
+            base_cols.append("Power Ranking (Day 2)")
+        
+        mc_cols = ["Share % (Day 1)"]
+        if odds_view == "Player (Micro)":
+            if d2_rounds > 0: mc_cols.append("Conv. Rate % (Day 2)")
+            if top_cut > 0: mc_cols.extend([f"Conv. Rate % (Top {top_cut})", "Win Event %"])
+        else:
+            if d2_rounds > 0: mc_cols.append("Share % (Day 2)")
+            if top_cut > 0: mc_cols.extend([f"Share % (Top {top_cut})", "Share % (Winner)"])
+                
+        final_column_order = base_cols + mc_cols
+
         col_config = {
-            "#": st.column_config.NumberColumn(width="small"),
-            "Tier": st.column_config.TextColumn(width="small", help="T0 (≥52.5%), T0.5 (≥50%), T1 (≥47.5%), T2 (≥45%), T3 (≥42.5%), T4 (≥0%)."), 
+            "#": st.column_config.TextColumn(width="small"),
             "Deck": st.column_config.TextColumn(width="medium"),
-            "Meta Score": st.column_config.NumberColumn(format="%.1f", help="Average of Power and Popularity. High scores mean heavily dominant."),
-            "Power Score": st.column_config.NumberColumn(format="%.1f", help="0-100 normalization of Win Rate. 100 is the best performing deck."),
-            "Type": st.column_config.TextColumn(help="Forced by user constraint (🔒) or simulated baseline (📈)."),
-            "Exp. WR %": st.column_config.NumberColumn(format="%.2f %%", help="Expected Win Rate against the entire predicted field."),
+            "Type": st.column_config.TextColumn(width="small", help="Forced by user constraint (🔒) or simulated baseline (📈)."),
+            "Tier": st.column_config.TextColumn(width="small", help="T0 (≥52.5%), T0.5 (≥50%), T1 (≥47.5%), T2 (≥45%), T3 (≥42.5%), T4 (≥0%)."), 
+            "Power Score": st.column_config.NumberColumn(width="small", format="%.2f", help="Normalization of Win Rate. 100 is the best performing deck. Can be negative."),
+            "Freq Score": st.column_config.NumberColumn(width="small", format="%.2f", help="Normalization of Popularity. 100 is the most played deck."),
+            "Meta Score": st.column_config.NumberColumn(width="small", format="%.2f", help="Average of Power and Frequency. High scores mean heavily dominant."),
+            "Power Ranking (Day 1)": st.column_config.NumberColumn(format="%.2f %%", help="Weighted Win Rate against the day 1 field."),
+            "Power Ranking (Day 2)": st.column_config.NumberColumn(format="%.2f %%", help="Expected Win Rate against the condensed Day 2 meta."),
         }
         
-        if d2_rounds > 0 and np.sum(day2_share_vec) > 0:
-            col_config["Day 2 Exp. WR %"] = st.column_config.NumberColumn(format="%.2f %%", help="Expected Win Rate against the condensed Day 2 meta.")
-
-        if odds_view == "Player (Micro)":
-            col_config["Day 1 Share %"] = st.column_config.NumberColumn(format="%.2f %%")
-            if d2_rounds > 0: col_config["Day 2 Conv. Rate %"] = st.column_config.NumberColumn(format="%.2f %%")
-            if top_cut > 0:
-                col_config["Top 8 Conv. Rate %"] = st.column_config.NumberColumn(format="%.2f %%")
-                col_config["Win Event %"] = st.column_config.NumberColumn(format="%.2f %%")
-        else:
-            col_config["Day 1 Share %"] = st.column_config.NumberColumn(format="%.2f %%")
-            if d2_rounds > 0: col_config["Day 2 Meta Share %"] = st.column_config.NumberColumn(format="%.2f %%")
-            if top_cut > 0:
-                col_config["Top 8 Meta Share %"] = st.column_config.NumberColumn(format="%.2f %%")
-                col_config["Winner Share %"] = st.column_config.NumberColumn(format="%.2f %%")
+        for c in mc_cols:
+            col_config[c] = st.column_config.NumberColumn(format="%.2f %%")
 
         st.caption("Click any column header to sort. Hover over headers for detailed metric definitions.")
-        st.dataframe(df, width="stretch", hide_index=True, column_config=col_config)
+        st.dataframe(df[final_column_order], width="stretch", hide_index=True, column_config=col_config)
         st.divider()
 
         # --- Head-to-Head Field Comparator ---
@@ -370,20 +378,20 @@ def main():
             da_mc, db_mc = mc_res.get(deck_a, {}), mc_res.get(deck_b, {})
 
             m_row1 = st.columns(4)
-            m_row1[0].metric("Meta Score", f"{da_metrics['base_meta_score']:.1f}", f"{da_metrics['base_meta_score'] - db_metrics['base_meta_score']:.1f} vs {deck_b}")
-            m_row1[1].metric("Power Score", f"{da_metrics['power_score']:.1f}", f"{da_metrics['power_score'] - db_metrics['power_score']:.1f} vs {deck_b}")
-            m_row1[2].metric("Exp. Win Rate", f"{da_metrics['expected_win_rate']:.2%}", f"{da_metrics['expected_win_rate'] - db_metrics['expected_win_rate']:.2%} vs {deck_b}")
+            m_row1[0].metric("Meta Score", f"{da_metrics['base_meta_score']:.2f}", f"{da_metrics['base_meta_score'] - db_metrics['base_meta_score']:.2f} vs {deck_b}")
+            m_row1[1].metric("Power Score", f"{da_metrics['power_score']:.2f}", f"{da_metrics['power_score'] - db_metrics['power_score']:.2f} vs {deck_b}")
+            m_row1[2].metric("Power Ranking (Day 1)", f"{da_metrics['expected_win_rate']:.2%}", f"{da_metrics['expected_win_rate'] - db_metrics['expected_win_rate']:.2%} vs {deck_b}")
             if d2_rounds > 0 and np.sum(day2_share_vec) > 0:
-                m_row1[3].metric("Day 2 Exp. WR", f"{day2_wr_dict.get(deck_a, 0):.2%}", f"{day2_wr_dict.get(deck_a, 0) - day2_wr_dict.get(deck_b, 0):.2%} vs {deck_b}")
+                m_row1[3].metric("Power Ranking (Day 2)", f"{day2_wr_dict.get(deck_a, 0):.2%}", f"{day2_wr_dict.get(deck_a, 0) - day2_wr_dict.get(deck_b, 0):.2%} vs {deck_b}")
 
             m_row2 = st.columns(3)
             if d2_rounds > 0:
                 m_row2[0].metric("Day 2 Odds", f"{da_mc.get('day2_conversion',0):.2%}", f"{da_mc.get('day2_conversion',0) - db_mc.get('day2_conversion',0):.2%} vs {deck_b}")
             if top_cut > 0:
-                m_row2[1].metric("Top 8 Odds", f"{da_mc.get('top_cut_conversion',0):.2%}", f"{da_mc.get('top_cut_conversion',0) - db_mc.get('top_cut_conversion',0):.2%} vs {deck_b}")
+                m_row2[1].metric(f"Top {top_cut} Odds", f"{da_mc.get('top_cut_conversion',0):.2%}", f"{da_mc.get('top_cut_conversion',0) - db_mc.get('top_cut_conversion',0):.2%} vs {deck_b}")
                 m_row2[2].metric("Win Odds", f"{da_mc.get('win_probability',0):.2%}", f"{da_mc.get('win_probability',0) - db_mc.get('win_probability',0):.2%} vs {deck_b}")
 
-            st.markdown("#### Matchups vs Top Metagame")
+            st.markdown("#### Matchups")
             
             top_field = [d for d in data if res["metrics_per_deck"][d["Deck"]]["meta_share"] >= 0.03] 
             comp_data = []
@@ -394,7 +402,7 @@ def main():
                 wr_b = full_win_matrix[db_idx, opp_idx] * 100
                 comp_data.append({
                     "Opponent": opp_name,
-                    "Field Share": res["metrics_per_deck"][opp_name]["meta_share"],
+                    "Share % (Day 1)": round(res["metrics_per_deck"][opp_name]["meta_share"] * 100, 2), 
                     f"{deck_a} WR": wr_a,
                     f"{deck_b} WR": wr_b,
                     "Advantage": f"{deck_a}" if wr_a > wr_b else f"{deck_b}" if wr_b > wr_a else "Tie"
@@ -404,16 +412,13 @@ def main():
             
             def highlight_winrates(val):
                 if not isinstance(val, (int, float)): return ''
-                
                 norm_val = val / 100.0
-                
                 target_rgb = aggressive_colorscale[0][1]
                 for threshold, color in aggressive_colorscale:
                     if norm_val >= threshold:
                         target_rgb = color
                     else:
                         break
-                        
                 nums = re.findall(r'\d+', target_rgb)
                 return f'background-color: rgba({nums[0]}, {nums[1]}, {nums[2]}, 0.25)'
 
@@ -422,7 +427,7 @@ def main():
             st.dataframe(
                 styled_comp_df, width="stretch", hide_index=True, 
                 column_config={
-                    "Field Share": st.column_config.NumberColumn(format="%.2f %%"),
+                    "Share % (Day 1)": st.column_config.NumberColumn(width="small", format="%.2f %%"),
                     f"{deck_a} WR": st.column_config.NumberColumn(format="%.2f %%"),
                     f"{deck_b} WR": st.column_config.NumberColumn(format="%.2f %%")
                 }
@@ -431,84 +436,136 @@ def main():
         st.divider()
 
         # --- Dynamic Actionable Intelligence ---
-        # 1. Top Threats are defined strictly by format dominance (Meta Score)
-        top_threats = sorted(active_decks, key=lambda d: res["metrics_per_deck"][d]["base_meta_score"], reverse=True)[:3]
-        
-        # 2. Recommendations are defined strictly by EV / pilot profitability (Power Score)
-        recs_sorted_by_power = sorted(active_decks, key=lambda d: res["metrics_per_deck"][d]["power_score"], reverse=True)
-        recommendations = [{"deck": d, **res["metrics_per_deck"][d]} for d in recs_sorted_by_power]
-        avoids = [{"deck": d, **res["metrics_per_deck"][d]} for d in recs_sorted_by_power[::-1]]
+        top_threats = sorted([d for d in active_decks if res["metrics_per_deck"][d]["base_meta_score"] > 50], 
+                             key=lambda d: res["metrics_per_deck"][d]["base_meta_score"], reverse=True)
+
+        if d2_rounds > 0:
+            ev_key = "day2_conversion"
+            ev_label = "Day 2 Odds"
+        elif top_cut > 0:
+            ev_key = "top_cut_conversion"
+            ev_label = f"Top {top_cut} Odds"
+        else:
+            ev_key = "power_score"
+            ev_label = "Power Score"
+
+        recs_sorted_by_ev = sorted(
+            active_decks, 
+            key=lambda d: (
+                mc_res.get(d, {}).get(ev_key, 0) if ev_key != "power_score" else res["metrics_per_deck"][d]["power_score"], 
+                res["metrics_per_deck"][d]["power_score"]
+            ), 
+            reverse=True
+        )
+        recommendations = [{"deck": d, **res["metrics_per_deck"][d]} for d in recs_sorted_by_ev]
+        avoids = [{"deck": d, **res["metrics_per_deck"][d]} for d in recs_sorted_by_ev[::-1]]
 
         best_day2 = max(active_decks, key=lambda d: mc_res.get(d, {}).get("day2_conversion", 0)) if d2_rounds > 0 else None
         best_top8 = max(active_decks, key=lambda d: mc_res.get(d, {}).get("top_cut_conversion", 0)) if top_cut > 0 else None
         best_win = max(active_decks, key=lambda d: mc_res.get(d, {}).get("win_probability", 0)) if top_cut > 0 else None
-        best_wr = recs_sorted_by_power[0]
+        best_wr = max(active_decks, key=lambda d: res["metrics_per_deck"][d]["power_score"])
         best_day2_predator = max(day2_wr_dict, key=day2_wr_dict.get) if d2_rounds > 0 and sum(day2_share_vec) > 0 else None
 
-        # --- Tabbed Intelligence Dashboard ---
+        best_ev_val = mc_res.get(recs_sorted_by_ev[0], {}).get(ev_key, 0) if ev_key != "power_score" else res["metrics_per_deck"][recs_sorted_by_ev[0]]["power_score"]
+
         tab_rec, tab_threat, tab_avoid = st.tabs(["🔥 Top Recommendations", "🚨 Top Threats", "🚫 Decks to Avoid"])
         
-        with tab_threat:
-            st.markdown("### 🚨 The Meta Dictators")
-            st.caption("These decks have the highest Meta Scores. They combine high win rates with massive popularity and warp the tournament around them. You MUST respect them.")
-            for i, deck in enumerate(top_threats, 1):
-                metrics = res["metrics_per_deck"][deck]
-                with st.container(border=True):
-                    c_title, c_stats = st.columns([2, 1])
-                    c_title.markdown(f"#### {i}. {deck}")
-                    c_stats.markdown(f"**Meta Score:** `{metrics['base_meta_score']:.1f}` | **Day 1 Share:** `{metrics['meta_share']:.1%}`")
-                    
-                    idx = deck_to_idx[deck]
-                    favorable, threats = [], []
-                    for opp_name in active_decks:
-                        if opp_name == deck: continue
-                        wr = full_win_matrix[idx, deck_to_idx[opp_name]]
-                        if wr >= WIN_THRESHOLD: favorable.append(opp_name)
-                        elif wr <= WIN_THRESHOLD: threats.append(opp_name)
-                    
-                    st.error(f"**This deck pushes these out of the meta:** {', '.join(favorable[:5])}...")
-                    st.success(f"**It is heavily countered by:** {', '.join(threats[:5])}...")
-
         with tab_rec:
             st.markdown("### 🔥 Best EV (Expected Value)")
-            st.caption("These decks are ranked strictly by Power Score. They mathematically yield the highest win rates against the predicted field.")
+            st.caption(f"These decks are ranked strictly by **{ev_label}**. They mathematically yield the highest returns in this specific bracket structure.")
             visible_recs = recommendations[:st.session_state.rec_limit]
             
             for i, r in enumerate(visible_recs, 1):
                 deck = r["deck"]
                 metrics = res["metrics_per_deck"][deck]
+                mc_metrics = mc_res.get(deck, {})
                 
                 tags = []
                 if deck == best_win: tags.append("🏆 Best to Win Event")
-                elif deck == best_top8: tags.append("🏅 Best for Top 8")
+                elif deck == best_top8: tags.append(f"🏅 Best for Top {top_cut}")
                 elif deck == best_day2: tags.append("🛡️ Safest Day 2")
                 if deck == best_wr: tags.append("📈 Highest Raw Win Rate")
                 if deck == best_day2_predator: tags.append("🧱 Day 2 Predator")
-                if metrics["meta_share"] >= 0.10 and metrics["expected_win_rate"] < 0.49: tags.append("🪤 Overplayed Trap")
-                if deck not in top_threats and full_win_matrix[deck_to_idx[deck], deck_to_idx[top_threats[0]]] > WIN_THRESHOLD:
+                if metrics["meta_share"] >= 0.10 and metrics["expected_win_rate"] < TIER_1_THRESHOLD: tags.append("🪤 Overplayed Trap")
+                if top_threats and deck not in top_threats and full_win_matrix[deck_to_idx[deck], deck_to_idx[top_threats[0]]] > WIN_THRESHOLD:
                     tags.append(f"💡 Rogue Meta Breaker (Beats {top_threats[0]})")
-                        
+                    
                 with st.container(border=True):
                     st.markdown(f"#### {i}. {deck}")
                     if tags:
                         st.markdown(" ".join([f"`{t}`" for t in tags]))
                     
-                    st.markdown(f"**Power Score:** `{metrics['power_score']:.1f}` | **Exp. WR:** `{metrics['expected_win_rate']:.2%}`")
+                    # Calculate EV delta vs #1 spot
+                    deck_ev_val = mc_metrics.get(ev_key, 0) if ev_key != "power_score" else metrics["power_score"]
+                    delta = deck_ev_val - best_ev_val
                     
-                    # --- Explicitly cross-reference against the Top Threats ---
+                    if i == 1 or delta == 0:
+                        if ev_key == "power_score":
+                            ev_str = f"**{ev_label}:** `{deck_ev_val:.2f}`"
+                        else:
+                            ev_str = f"**Tournament EV ({ev_label}):** `{deck_ev_val:.2%}`"
+                    else:
+                        if ev_key == "power_score":
+                            ev_str = f"**{ev_label}:** `{deck_ev_val:.2f}` ({delta:.2f} from #1)"
+                        else:
+                            ev_str = f"**Tournament EV ({ev_label}):** `{deck_ev_val:.2%}` ({delta:.2%} from #1)"
+
+                    st.markdown(f"{ev_str} | **Power Ranking (Day 1):** `{metrics['expected_win_rate']:.2%}`")
+                    
                     st.markdown("##### Performance vs Top Threats:")
-                    threat_cols = st.columns(len(top_threats))
-                    for t_idx, threat_deck in enumerate(top_threats):
-                        wr_vs_threat = full_win_matrix[deck_to_idx[deck], deck_to_idx[threat_deck]]
-                        color = "🟢" if wr_vs_threat >= WIN_THRESHOLD else "🔴" if wr_vs_threat <= (1 - WIN_THRESHOLD) else "🟡"
-                        threat_cols[t_idx].markdown(f"{color} **{threat_deck}**: `{wr_vs_threat:.0%}`")
+                    if top_threats:
+                        threat_cols = st.columns(len(top_threats))
+                        for t_idx, threat_deck in enumerate(top_threats):
+                            wr_vs_threat = full_win_matrix[deck_to_idx[deck], deck_to_idx[threat_deck]]
+                            color = "🟢" if wr_vs_threat >= WIN_THRESHOLD else "🔴" if wr_vs_threat <= (1 - WIN_THRESHOLD) else "🟡"
+                            threat_cols[t_idx].markdown(f"{color} **{threat_deck}**: `{wr_vs_threat:.0%}`")
+                    else:
+                        st.caption("No dominant meta dictators detected in this field.")
 
             if st.session_state.rec_limit < len(recommendations):
                 st.button("⬇️ Load more...", key="btn_load_recs", on_click=load_more_recs, width="stretch")
+                
+        with tab_threat:
+            st.markdown("### 🚨 The Meta Dictators")
+            st.caption("These decks have the highest Meta Scores (>50). They combine high win rates with massive popularity.")
+            for i, deck in enumerate(top_threats, 1):
+                metrics = res["metrics_per_deck"][deck]
+                with st.container(border=True):
+                    c_title, c_stats = st.columns([2, 1])
+                    c_title.markdown(f"#### {i}. {deck}")
+                    c_stats.markdown(f"**Meta Score:** `{metrics['base_meta_score']:.2f}` | **Day 1 Share:** `{metrics['meta_share']:.2%}`")
+                    
+                    idx = deck_to_idx[deck]
+                    favorable_data, threat_data = [], []
+                    
+                    for opp_name in active_decks:
+                        if opp_name == deck: continue
+                        opp_share = res["full_meta"][opp_name]
+                        if opp_share < 0.01: continue # 1% cutoff
+                        
+                        wr = full_win_matrix[idx, deck_to_idx[opp_name]]
+                        if wr >= WIN_THRESHOLD: 
+                            favorable_data.append((opp_name, opp_share))
+                        elif wr <= (1 - WIN_THRESHOLD): 
+                            threat_data.append((opp_name, opp_share))
+                    
+                    favorable_data.sort(key=lambda x: x[1], reverse=True)
+                    threat_data.sort(key=lambda x: x[1], reverse=True)
+                    
+                    favorable_share = sum(share for _, share in favorable_data)
+                    threats_share = sum(share for _, share in threat_data)
+                    
+                    favorable_strs = [f"{name} ({share:.2%})" for name, share in favorable_data]
+                    threat_strs = [f"{name} ({share:.2%})" for name, share in threat_data]
+                    
+                    if favorable_strs:
+                        st.error(f"**Pushes out (Total {favorable_share:.2%}):** {', '.join(favorable_strs)}")
+                    if threat_strs:
+                        st.success(f"**Countered by (Total {threats_share:.2%}):** {', '.join(threat_strs)}")
 
         with tab_avoid:
             st.markdown("### 🚫 Negative Expected Value")
-            st.caption("These decks are ranked by the lowest Power Scores. They are mathematically unfavored against the predicted field.")
+            st.caption("These decks are mathematically unfavored against the predicted field.")
             visible_avoids = avoids[:st.session_state.avoid_limit]
             
             for i, r in enumerate(visible_avoids, 1):
@@ -516,20 +573,25 @@ def main():
                 metrics = res["metrics_per_deck"][deck]
                 with st.container(border=True):
                     st.markdown(f"#### {i}. {deck}")
-                    st.markdown(f"**Power Score:** `{metrics['power_score']:.1f}` | **Exp. WR:** `{metrics['expected_win_rate']:.2%}`")
+                    st.markdown(f"**Power Score:** `{metrics['power_score']:.2f}` | **Power Ranking (Day 1):** `{metrics['expected_win_rate']:.2%}`")
                     
                     idx = deck_to_idx[deck]
-                    threats = []
+                    threat_data = []
+                    
                     for opp_name, opp_share in res["full_meta"].items():
-                        if opp_name == deck or opp_share < 0.02: continue
+                        if opp_name == deck or opp_share < 0.01: continue # 1% Cutoff
                         if full_win_matrix[idx, deck_to_idx[opp_name]] <= 0.45: 
-                            threats.append(opp_name)
+                            threat_data.append((opp_name, opp_share))
 
-                    if threats: 
-                        st.error(f"⚠️ Farmed by: {', '.join(threats[:5])}...")
+                    threat_data.sort(key=lambda x: x[1], reverse=True)
+                    threats_share = sum(share for _, share in threat_data)
+                    threat_strs = [f"{name} ({share:.2%})" for name, share in threat_data]
+
+                    if threat_strs: 
+                        st.error(f"⚠️ **Farmed by (Total {threats_share:.2%}):** {', '.join(threat_strs)}")
 
             if st.session_state.avoid_limit < len(avoids):
                 st.button("⬇️ Load more...", key="btn_load_avoids", on_click=load_more_avoids, width="stretch")
-
+                
 if __name__ == "__main__":
     main()
