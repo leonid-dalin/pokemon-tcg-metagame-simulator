@@ -2,7 +2,7 @@
 
 This document provides a comprehensive overview of the project's architecture for fellow developers. It details the purpose, structure, and key components (functions, variables, classes) of each module to ensure a clear understanding of the system's scope and design.
 
-The project simulates the long-term evolutionary dynamics of a competitive Pokémon TCG metagame using evolutionary game theory (Replicator Dynamics) and agent-based tournament simulations. It predicts the stable equilibrium state (Evolutionary Stable State) and provides advanced analytics, visualizations, and an interactive web application for real-time tournament equity predictions.
+The project simulates the long-term evolutionary dynamics of a competitive Pokémon TCG metagame using advanced evolutionary game theory (Optimistic Multiplicative Weights Update) and agent-based tournament simulations. It predicts the stable equilibrium state (Evolutionary Stable State) and provides advanced analytics, visualizations, and an interactive web application for real-time tournament equity predictions.
 
 ⚠️ Caution: This project is undergoing active refactoring. Expect frequent changes to the architecture, and verify information with the latest source code. I'll do my best to keep it updated, but you know, I'm only human.
 
@@ -16,6 +16,8 @@ To maintain high-speed parallel performance and prevent statistical noise from o
 2. **Matchup Determinism:** Basically, **no luck.** While the tournament bracket pairings are stochastic (RNG-driven), the actual match results are resolved purely as a weighted coin flip based on the archetype matchup data. There is no simulation of bricked hands, dead draws, or top-decks. We make the assumption that the winrate and data we already gathered are **absolute** in their nature.
 3. **Speed-Agnostic Tie Convergence:** The Parabolic Tie Convergence feature forces match-point bleed (ties) based purely on the mathematical closeness of the matchup (e.g., a 50/50 matchup ties more than an 80/20 matchup). It is entirely blind to deck archetype speed. I don't want to insert more *magic numbers* on which archetypes I consider 'easy' to pilot and which I don't. Do they time waste because they're a `Gholdengho` player, because they're versing a difficult match-up, or because that's the *right* decision to do Competitively by leading first game 1-0? Nobody knows. And **ignorance is bliss.** 
 4. **No Mid-Tournament Teching:** I won't cover the JP Tournament system. A deck's strategic profile remains frozen for the duration of the tournament or generation. The engine does not account for players altering tech cards (e.g., adding a specific counter-card) in response to expected Day 2 shifts. *If only I had data on Mulligan WR, Draw WR, Played WR, etc. ...*
+5. **Structured Variance:** The Monte Carlo engine simulates tournament realities (e.g., BO3 math conversions via $3p^2 - 2p^3$, time-limit Tie Convergence, and X-3 Drop Logic), but assumes perfectly randomized pairings within equivalent point brackets (Swiss).
+6. **Thermodynamic Data Purity (Zero-Sum):** Real-world matchup data is inherently General-Sum due to reporting biases. The simulation mathematically forces empirical data into a strict Zero-Sum environment. The Scraper achieves this via **Zero-Sum Match Equity** (splitting Ties evenly), and the Engine enforces symmetry to eliminate "free game-theoretic energy."
 
 ---
 
@@ -26,14 +28,14 @@ The codebase utilizes a domain-driven layout to strictly separate long-term evol
 ```text
 pokemon-tcg-metagame-simulator/
 ├── data/                       # Raw and processed JSON/CSV data
-├── output/                     # Simulation results, interactive HTML plots, and logs
+├── output/                     # Simulation results, interactive Plotly HTML, and logs
 └── src/                        # Source code
     ├── main.py                 # Top-level CLI orchestrator
     ├── scraper.py              # Limitless TCG HTML data ingestion
     ├── core/                   # Shared infrastructure and truths
-    ├── evolution/              # Engine 1: Long-term Metagame Evolution (Game Theory)
-    ├── tournament/             # Engine 2: Immediate Tournament Solver (Monte Carlo)
-    └── interfaces/             # User entry points (Streamlit & CLI args)
+    ├── evolution/              # Engine 1: Long-term ESS Replicator Engine & Analytics (Game Theory)
+    ├── tournament/             # Engine 2: Short-term Tournament Solver (Monte Carlo Bracket Engine)
+    └── interfaces/             # User entry points (Streamlit & CLI parsers)
 ```
 
 ---
