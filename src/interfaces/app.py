@@ -21,6 +21,7 @@ from src.core.data import load_matchup_data
 from src.core.config import INPUT_DIR, MIN_GAMES, WIN_THRESHOLD, TIER_ORDER, aggressive_colorscale, TIER_THRESHOLDS, TIER_1_THRESHOLD
 from src.tournament.monte_carlo import run_monte_carlo_analytics
 from src.tournament.solver import predict_best_decks, UserMetaSpec, MatchFormat, swiss_rounds_from_players, get_variant_5_structure
+from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
 
 @st.cache_data(show_spinner=False)
 def get_valid_deck_names() -> List[str]:
@@ -139,12 +140,20 @@ def main():
             global_tie_rate = st.slider("Global Tie Rate (%)", min_value=0.0, max_value=30.0, value=15.0, step=0.5, disabled=not use_tie_convergence) / 100.0
             
             use_drop_feature = st.toggle("Enable X-3 Drop Logic", value=False, help="Simulates players dropping from the tournament after accumulating 3 losses.")
+            allow_negative_power = st.toggle("Show Negative Power Scores", value=False, help="When disabled, deeply unviable decks (Power Score < 0) are completely hidden from the Metagame Scatter Plot to keep the view clean. Toggle this ON to view them at their true negative depths.")
 
     # ==========================================
     # MAIN UI: META CONSTRAINTS & IMPORT
     # ==========================================
     st.subheader("📊 Metagame Constraints")
     
+    if "import_msg" in st.session_state:
+        st.success(st.session_state.import_msg)
+        del st.session_state.import_msg
+    if "import_warn" in st.session_state:
+        st.warning(st.session_state.import_warn)
+        del st.session_state.import_warn
+
     with st.expander("📁 Import Limitless Labs HTML", expanded=True):
         uploaded_file = st.file_uploader("Upload a saved HTML file from Limitless Labs...", type=["html", "htm"])
         if uploaded_file is not None:
@@ -155,11 +164,13 @@ def main():
                     clear_all_rows()
                     for deck_name, count in parsed_meta.items():
                         add_meta_row(deck=deck_name, spec_type="Exact", val=(count / total_import_players) * 100.0 if total_import_players > 0 else 0.0, is_locked=True)
-                    st.success(f"✅ Successfully imported {len(parsed_meta)} recognized decks ({total_import_players} total players).")
+                    st.session_state.import_msg = f"✅ Successfully imported {len(parsed_meta)} recognized decks ({total_import_players} total players)."
                     if wildcard_players > 0: st.warning(f"⚠️ {wildcard_players} players were using unrecognized/rogue decks. Handled via rescaling.")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Failed to parse file: {e}")
+                    st.error(f"❌ Error parsing HTML file: {str(e)}")
+                    st.exception(e)
+                    st.stop()
 
     user_meta: UserMetaSpec = {}
     total_min = 0.0
@@ -363,6 +374,13 @@ def main():
         st.dataframe(df[final_column_order], width="stretch", hide_index=True, column_config=col_config)
         st.divider()
 
+        # --- Metagame Scatter Plot ---
+        st.subheader("🌌 Metagame Scatter Plot")
+        st.markdown("Visualizing the format. The ideal 'Best Deck' pulls towards the top right (100, 100)")
+        fig_scatter = plot_metagame_scatter(df, allow_negative_power)
+        st.plotly_chart(fig_scatter, width="stretch")
+        st.divider()
+        
         # --- Head-to-Head Field Comparator ---
         st.subheader("⚔️ Head-to-Head Field Comparator")
         st.markdown("Compare odds and matchups between two decks across the predicted field.")
@@ -390,6 +408,73 @@ def main():
             if top_cut > 0:
                 m_row2[1].metric(f"Top {top_cut} Odds", f"{da_mc.get('top_cut_conversion',0):.2%}", f"{da_mc.get('top_cut_conversion',0) - db_mc.get('top_cut_conversion',0):.2%} vs {deck_b}")
                 m_row2[2].metric("Win Odds", f"{da_mc.get('win_probability',0):.2%}", f"{da_mc.get('win_probability',0) - db_mc.get('win_probability',0):.2%} vs {deck_b}")
+            
+            # --- Interactive Spider/Radar Chart ---
+            st.markdown("#### 🕸️ Head-to-Head Stat Radar")
+            
+            global_max_meta = max(m["base_meta_score"] for m in res["metrics_per_deck"].values())
+            global_max_power = max(m["power_score"] for m in res["metrics_per_deck"].values())
+            global_max_pr1 = max(m["expected_win_rate"] for m in res["metrics_per_deck"].values()) * 100
+            
+            def safe_norm(val, max_val): 
+                return max(0.0, (val / max_val * 100.0)) if max_val > 0 else 0.0
+
+            categories = ['Meta Score', 'Power Score', 'Power Ranking (D1)']
+            
+            da_vals_norm = [
+                safe_norm(da_metrics['base_meta_score'], global_max_meta),
+                safe_norm(da_metrics['power_score'], global_max_power),
+                safe_norm(da_metrics['expected_win_rate'] * 100, global_max_pr1)
+            ]
+            db_vals_norm = [
+                safe_norm(db_metrics['base_meta_score'], global_max_meta),
+                safe_norm(db_metrics['power_score'], global_max_power),
+                safe_norm(db_metrics['expected_win_rate'] * 100, global_max_pr1)
+            ]
+            
+            da_texts = [
+                f"Meta Score: {da_metrics['base_meta_score']:.2f}",
+                f"Power Score: {da_metrics['power_score']:.2f}",
+                f"Power Rank D1: {da_metrics['expected_win_rate']:.2%}"
+            ]
+            db_texts = [
+                f"Meta Score: {db_metrics['base_meta_score']:.2f}",
+                f"Power Score: {db_metrics['power_score']:.2f}",
+                f"Power Rank D1: {db_metrics['expected_win_rate']:.2%}"
+            ]
+
+            if d2_rounds > 0 and np.sum(day2_share_vec) > 0:
+                global_max_pr2 = max(day2_wr_dict.values()) * 100 if day2_wr_dict else 1
+                categories.append('Power Ranking (D2)')
+                da_vals_norm.append(safe_norm(day2_wr_dict.get(deck_a, 0) * 100, global_max_pr2))
+                db_vals_norm.append(safe_norm(day2_wr_dict.get(deck_b, 0) * 100, global_max_pr2))
+                da_texts.append(f"Power Rank D2: {day2_wr_dict.get(deck_a, 0):.2%}")
+                db_texts.append(f"Power Rank D2: {day2_wr_dict.get(deck_b, 0):.2%}")
+                
+            if d2_rounds > 0:
+                global_max_d2 = max(m.get("day2_conversion", 0) for m in mc_res.values()) * 100
+                categories.append('Day 2 Odds')
+                da_vals_norm.append(safe_norm(da_mc.get('day2_conversion', 0) * 100, global_max_d2))
+                db_vals_norm.append(safe_norm(db_mc.get('day2_conversion', 0) * 100, global_max_d2))
+                da_texts.append(f"D2 Odds: {da_mc.get('day2_conversion', 0):.2%}")
+                db_texts.append(f"D2 Odds: {db_mc.get('day2_conversion', 0):.2%}")
+
+            if top_cut > 0:
+                global_max_t8 = max(m.get("top_cut_conversion", 0) for m in mc_res.values()) * 100
+                global_max_win = max(m.get("win_probability", 0) for m in mc_res.values()) * 100
+                categories.append(f'Top {top_cut} Odds')
+                da_vals_norm.append(safe_norm(da_mc.get('top_cut_conversion', 0) * 100, global_max_t8))
+                db_vals_norm.append(safe_norm(db_mc.get('top_cut_conversion', 0) * 100, global_max_t8))
+                da_texts.append(f"Top {top_cut} Odds: {da_mc.get('top_cut_conversion', 0):.2%}")
+                db_texts.append(f"Top {top_cut} Odds: {db_mc.get('top_cut_conversion', 0):.2%}")
+                categories.append('Win Odds')
+                da_vals_norm.append(safe_norm(da_mc.get('win_probability', 0) * 100, global_max_win))
+                db_vals_norm.append(safe_norm(db_mc.get('win_probability', 0) * 100, global_max_win))
+                da_texts.append(f"Win Odds: {da_mc.get('win_probability', 0):.2%}")
+                db_texts.append(f"Win Odds: {db_mc.get('win_probability', 0):.2%}")
+
+            fig_radar = plot_head_to_head_radar(deck_a, deck_b, categories, da_vals_norm, db_vals_norm, da_texts, db_texts)
+            st.plotly_chart(fig_radar, width="stretch")
 
             st.markdown("#### Matchups")
             
@@ -420,7 +505,7 @@ def main():
                     else:
                         break
                 nums = re.findall(r'\d+', target_rgb)
-                return f'background-color: rgba({nums[0]}, {nums[1]}, {nums[2]}, 0.25)'
+                return f'background-color: rgba({nums[0]}, {nums[1]}, {nums[2]}, 0.55); color: #ffffff; font-weight: bold;'
 
             styled_comp_df = comp_df.style.map(highlight_winrates, subset=[f"{deck_a} WR", f"{deck_b} WR"])
 
@@ -520,13 +605,13 @@ def main():
                             color = "🟢" if wr_vs_threat >= WIN_THRESHOLD else "🔴" if wr_vs_threat <= (1 - WIN_THRESHOLD) else "🟡"
                             threat_cols[t_idx].markdown(f"{color} **{threat_deck}**: `{wr_vs_threat:.0%}`")
                     else:
-                        st.caption("No dominant meta dictators detected in this field.")
+                        st.caption("No dominant meta juggernaut detected in this field.")
 
             if st.session_state.rec_limit < len(recommendations):
                 st.button("⬇️ Load more...", key="btn_load_recs", on_click=load_more_recs, width="stretch")
                 
         with tab_threat:
-            st.markdown("### 🚨 The Meta Dictators")
+            st.markdown("### 🚨 The Meta Juggernauts")
             st.caption("These decks have the highest Meta Scores (>50). They combine high win rates with massive popularity.")
             for i, deck in enumerate(top_threats, 1):
                 metrics = res["metrics_per_deck"][deck]
@@ -565,7 +650,7 @@ def main():
 
         with tab_avoid:
             st.markdown("### 🚫 Negative Expected Value")
-            st.caption("These decks are mathematically unfavored against the predicted field.")
+            st.caption("These decks are mathematically unfavored against the predicted field. Do yourself a favour and **avoid.**")
             visible_avoids = avoids[:st.session_state.avoid_limit]
             
             for i, r in enumerate(visible_avoids, 1):

@@ -1,25 +1,46 @@
-## Commit `[???]` (Mar 24, 2026)
+## Commit `[?]` (Mar 24, 2026)
+### feat: interactive Plotly analytics, error boundaries, and UI/UX refinements
+
+This update drastically enhances the visual storytelling of the dashboard using Plotly and patches several silent failure states in the data ingestion pipeline.
+
+#### **📊 Advanced Visualizations (`plotting.py`)**
+* **Metagame Scatter Plot:** Introduced a 2D interactive scatter plot underneath the main data table. It visually maps a deck's Power Score against its Frequency Score, with the bubble's radius representing its overall Meta Score. Hover tooltips and static labels allow for rapid format comprehension.
+* **Negative Power Score Toggle:** Added a sidebar toggle (`allow_negative_power`) that strictly filters out unviable decks (Power Score < 0) from the Scatter Plot by default. This keeps the visual plane clean, while allowing users to opt-in to seeing the "graveyard" of negative EV decks.
+* **Head-to-Head Radar Chart:** Complimenting the static text comparisons with a dynamic Plotly Spider/Radar chart. The chart automatically scales its axes to match the selected tournament structure (e.g., adding Day 2/Top 8 spokes only if applicable) and normalizes coordinates while preserving true metric values in the hover text.
+
+#### **🛡️ Stability & Error Handling**
+* **Limitless HTML Error Catching:** Wrapped the `Import Limitless Labs HTML` logic in a hard `try...except` boundary. Instead of the UI silently refreshing and hiding the error when encountering malformed JSON or unrecognized deck strings, the app now explicitly halts and prints the Python stack trace directly to the UI for easy debugging.
+* **Persistent Success States:** Fixed a bug where successful HTML import alerts (`st.success`) would vanish in milliseconds due to the forced Streamlit rerun. Messages are now temporarily cached in `st.session_state` to survive the lifecycle refresh.
+
+#### **💅 UI/UX Polish**
+* **Matchup Table Visibility:** Fixed an issue where the background-color styler on the Head-to-Head matchup table died in Dark Mode. Boosted rgba opacity to `0.55` and forced `font-weight: bold; color: #ffffff;`.
+* **Deprecation Maintenance:** Replaced all instances of the deprecated `use_container_width=True` argument in `st.dataframe` and `st.plotly_chart` with the desired `width="stretch"` standard.
+* **Radar Coordinate Bounding:** Enforced a visual `0.0` rendering floor on the Radar chart to prevent negative Power Scores from inverting the geometry of the polygon, while keeping the true negative text mapped to the user tooltips.
+
+---
+
+## Commit `5f7c7f1` (Mar 24, 2026)
 ### refactor: formalize tournament EV logic, stabilize UI state, and fix mathematical clipping
 
 This update represents a fundamental shift in the recommendation engine, while resolving several critical stability bugs and mathematical floor errors. Updated the current `INPUT_DATA` to the Limitless TCG's stats of Mar 24, 2026 of ASC format.
 
-#### **1. Tournament EV & Dynamic Logic Overhaul**
+#### **📊 Tournament EV & Dynamic Logic Overhaul**
 * **Context-Aware EV:** The engine now dynamically switches primary metrics based on player count. Large-scale tournaments (e.g., 2,000+ players) prioritize **Day 2 Conversion** to mitigate Top 8 variance. Smaller events pivot to **Top 8/Top X Conversion**. This is very much still subject to change, and are a direct preference of mine's.
 * **EV Delta Metric:** Introduced a relative performance stat that shows the "Equity Drop-off" compared to the #1 ranked deck, providing better context for the other choices.
 * **Mathematical Floor Fix:** Updated `solver.py` to use `np.minimum(100.0)` instead of a hard `np.clip`. This allows for negative scores in the framework, accurately representing sub-baseline rogue decks.
 
-#### **2. Critical Stability & Crash Prevention**
+#### **🛡️ Critical Stability & Crash Prevention**
 * **Variable Alignment:** Fixed a fatal crash where `best_wr` was pointing to the deleted `recs_sorted_by_power` list.
 * **Empty Meta Handling:** Sanitized `tab_rec` logic to prevent `IndexError` and `StreamlitAPIException`. The app no longer crashes if no decks exceed the Meta Score threshold (balanced meta) or if `st.columns()` receives a zero count.
 * **Strict Column Ordering:** Implemented a `final_column_order` array to prevent Streamlit from silently dropping dynamic archetype columns in the Macro view.
 
-#### **3. UI/UX Refinement & Precision**
+#### **💅 UI/UX Refinement & Precision**
 * **Bulletproof Formatting:** Enforced **2-decimal precision** (`f"{val:.2f}"`) across all metrics (Power, Freq, Meta) to ensure visual alignment and "column hugging."
 * **Naming Convention:** Renamed "Exp. Avg. WR %" to **"Power Ranking (Day 1)"** to create a logical pair with "Power Ranking (Day 2)."
 * **Noise Reduction:** Added a strict **1% field share cutoff** for threat lists to filter out statistically irrelevant rogue decks.
 * **Default State:** The `Import Limitless Labs HTML` expander now defaults to "Open" instead of `Active Custom Constraints`.
 
-#### **4. Architectural Diagnostics**
+#### **🔬 Architectural Diagnostics**
 * **Multiprocessing:** Documenting the root cause of the `No runtime found` cache warning. Windows `multiprocessing.Pool` spawns child processes that re-evaluate `app.py`, triggering `@st.cache_data` decorators outside the main Streamlit thread. A problem for future I.
 
 ---

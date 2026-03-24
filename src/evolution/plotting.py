@@ -6,6 +6,7 @@ import logging
 import os
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import networkx as nx
@@ -356,4 +357,84 @@ def plot_matchup_network(
         logging.info(f"✅ Network graph saved to {save_path}")
         return None
 
+    return fig
+
+# ----------------------------
+# Metagame Scatter Plot
+# ----------------------------
+def plot_metagame_scatter(df: pd.DataFrame, allow_negative_power: bool = False) -> go.Figure:
+    """Create an interactive scatter plot of the metagame based on the dataframe."""
+    scatter_df = df.copy()
+    
+    if not allow_negative_power:
+        scatter_df = scatter_df[scatter_df["Power Score"] >= 0.0]
+    
+    scatter_df["Bubble Size"] = scatter_df["Meta Score"].clip(lower=1.0)
+    scatter_df["Label"] = scatter_df["Deck"] + " (" + scatter_df["Meta Score"].astype(str) + ")"
+
+    fig = px.scatter(
+        scatter_df,
+        x="Power Score",
+        y="Freq Score",
+        size="Bubble Size",
+        color="Deck",
+        hover_name="Deck",
+        hover_data={"Bubble Size": False, "Meta Score": True, "Power Score": True, "Freq Score": True, "Deck": False},
+        text="Label"
+    )
+    
+    fig.update_traces(textposition='bottom center')
+    
+    x_min = min(-5.0, scatter_df["Power Score"].min() - 5.0) if allow_negative_power else -2.0
+    fig.update_layout(
+        xaxis=dict(range=[x_min, 105], title="Power Score (Expected Win Rate)"),
+        yaxis=dict(range=[-5, 105], title="Frequency Score (Popularity)"),
+        showlegend=False,
+        height=600,
+        margin=dict(t=30, b=30, l=30, r=30),
+        template="plotly_white"
+    )
+    return fig
+
+# ----------------------------
+# Radar Chart
+# ----------------------------
+def plot_head_to_head_radar(deck_a: str, deck_b: str, categories: List[str], da_vals: List[float], db_vals: List[float], da_texts: List[str], db_texts: List[str]) -> go.Figure:
+    """Create a dynamic radar chart comparing two decks using normalized coordinates but real hover text."""
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatterpolar(
+        r=da_vals,
+        theta=categories,
+        fill='toself',
+        name=deck_a,
+        hoverinfo="text",
+        text=da_texts,
+        line_color='rgba(46, 204, 113, 1)'  # Emerald Green
+    ))
+    fig.add_trace(go.Scatterpolar(
+        r=db_vals,
+        theta=categories,
+        fill='toself',
+        name=deck_b,
+        hoverinfo="text",
+        text=db_texts,
+        line_color='rgba(231, 76, 60, 1)'   # Alizarin Red
+    ))
+
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                showline=False,
+                range=[0, 100],
+                gridcolor='rgba(255, 255, 255, 0.2)'
+            )
+        ),
+        showlegend=True,
+        height=450,
+        margin=dict(t=40, b=40, l=40, r=40),
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)'
+    )
     return fig
