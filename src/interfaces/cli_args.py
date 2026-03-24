@@ -11,10 +11,8 @@ class Args(NamedTuple):
     output: str
     mode: str
     gens: int
-    min_games: int
     extinction_threshold: float
     noise: float
-    intro_prob: float
     seed: int
     stability_threshold: float
     convergence_window: int
@@ -24,7 +22,7 @@ class Args(NamedTuple):
     num_tournaments_per_gen: int
     num_rounds: int
     use_multiproc: bool
-    mutation_floor: float
+    mutation_rate: float
     selection_pressure: float
     log_level: str
     batch: bool
@@ -58,12 +56,6 @@ def parse_args() -> Args:
         default=OUTPUT_DIR,
         metavar="DIR",
         help="Directory where simulation logs and interactive plots will be saved. (default: %(default)s)",
-    )
-    io_group.add_argument(
-        "-m", "--min-games",
-        type=int,
-        default=MIN_GAMES,
-        help="Minimum required match volume to include an archetype in the baseline field. (default: %(default)s)",
     )
 
     # ⚙️ Core Simulation Setup
@@ -103,13 +95,6 @@ def parse_args() -> Args:
         help="Scale of Gaussian noise injected into generation payoffs to simulate pilot error/luck. (default: %(default)s)",
     )
     evo_group.add_argument(
-        "-I", "--intro-prob",
-        type=float,
-        default=DYNAMIC_DECK_INTRO_PROB,
-        dest="intro_prob",
-        help="Stochastic probability per generation of a rogue/extinct deck re-entering the meta. (default: %(default)s)",
-    )
-    evo_group.add_argument(
         "-S", "--stability-threshold",
         type=float,
         default=STABILITY_THRESHOLD,
@@ -130,9 +115,9 @@ def parse_args() -> Args:
         help="Generations a deck must remain extinct before being permanently culled from memory. (default: %(default)s)",
     )
     evo_group.add_argument(
-        "--mutation-floor",
+        "--mutation-rate",
         type=float,
-        default=MUTATION_FLOOR,
+        default=MUTATION_RATE,
         help="Absolute frequency floor applied when a deck is randomly reintroduced. (default: %(default)s)",
     )
     evo_group.add_argument(
@@ -258,10 +243,8 @@ def parse_args() -> Args:
         output=args.output,
         mode=args.mode,
         gens=args.gens,
-        min_games=args.min_games,
         extinction_threshold=args.extinction_threshold,
         noise=args.noise,
-        intro_prob=args.intro_prob,
         seed=args.seed,
         log_level=args.log_level,
         batch=args.batch,
@@ -279,7 +262,7 @@ def parse_args() -> Args:
         num_tournaments_per_gen=args.num_tournaments_per_gen,
         num_rounds=args.num_rounds,
         use_multiproc=args.use_multiproc,
-        mutation_floor=args.mutation_floor,
+        mutation_rate=args.mutation_rate,
         selection_pressure=args.selection_pressure,
         tournament_style=args.tournament_style,
     )

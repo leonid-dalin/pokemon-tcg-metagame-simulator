@@ -57,3 +57,4 @@ temp/
 
 # Tests
 tests/
+diagnose.py

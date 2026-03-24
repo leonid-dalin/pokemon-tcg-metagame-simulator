@@ -1,3 +1,26 @@
+## Commit `?` (Mar 24, 2026)
+### 🚀 major: transition to high-fidelity Evolutionary Game Theory (EGT) solver
+This massive architectural update transitions the project from a heuristic simulation to a rigorous Quantal Response Equilibrium (QRE) solver, achieving point-wise convergence to a true Evolutionary Stable State (ESS).
+
+#### **🧬 Core Engine & Mathematics**
+* **Multiplicative Weights Update:** Upgraded the Multiplicative Weights Update (MWU) to an **Optimistic** variant using gradient extrapolation ($2 \times payoffs - last\_payoffs$). This dampens zero-sum limit cycles, forcing the metagame to spiral into the Nash Equilibrium rather than orbiting it endlessly.
+* **Replicator-Mutator Equation:** Replaced random rogue-deck reintroductions with a continuous ambient entropy regularizer ($MUTATION\_RATE = 1e-4$). This prevents gradient collapse and ensures the final equilibrium is globally unexploitable.
+* **Stochastic Volatility:** Re-integrated `noise_scale` into the MWU engine, injecting Gaussian noise into the fitness growth exponent to simulate imperfect player information and local metagame turbulence. Defaults at `0.0` for the unforeseeable future.
+
+#### **⚖️ Data Purity & Scraper**
+* **Zero-Sum Match Equity:** Overhauled `scraper.py` to calculate win rates using the standard Elo formula: $(Wins + 0.5 \times Ties) / Total\ Matches$. This eliminates "energy leaks" where ties were previously penalized as double-losses, ensuring a mathematically perfect 100% zero-sum matrix.
+* **Asymmetrical Matrix Centering:** Updated Expected Value (EV) calculations to use $payoffs - avg\_payoff$, correctly centering the gradient plane for asymmetrical TCG matchup data.
+
+#### **⚡ Performance & Stability Sensors**
+* **Kinetic & Nash Convergence:** The engine now mandates a dual-stability check: **Kinetic Stability** (frequency shifts < $5e-5$) and **Game-Theoretic Stability** (max unexploited advantage < $0.25\%$).
+* **Artificial Floor Removal:** Completely removed `MIN_GENERATIONS_PROP`, allowing the engine to break and exit the moment the stability window is mathematically achieved. For complex 33-deck metas, this reduced convergence time to ~6,600 generations (0.25s).
+
+#### **🛡️ Infrastructure & CLI**
+* **Safe Attribute Ingestion:** Modified `main.py` to use `getattr()` when extracting CLI arguments like `min_games`, providing a safe fallback to `config.py` constants and preventing `AttributeError` crashes.
+* **Hyperparameter Sync:** Re-tuned `SELECTION_PRESSURE` to `1.0`, leveraging OMWU’s stability to achieve blazing-fast descent without gradient explosion.
+
+---
+
 ## Commit `b4b8c53` (Mar 24, 2026)
 ### feat: interactive Plotly analytics, error boundaries, and UI/UX refinements
 

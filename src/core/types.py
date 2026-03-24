@@ -6,7 +6,6 @@ from typing import Literal
 class SimulationConfig:
     mode: Literal["replicator", "tournament"]
     max_generations: int
-    min_generations: int
     extinction_threshold: float
     stability_threshold: float
     convergence_window: int
@@ -17,8 +16,7 @@ class SimulationConfig:
     num_rounds: int
     use_multiproc: bool
     seed: int
-    dynamic_deck_intro_prob: float
-    mutation_floor: float
+    mutation_rate: float
     noise_scale: float
     selection_pressure: float
     tournament_style: Literal["pure_swiss", "championship_series"] = "pure_swiss"

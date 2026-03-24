@@ -73,14 +73,13 @@ def run_single_experiment(args: Args, config_override: Optional[dict[str, Any]] 
     logging.info(f"🚀 Starting experiment '{experiment_id}'. Output: {base_output_dir}")
     logging.info(f"Parameters: mode={args.mode}, gens={args.gens}, noise={args.noise}")
 
-    min_generations = max(1, int(args.gens * MIN_GENERATIONS_PROP))
     mode_literal = cast(Literal["replicator", "tournament"], args.mode)
-    style_literal = cast(Literal["pure_swiss", "championship_series"], args.tournament_style)
+    style_literal = cast(Literal["pure_swiss", "championship_series"], getattr(args, "tournament_style", "pure_swiss"))
+    derived_mutation_rate = getattr(args, "mutation_rate", MUTATION_RATE)
 
     sim_config = SimulationConfig(
         mode=mode_literal,
         max_generations=args.gens,
-        min_generations=min_generations,
         extinction_threshold=args.extinction_threshold,
         stability_threshold=args.stability_threshold,
         convergence_window=args.convergence_window,
@@ -91,15 +90,15 @@ def run_single_experiment(args: Args, config_override: Optional[dict[str, Any]] 
         num_rounds=args.num_rounds,
         use_multiproc=args.use_multiproc,
         seed=args.seed,
-        dynamic_deck_intro_prob=args.intro_prob,
-        mutation_floor=args.mutation_floor,
+        mutation_rate=derived_mutation_rate,
         noise_scale=args.noise,
         selection_pressure=args.selection_pressure,
         tournament_style=style_literal,
     )
     logging.debug(f"Simulation Config: {sim_config}")
 
-    deck_names, win_matrix, matchup_details = load_matchup_data(args.input, args.min_games)
+    derived_min_games = getattr(args, "min_games", MIN_GAMES)
+    deck_names, win_matrix, matchup_details = load_matchup_data(args.input, derived_min_games)
     if not deck_names:
         logging.error("No reliable decks loaded. Aborting.")
         return {}
@@ -142,7 +141,6 @@ def run_single_experiment(args: Args, config_override: Optional[dict[str, Any]] 
     try:
         if base_output_dir != final_output_dir:
             if os.path.exists(final_output_dir):
-                # If final dir somehow exists, add a counter
                 counter = 1
                 while os.path.exists(f"{final_output_dir}_{counter}"):
                     counter += 1
@@ -190,7 +188,7 @@ def run_single_experiment(args: Args, config_override: Optional[dict[str, Any]] 
         json.dump(similarity.tolist(), cast(Any, f), indent=2)
 
     # Plotting
-    if not args.no_plot:
+    if not getattr(args, "no_plot", False):
         plot_metagame_evolution_interactive(
             history,
             deck_names,
@@ -227,7 +225,7 @@ def run_single_experiment(args: Args, config_override: Optional[dict[str, Any]] 
             "gens": args.gens,
             "noise": args.noise,
             "extinction_threshold": args.extinction_threshold,
-            "intro_prob": args.intro_prob,
+            "mutation_rate": derived_mutation_rate,
         },
     }
     return metadata
@@ -264,7 +262,6 @@ def run_batch_experiments(args: Args):
                     logging.warning(f"Ignoring unknown parameter '{key}' in batch config.")
 
         args_dict["output"] = os.path.join(base_output, "batch")
-
         exp_args = Args(**args_dict)
 
         metadata = run_single_experiment(exp_args, config_override=exp_config)
@@ -274,7 +271,6 @@ def run_batch_experiments(args: Args):
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(results_summary, cast(Any, f), indent=4)
     logging.info(f"📊 Batch summary saved to {summary_path}")
-
 
 # ----------------------------
 # Main Entry Point
@@ -317,7 +313,7 @@ def main():
             sys.exit(1)
 
     # --- Batch or Single Mode ---
-    if args.batch:
+    if getattr(args, "batch", False):
         run_batch_experiments(args)
     else:
         run_single_experiment(args)

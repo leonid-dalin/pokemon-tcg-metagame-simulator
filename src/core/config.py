@@ -25,16 +25,15 @@ MIN_GAMES = 100
 # ----------------------------
 # Evolutionary Dynamics (Replicator Engine)
 # ----------------------------
-MAX_GENERATIONS = 1000
-MIN_GENERATIONS_PROP = 0.2
-STABILITY_THRESHOLD = 1e-8       # 0.01
-CONVERGENCE_WINDOW = 100
-EXTINCTION_THRESHOLD = 1e-10     # 0.005
-MAX_INACTIVE_GENERATIONS = 1_000_000
-DYNAMIC_DECK_INTRO_PROB = 0      # 1e-4
-MUTATION_FLOOR = 0               # 1e-4
-NOISE_SCALE = 0                  # 1e-4
-SELECTION_PRESSURE = 6
+MAX_GENERATIONS = 100_000
+MAX_INACTIVE_GENERATIONS = 1_000
+CONVERGENCE_WINDOW = 50
+STABILITY_THRESHOLD = 5e-5
+EXTINCTION_THRESHOLD = 1e-6
+MUTATION_RATE = 1e-4
+NOISE_SCALE = 0.0
+SELECTION_PRESSURE = 1
+NASH_EQUILIBRIUM = 0.0025
 
 # ----------------------------
 # Tournament Agent Engine (Monte Carlo)
@@ -97,10 +96,10 @@ COMPOSITE_SCORE_CONSISTENCY_WEIGHT = 0.20
 # Plotting & UI Defaults
 # ----------------------------
 aggressive_colorscale = [
-    [0.0, "rgb(178, 34, 34)"],      # Tier E (Firebrick)
-    [0.45, "rgb(255, 69, 0)"],      # Tier C (Red-Orange)
-    [0.475, "rgb(255, 215, 0)"],    # Tier B (Gold/Yellow)
-    [0.50, "rgb(50, 205, 50)"],     # Tier A (Lime Green)
-    [0.525, "rgb(0, 100, 0)"],      # Tier S (Dark Green)
-    [1.0, "rgb(0, 30, 0)"],         # Tier S+ (Very Dark Green)
+    [0.0, 'rgb(215, 48, 39)'],
+    [0.45, 'rgb(244, 109, 67)'],
+    [0.49, 'rgb(253, 219, 199)'],
+    [0.51, 'rgb(224, 243, 248)'],
+    [0.55, 'rgb(116, 173, 209)'],
+    [1.0, 'rgb(69, 117, 180)']
 ]

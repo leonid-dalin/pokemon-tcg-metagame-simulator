@@ -557,7 +557,7 @@ def main():
         tab_rec, tab_threat, tab_avoid = st.tabs(["🔥 Top Recommendations", "🚨 Top Threats", "🚫 Decks to Avoid"])
         
         with tab_rec:
-            st.markdown("### 🔥 Best EV (Expected Value)")
+            st.markdown("### 🔥 Best EV")
             st.caption(f"These decks are ranked strictly by **{ev_label}**. They mathematically yield the highest returns in this specific bracket structure.")
             visible_recs = recommendations[:st.session_state.rec_limit]
             
@@ -650,7 +650,7 @@ def main():
                         st.success(f"**Countered by (Total {threats_share:.2%}):** {', '.join(threat_strs)}")
 
         with tab_avoid:
-            st.markdown("### 🚫 Negative Expected Value")
+            st.markdown("### 🚫 Negative EV")
             st.caption("These decks are mathematically unfavored against the predicted field. Do yourself a favour and **avoid.**")
             visible_avoids = avoids[:st.session_state.avoid_limit]
             

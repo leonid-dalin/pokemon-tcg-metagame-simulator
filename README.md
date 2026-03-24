@@ -157,7 +157,7 @@ Your input file should be a JSON object. An example structure is provided in `da
 Use this mode to predict the **Evolutionary Stable State** (the point where a metagame becomes unexploitable) over thousands of generations using Replicator Dynamics.
 
 ```bash
-python -m src.main -i data/input/ea_input.json -g 1_000_000 --mode replicator
+python -m src.main -i data/input/ea_input.json -g 10_000 --mode replicator
 ```
 
 ## 🏆 Engine 2: Immediate Tournament Solver (Monte Carlo)

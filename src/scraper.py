@@ -81,15 +81,13 @@ def scrape_matchup_data(file_path: str, deck_archetype: str, format_name: str, c
         matches_attr = row.get("data-matches")
         matches = int(matches_attr) if matches_attr is not None else 0
 
-        winrate_attr = row.get("data-winrate")
-        winrate = float(winrate_attr) if winrate_attr is not None else 0.5
-
         wins = losses = ties = 0
         score_tds = row.find_all("td")
         if len(score_tds) > 3:
             score_text = score_tds[3].get_text(strip=True)
+            # Parse the "W - L - T" string (e.g., "6 - 12 - 5")
             parts = [p.strip() for p in score_text.split("-") if p.strip()]
-            
+
             try:
                 if len(parts) >= 3:
                     wins, losses, ties = map(int, parts[:3])
@@ -98,9 +96,11 @@ def scrape_matchup_data(file_path: str, deck_archetype: str, format_name: str, c
             except (ValueError, TypeError):
                 pass
 
-            if wins + losses + ties != matches and matches > 0:
-                print(f"⚠️  Mismatch: {deck_archetype} vs {opponent_archetype}: {wins}+{losses}+{ties} != {matches}")
-                winrate = wins / matches if matches > 0 else 0.5
+        if matches > 0:
+             # Formula: (Wins + 0.5 * Ties) / Total Matches
+            winrate = (wins + (0.5 * ties)) / matches
+        else:
+            winrate = 0.5
 
         matchups.append({
             "deck_archetype": deck_archetype,

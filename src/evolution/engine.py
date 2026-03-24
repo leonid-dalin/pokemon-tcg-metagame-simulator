@@ -7,7 +7,7 @@ import numpy as np
 import csv
 from typing import List, Dict, Any, Optional, Iterable
 
-# Optional modules — gracefully degrade
+# Optional modules
 try:
     from tqdm import tqdm
     TQDM_AVAILABLE = True
@@ -21,7 +21,6 @@ except ImportError:
     MULTIPROC_AVAILABLE = False
     mp = None
 
-# Local import
 from src.core.config import *
 from src.core.data import safe_normalize
 from src.core.types import SimulationConfig
@@ -30,7 +29,6 @@ from src.tournament.solver import get_variant_5_structure
 # ----------------------------
 # Tournament Simulation Workers
 # ----------------------------
-
 def _pure_swiss_worker(args: tuple) -> tuple[np.ndarray, np.ndarray]:
     """
     Simulates a standard, fast, single-phase Swiss tournament using fast array slicing.
@@ -259,31 +257,63 @@ def run_tournament_generation(
     new_freq = current_freq * np.exp(config["selection_pressure"] * (payoffs - 0.5))
     return safe_normalize(new_freq)
 
+# ----------------------------
+# Exponential Replicator Dynamic (MWU) with Entropy Regularization
+# ----------------------------
 def update_replicator_dynamics(
         current_freq: np.ndarray,
         win_matrix: np.ndarray,
-        rng: np.random.Generator,
+        selection_pressure: float = SELECTION_PRESSURE,
+        mutation_rate: float = MUTATION_RATE,
         noise_scale: float = NOISE_SCALE,
-) -> np.ndarray:
+        rng: Optional[np.random.Generator] = None,
+        last_payoffs: Optional[np.ndarray] = None
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+        Executes the Multiplicative Weights Update (MWU).
+        By extrapolating the gradient using the previous generation's payoffs,
+        this algorithm completely dampens the zero-sum limit cycles (orbits)
+        inherent to TCG metagames, forcing rapid point-wise convergence to the ESS.
+        """
+    n = len(current_freq)
+
+    # 1. Calculate Current Expected Value (EV)
     payoffs = win_matrix @ current_freq
-    avg_payoff = current_freq @ payoffs
 
-    if avg_payoff <= 0:
-        return current_freq 
+    # 2. Gradient Extrapolation
+    if last_payoffs is not None:
+        optimistic_payoffs = 2.0 * payoffs - last_payoffs
+    else:
+        optimistic_payoffs = payoffs
 
-    growth = payoffs / avg_payoff
+    # 3. Dynamic Centering
+    avg_payoff = current_freq @ optimistic_payoffs
 
-    if noise_scale > 0:
-        noise = rng.normal(0, noise_scale, size=growth.shape)
-        growth *= np.exp(noise) 
+    # 4. Base Exponential Gradient
+    exponent = selection_pressure * (optimistic_payoffs - avg_payoff)
 
-    new_freq = current_freq * growth
-    return safe_normalize(new_freq)
+    # 5. Stochastic Environmental Volatility
+    if noise_scale > 0.0 and rng is not None:
+        exponent += rng.normal(0, noise_scale, size=n)
+
+    # 6. Weights Update Step
+    growth = np.exp(exponent)
+    raw_next_freq = current_freq * growth
+
+    s = raw_next_freq.sum()
+    if s > 0:
+        raw_next_freq /= s
+    else:
+        raw_next_freq = np.ones(n) / n
+
+    # 7. Ambient Uniform Mutation (Entropy Regularization)
+    new_freq = (1.0 - mutation_rate) * raw_next_freq + (mutation_rate / n)
+
+    return safe_normalize(new_freq), payoffs
 
 # ----------------------------
 # Evolutionary Stable State Solver
 # ----------------------------
-
 def find_evolutionary_stable_state(
         deck_names: List[str],
         win_matrix: np.ndarray,
@@ -298,7 +328,6 @@ def find_evolutionary_stable_state(
 
     mode = config.mode
     max_generations = config.max_generations
-    min_generations = config.min_generations
     extinction_threshold = config.extinction_threshold
     stability_threshold = config.stability_threshold
     convergence_window = config.convergence_window
@@ -309,10 +338,9 @@ def find_evolutionary_stable_state(
     num_rounds = config.num_rounds
     use_multiproc = config.use_multiproc
     seed = config.seed
-    dynamic_deck_intro_prob = config.dynamic_deck_intro_prob
-    mutation_floor = config.mutation_floor
-    noise_scale = config.noise_scale
     selection_pressure = config.selection_pressure
+    mutation_rate = config.mutation_rate
+    noise_scale = config.noise_scale
     tournament_style = getattr(config, "tournament_style", "pure_swiss")
 
     rng = np.random.default_rng(seed)
@@ -356,12 +384,12 @@ def find_evolutionary_stable_state(
         "selection_pressure": selection_pressure,
         "tournament_style": tournament_style
     }
-
+    last_payoffs = None
     try:
         for gen in gens_iter:
             if mode == "replicator":
-                target_freq = update_replicator_dynamics(
-                    current_freq, win_matrix, rng, noise_scale
+                target_freq, last_payoffs = update_replicator_dynamics(
+                    current_freq, win_matrix, selection_pressure, mutation_rate, noise_scale, rng, last_payoffs
                 )
             elif mode == "tournament":
                 target_freq = run_tournament_generation(
@@ -373,6 +401,7 @@ def find_evolutionary_stable_state(
                     rng,
                     pool=pool
                 )
+                last_payoffs = None
             else:
                 raise ValueError(f"Unknown mode: {mode}")
 
@@ -384,22 +413,12 @@ def find_evolutionary_stable_state(
 
             for i in np.where(extinct_mask)[0]:
                 extinction_gens[i] = gen
-                next_freq[i] = 0.0
-
-            next_freq = reintroduce_extinct_decks(
-                next_freq,
-                extinction_gens,
-                deck_names,
-                rng,
-                intro_prob=dynamic_deck_intro_prob,
-                mutation_floor=mutation_floor,
-                current_generation=gen,
-            )
 
             max_change = float(np.max(np.abs(next_freq - current_freq)))
             recent_max_changes[gen % convergence_window] = max_change
 
-            history.append(current_freq.copy())
+            history.append(next_freq.copy())
+            current_freq = next_freq
 
             if history_writer and history_file_handle:
                 try:
@@ -408,13 +427,20 @@ def find_evolutionary_stable_state(
                 except Exception as e:
                     logging.error(f"Failed to write to history file at gen {gen + 1}: {e}")
 
-            if gen >= min_generations:
-                is_stable = np.max(recent_max_changes) < stability_threshold
-                if is_stable:
-                    logging.info(f"✅ Metagame stabilized after {gen + 1} generations.")
-                    break
+            # 1. Kinetic Stability: Are the physical frequencies done shifting?
+            is_kinetically_stable = np.max(recent_max_changes) < stability_threshold
 
-            current_freq = next_freq
+            # 2. Game-Theoretic Stability: Does ANY deck have an unexploited advantage?
+            # A true Nash Equilibrium / ESS requires that no strategy has an EV significantly higher than the meta average.
+            current_payoffs = win_matrix @ current_freq
+            avg_payoff = current_freq @ current_payoffs
+            max_advantage = np.max(current_payoffs - avg_payoff)
+
+            is_nash_equilibrium = max_advantage < NASH_EQUILIBRIUM
+
+            if is_kinetically_stable and is_nash_equilibrium:
+                logging.info(f"✅ Evolutionary Stable State (ESS) reached at generation {gen + 1}.")
+                break
 
     except KeyboardInterrupt:
         logging.info("🛑 Simulation interrupted.")
@@ -442,29 +468,3 @@ def find_evolutionary_stable_state(
             }
         )
     return results, history, extinction_gens
-
-# ----------------------------
-# Deck Dynamics
-# ----------------------------
-
-def reintroduce_extinct_decks(
-        current_freq: np.ndarray,
-        extinction_gens: List[Optional[int]],
-        deck_names: List[str],
-        rng: np.random.Generator,
-        intro_prob: float = DYNAMIC_DECK_INTRO_PROB,
-        mutation_floor: float = MUTATION_FLOOR,
-        current_generation: int = 0,
-) -> np.ndarray:
-
-    active_mask = np.array([g is None for g in extinction_gens], dtype=bool)
-    extinct_indices = np.where(~active_mask)[0]
-
-    # Purged the global mutation_floor application that broke Replicator purity.
-    if len(extinct_indices) > 0 and rng.random() < intro_prob:
-        chosen_idx = rng.choice(extinct_indices)
-        current_freq[chosen_idx] = max(mutation_floor * 10, 1e-5)
-        extinction_gens[chosen_idx] = None
-        logging.debug(f"Reintroduced deck '{deck_names[chosen_idx]}' at generation {current_generation}.")
-
-    return safe_normalize(current_freq)
