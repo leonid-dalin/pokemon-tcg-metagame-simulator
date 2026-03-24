@@ -24,7 +24,7 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
 
         match_points.fill(0)
         opponents_history: List[List[int]] = [[] for _ in range(players)]
-        losses = np.zeros(players, dtype=int)
+        losses = np.zeros(players, dtype=int) if use_drop_feature else None
 
         def play_rounds(rounds, current_active):
             for _ in range(rounds):
@@ -67,14 +67,16 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                     match_points[p1s[ties]] += 1
                     match_points[p2s[ties]] += 1
 
-                    losses[p1s[p2_wins]] += 1
-                    losses[p2s[p1_wins]] += 1
+                    if use_drop_feature and losses is not None:
+                        losses[p1s[p2_wins]] += 1
+                        losses[p2s[p1_wins]] += 1
                 else:
                     p1_basic_wins = rng.random(len(p1s)) < win_probs
                     match_points[p1s[p1_basic_wins]] += 3
                     match_points[p2s[~p1_basic_wins]] += 3
-                    losses[p1s[~p1_basic_wins]] += 1
-                    losses[p2s[p1_basic_wins]] += 1
+                    if use_drop_feature and losses is not None:
+                        losses[p1s[~p1_basic_wins]] += 1
+                        losses[p2s[p1_basic_wins]] += 1
 
                 for p1, p2 in zip(p1s, p2s):
                     p1_idx, p2_idx = int(p1), int(p2)
@@ -82,7 +84,7 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                     opponents_history[p2_idx].append(p1_idx)
 
                 # --- X-3 DROP LOGIC ---
-                if use_drop_feature:
+                if use_drop_feature and losses is not None:
                     current_active = current_active[losses[current_active] < 3]
 
         # 1. Play Day 1
@@ -114,7 +116,7 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                 top_players = np.array(pool_for_owp[top_order][:top_cut], dtype=int)
                 total_topcut += np.bincount(field_indices[top_players], minlength=n_decks)
             
-        # 4. Playoffs 
+        # 4. Playoffs
         if len(top_players) > 0:
             standings = top_players.copy()
             while len(standings) > 1:
