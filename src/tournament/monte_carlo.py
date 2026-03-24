@@ -21,9 +21,9 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
     for _ in range(iterations):
         field_indices = rng.choice(n_decks, size=players, p=meta_distribution)
         total_initial += np.bincount(field_indices, minlength=n_decks)
-        
+
         match_points.fill(0)
-        opponents_history = [[] for _ in range(players)]
+        opponents_history: List[List[int]] = [[] for _ in range(players)]
         losses = np.zeros(players, dtype=int)
 
         def play_rounds(rounds, current_active):
@@ -75,10 +75,11 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                     match_points[p2s[~p1_basic_wins]] += 3
                     losses[p1s[~p1_basic_wins]] += 1
                     losses[p2s[p1_basic_wins]] += 1
-                
+
                 for p1, p2 in zip(p1s, p2s):
-                    opponents_history[p1].append(p2)
-                    opponents_history[p2].append(p1)
+                    p1_idx, p2_idx = int(p1), int(p2)
+                    opponents_history[p1_idx].append(p2_idx)
+                    opponents_history[p2_idx].append(p1_idx)
 
                 # --- X-3 DROP LOGIC ---
                 if use_drop_feature:
@@ -104,7 +105,9 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                 for i in pool_for_owp:
                     opps = opponents_history[i]
                     if not opps: continue
-                    opp_win_pcts = np.clip(np.array([match_points[int(o)] / (max(1, len(opponents_history[int(o)])) * 3.0) for o in opps], dtype=float), 0.25, 1.0)
+                    opp_win_pcts = np.clip(
+                        np.array([match_points[o] / (max(1, len(opponents_history[o])) * 3.0) for o in opps],
+                                 dtype=float), 0.25, 1.0)
                     owp[i] = np.mean(opp_win_pcts)
 
                 top_order = np.lexsort((-owp[pool_for_owp], -match_points[pool_for_owp]))
