@@ -4,7 +4,7 @@
 from __future__ import annotations
 import logging
 import os
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Optional
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -38,20 +38,18 @@ def plot_metagame_evolution_interactive(
         logging.warning("No history to plot.")
         return None
 
-    # Compute final frequencies to select top decks
     final_freq = history[-1]
     top_indices = np.argsort(final_freq)[-top_n:][::-1].tolist()
-    # Include any deck >1% even if not in top N
     high_presence_indices = np.where(final_freq > 0.01)[0]
     for idx in high_presence_indices:
         if idx not in top_indices:
             top_indices.append(idx)
-    top_indices = top_indices[:12]  # Cap for readability
+    top_indices = top_indices[:12] # for readability
 
     generations = list(range(len(history)))
     fig = go.Figure()
     colors = px.colors.qualitative.Bold + px.colors.qualitative.Dark24
-    # List to hold all annotations (extinction markers)
+
     annotations_list = []
 
     for i, idx in enumerate(top_indices):
@@ -59,7 +57,6 @@ def plot_metagame_evolution_interactive(
         freq_series = [h[idx] for h in history]
         extinction_gen = extinction_gens[idx] if extinction_gens else None
 
-        # Line trace
         fig.add_trace(
             go.Scatter(
                 x=generations,
@@ -137,7 +134,6 @@ def plot_matchup_heatmap_interactive(
     if n == 0:
         return None
 
-    # Reorder if tier_order provided
     if tier_order:
         idx_map = {name: i for i, name in enumerate(deck_names)}
         sorted_indices = [idx_map[name] for name in tier_order if name in idx_map]
@@ -149,8 +145,6 @@ def plot_matchup_heatmap_interactive(
     else:
         sorted_win_matrix = win_matrix * 100
         sorted_names = deck_names
-
-
 
     fig = go.Figure(
         data=go.Heatmap(
@@ -168,7 +162,7 @@ def plot_matchup_heatmap_interactive(
     )
 
     fig.update_layout(
-        title=title,
+        title=dict(text=title),
         xaxis_title="Opponent's Deck",
         yaxis_title="Your Deck",
         xaxis=dict(tickangle=45, automargin=True),
@@ -225,17 +219,15 @@ def plot_matchup_network(
     # --- Calculate All-Time Presence for Node Sizing ---
     if metagame_history is not None and len(metagame_history) > 0:
         total_metagame = np.sum(metagame_history, axis=0) / len(metagame_history)
-        # Create a mapping from deck name to its all-time presence
         deck_presence = {deck_names[i]: total_metagame[i] for i in range(n)}
     else:
         # Fallback: uniform size if no history is provided
         deck_presence = {name: 1.0 for name in deck_names}
 
-    # --- Create the edges trace ---
     edge_x = []
     edge_y = []
     edge_hover = []
-    # Store the 'to' and 'from' nodes for each edge for the callback
+
     edge_from_nodes = []
     edge_to_nodes = []
 
@@ -245,7 +237,7 @@ def plot_matchup_network(
         edge_x.extend([x0, x1, None])
         edge_y.extend([y0, y1, None])
         edge_hover.append(f"{edge[0]} → {edge[1]}: {edge[2]['weight']:.2%}")
-        edge_from_nodes.extend([edge[0], edge[0], None])  # Match the [x0, x1, None] pattern
+        edge_from_nodes.extend([edge[0], edge[0], None])
         edge_to_nodes.extend([edge[1], edge[1], None])
 
     edge_trace = go.Scatter(
@@ -255,14 +247,13 @@ def plot_matchup_network(
         hoverinfo="text",
         text=edge_hover,
         mode="lines",
-        customdata=np.array([edge_from_nodes, edge_to_nodes]).T,  # Store from/to data for each point
+        customdata=np.array([edge_from_nodes, edge_to_nodes]).T,
         showlegend=False,
     )
 
-    # --- Create the node trace ---
     node_x = [pos[node][0] for node in graph.nodes()]
     node_y = [pos[node][1] for node in graph.nodes()]
-    # Use all-time presence for sizing
+
     base_size = 10
     max_presence = max(deck_presence.values()) if deck_presence else 1.0
     node_size = [base_size + 30 * (deck_presence[node] / max_presence) for node in graph.nodes()]
@@ -277,14 +268,12 @@ def plot_matchup_network(
         textposition="top center",
         textfont=dict(size=10, color="black"),
         hovertext=[f"{node} (Degree: {graph.degree(node)}, Presence: {deck_presence[node]:.2%})" for node in graph.nodes()],
-        # Assign an ID to the node trace for the callback
         uid="node_trace",
     )
 
-    # --- Highlight cycles ---
     cycle_traces = []
     cycle_colors = px.colors.qualitative.Set1
-    for idx, cycle in enumerate(cycles[:5]):  # Limit to 5 cycles
+    for idx, cycle in enumerate(cycles[:5]):
         if len(cycle) < 3:
             continue
         cycle_x = []
@@ -310,10 +299,9 @@ def plot_matchup_network(
 
     fig = go.Figure(data=[edge_trace, node_trace] + cycle_traces)
 
-    # --- Add Interactive Callback for Node Click ---
-    # This JavaScript code will run in the browser when the plot is displayed
+    # --- Interactive Callback for Node Click ---
     fig.update_layout(
-        title=title,
+        title=dict(text=title),
         showlegend=True,
         hovermode="closest",
         margin=dict(b=20, l=5, r=5, t=40),
@@ -321,12 +309,9 @@ def plot_matchup_network(
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         height=800,
         template="plotly_white",
-        # Add the custom JavaScript for interactivity
         updatemenus=[],
     )
-    # We add the interactivity via a clientside callback in the HTML.
-    # This is done by injecting JavaScript into the figure's `config`.
-    # a function that will be called when a point is clicked
+
     fig_config = {
         "scrollZoom": True,
         "displayModeBar": True,
@@ -341,7 +326,7 @@ def plot_matchup_network(
             "eraseshape",
         ],
         "responsive": True,
-        "doubleClick": "reset+autosize",  # Default behavior on double-click
+        "doubleClick": "reset+autosize",
     }
 
     logging.info("💡 For advanced interactivity (click-to-focus), consider serving this plot via a Dash application.")
@@ -387,8 +372,8 @@ def plot_metagame_scatter(df: pd.DataFrame, allow_negative_power: bool = False) 
     
     x_min = min(-5.0, scatter_df["Power Score"].min() - 5.0) if allow_negative_power else -2.0
     fig.update_layout(
-        xaxis=dict(range=[x_min, 105], title="Power Score (Expected Win Rate)"),
-        yaxis=dict(range=[-5, 105], title="Frequency Score (Popularity)"),
+        xaxis=dict(range=[x_min, 105], title=dict(text="Power Score (Expected Win Rate)")),
+        yaxis=dict(range=[-5, 105], title=dict(text="Frequency Score (Popularity)")),
         showlegend=False,
         height=600,
         margin=dict(t=30, b=30, l=30, r=30),
@@ -410,7 +395,7 @@ def plot_head_to_head_radar(deck_a: str, deck_b: str, categories: List[str], da_
         name=deck_a,
         hoverinfo="text",
         text=da_texts,
-        line_color='rgba(46, 204, 113, 1)'  # Emerald Green
+        line=dict(color='rgba(46, 204, 113, 1)')  # Emerald Green
     ))
     fig.add_trace(go.Scatterpolar(
         r=db_vals,
@@ -419,7 +404,7 @@ def plot_head_to_head_radar(deck_a: str, deck_b: str, categories: List[str], da_
         name=deck_b,
         hoverinfo="text",
         text=db_texts,
-        line_color='rgba(231, 76, 60, 1)'   # Alizarin Red
+        line=dict(color='rgba(231, 76, 60, 1)')  # Alizarin Red
     ))
 
     fig.update_layout(

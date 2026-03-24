@@ -7,7 +7,7 @@ import json
 import re
 import numpy as np
 import pandas as pd
-from typing import List, cast, Tuple, Dict, Any
+from typing import List, cast, Tuple, Dict
 from pathlib import Path
 
 # Resolve the project root
@@ -18,7 +18,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.core.data import load_matchup_data
-from src.core.config import INPUT_DIR, MIN_GAMES, WIN_THRESHOLD, TIER_ORDER, aggressive_colorscale, TIER_THRESHOLDS, TIER_1_THRESHOLD
+from src.core.config import INPUT_DIR, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, TIER_1_THRESHOLD
 from src.tournament.monte_carlo import run_monte_carlo_analytics
 from src.tournament.solver import predict_best_decks, UserMetaSpec, MatchFormat, swiss_rounds_from_players, get_variant_5_structure
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
@@ -114,15 +114,13 @@ def main():
             
             if tourney_structure == "Championship Series":
                 d1_rounds, cut_points, d2_rounds, top_cut = get_variant_5_structure(players)
-                total_swiss = d1_rounds + d2_rounds
                 st.caption("**Championship Series Details**")
                 st.markdown(f"- **Day 1**: {d1_rounds} Rounds\n- **Day 2 Cut**: {cut_points} Match Pts\n- **Day 2**: {d2_rounds} Rounds\n- **Playoffs**: Top {top_cut}")
             else:
                 d1_rounds = swiss_rounds_from_players(players)
                 cut_points, d2_rounds, top_cut = 999, 0, (8 if players >= 8 else 0)
-                total_swiss = d1_rounds
                 st.caption("**Pure Swiss Details**")
-                st.markdown(f"- **Swiss**: {total_swiss} Rounds")
+                st.markdown(f"- **Swiss**: {d1_rounds} Rounds")
                 if top_cut > 0: st.markdown(f"- **Playoffs**: Top {top_cut}")
 
         st.header("⚙️ Engine Parameters")
@@ -215,11 +213,13 @@ def main():
                             if prop > 0: user_meta[deck] = prop; total_min += prop
                         else:
                             if is_raw:
-                                val = st.slider("Range (Players)", 0, int(players), (0, min(15, int(players))), key=f"slider_{row_id}")
-                                min_prop, max_prop = val[0] / players if players > 0 else 0.0, val[1] / players if players > 0 else 0.0
+                                val_slider = st.slider("Range (Players)", 0, int(players), (0, min(15, int(players))), key=f"slider_{row_id}")
+                                min_prop, max_prop = val_slider[0] / players if players > 0 else 0.0, val_slider[1] / players if players > 0 else 0.0
                             else:
-                                val = st.slider("Range (%)", 0.0, 100.0, (0.0, 15.0), step=0.1, format="%.1f%%", key=f"slider_{row_id}")
-                                min_prop, max_prop = val[0] / 100.0, val[1] / 100.0
+                                val_slider = st.slider("Range (%)", 0.0, 100.0, (0.0, 15.0), step=0.1, format="%.1f%%",
+                                                       key=f"slider_{row_id}")
+                                min_prop, max_prop = val_slider[0] / 100.0, val_slider[1] / 100.0
+
                             user_meta[deck] = {"min": min_prop, "max": max_prop}; total_min += min_prop
                     with cols[3]:
                         st.button("🗑️", key=f"del_{row_id}", on_click=delete_meta_row, args=(row_id,))
@@ -321,9 +321,9 @@ def main():
                 "Power Ranking (Day 1)": round(metrics["expected_win_rate"] * 100, 2),
                 "Share % (Day 1)": round(meta_share * 100, 2),
             }
-            
+
             if d2_rounds > 0 and np.sum(day2_share_vec) > 0:
-                row_data["Power Ranking (Day 2)"] = round(day2_wr_dict[deck] * 100, 2)
+                row_data["Power Ranking (Day 2)"] = round(float(day2_wr_dict[deck]) * 100, 2)
             
             # --- Micro/Macro Odds View ---
             if odds_view == "Player (Micro)":
@@ -411,13 +411,13 @@ def main():
             
             # --- Interactive Spider/Radar Chart ---
             st.markdown("#### 🕸️ Head-to-Head Stat Radar")
-            
-            global_max_meta = max(m["base_meta_score"] for m in res["metrics_per_deck"].values())
-            global_max_power = max(m["power_score"] for m in res["metrics_per_deck"].values())
-            global_max_pr1 = max(m["expected_win_rate"] for m in res["metrics_per_deck"].values()) * 100
-            
-            def safe_norm(val, max_val): 
-                return max(0.0, (val / max_val * 100.0)) if max_val > 0 else 0.0
+
+            global_max_meta = float(max(m["base_meta_score"] for m in res["metrics_per_deck"].values()))
+            global_max_power = float(max(m["power_score"] for m in res["metrics_per_deck"].values()))
+            global_max_pr1 = float(max(m["expected_win_rate"] for m in res["metrics_per_deck"].values())) * 100.0
+
+            def safe_norm(v, max_val):
+                return max(0.0, (v / max_val * 100.0)) if max_val > 0 else 0.0
 
             categories = ['Meta Score', 'Power Score', 'Power Ranking (D1)']
             
@@ -444,7 +444,7 @@ def main():
             ]
 
             if d2_rounds > 0 and np.sum(day2_share_vec) > 0:
-                global_max_pr2 = max(day2_wr_dict.values()) * 100 if day2_wr_dict else 1
+                global_max_pr2 = float(max(float(v) for v in day2_wr_dict.values()) * 100.0) if day2_wr_dict else 1.0
                 categories.append('Power Ranking (D2)')
                 da_vals_norm.append(safe_norm(day2_wr_dict.get(deck_a, 0) * 100, global_max_pr2))
                 db_vals_norm.append(safe_norm(day2_wr_dict.get(deck_b, 0) * 100, global_max_pr2))
@@ -452,7 +452,7 @@ def main():
                 db_texts.append(f"Power Rank D2: {day2_wr_dict.get(deck_b, 0):.2%}")
                 
             if d2_rounds > 0:
-                global_max_d2 = max(m.get("day2_conversion", 0) for m in mc_res.values()) * 100
+                global_max_d2 = float(max(m.get("day2_conversion", 0) for m in mc_res.values()) * 100.0)
                 categories.append('Day 2 Odds')
                 da_vals_norm.append(safe_norm(da_mc.get('day2_conversion', 0) * 100, global_max_d2))
                 db_vals_norm.append(safe_norm(db_mc.get('day2_conversion', 0) * 100, global_max_d2))
@@ -460,8 +460,8 @@ def main():
                 db_texts.append(f"D2 Odds: {db_mc.get('day2_conversion', 0):.2%}")
 
             if top_cut > 0:
-                global_max_t8 = max(m.get("top_cut_conversion", 0) for m in mc_res.values()) * 100
-                global_max_win = max(m.get("win_probability", 0) for m in mc_res.values()) * 100
+                global_max_t8 = float(max(m.get("top_cut_conversion", 0) for m in mc_res.values()) * 100.0)
+                global_max_win = float(max(m.get("win_probability", 0) for m in mc_res.values()) * 100.0)
                 categories.append(f'Top {top_cut} Odds')
                 da_vals_norm.append(safe_norm(da_mc.get('top_cut_conversion', 0) * 100, global_max_t8))
                 db_vals_norm.append(safe_norm(db_mc.get('top_cut_conversion', 0) * 100, global_max_t8))
@@ -483,25 +483,25 @@ def main():
             for field_deck in top_field:
                 opp_name = field_deck["Deck"]
                 opp_idx = deck_to_idx[opp_name]
-                wr_a = full_win_matrix[da_idx, opp_idx] * 100
-                wr_b = full_win_matrix[db_idx, opp_idx] * 100
+                wr_a = float(full_win_matrix[da_idx, opp_idx] * 100)
+                wr_b = float(full_win_matrix[db_idx, opp_idx] * 100)
                 comp_data.append({
                     "Opponent": opp_name,
-                    "Share % (Day 1)": round(res["metrics_per_deck"][opp_name]["meta_share"] * 100, 2), 
+                    "Share % (Day 1)": round(float(res["metrics_per_deck"][opp_name]["meta_share"]) * 100, 2),
                     f"{deck_a} WR": wr_a,
                     f"{deck_b} WR": wr_b,
                     "Advantage": f"{deck_a}" if wr_a > wr_b else f"{deck_b}" if wr_b > wr_a else "Tie"
                 })
             
             comp_df = pd.DataFrame(comp_data)
-            
-            def highlight_winrates(val):
-                if not isinstance(val, (int, float)): return ''
-                norm_val = val / 100.0
+
+            def highlight_winrates(v):
+                if not isinstance(v, (int, float)): return ''
+                norm_val = v / 100.0
                 target_rgb = aggressive_colorscale[0][1]
-                for threshold, color in aggressive_colorscale:
+                for threshold, co in aggressive_colorscale:
                     if norm_val >= threshold:
-                        target_rgb = color
+                        target_rgb = co
                     else:
                         break
                 nums = re.findall(r'\d+', target_rgb)
@@ -549,7 +549,8 @@ def main():
         best_top8 = max(active_decks, key=lambda d: mc_res.get(d, {}).get("top_cut_conversion", 0)) if top_cut > 0 else None
         best_win = max(active_decks, key=lambda d: mc_res.get(d, {}).get("win_probability", 0)) if top_cut > 0 else None
         best_wr = max(active_decks, key=lambda d: res["metrics_per_deck"][d]["power_score"])
-        best_day2_predator = max(day2_wr_dict, key=day2_wr_dict.get) if d2_rounds > 0 and sum(day2_share_vec) > 0 else None
+        best_day2_predator = max(day2_wr_dict.keys(), key=lambda k: float(day2_wr_dict[k])) if d2_rounds > 0 and np.sum(
+            day2_share_vec) > 0 else None
 
         best_ev_val = mc_res.get(recs_sorted_by_ev[0], {}).get(ev_key, 0) if ev_key != "power_score" else res["metrics_per_deck"][recs_sorted_by_ev[0]]["power_score"]
 

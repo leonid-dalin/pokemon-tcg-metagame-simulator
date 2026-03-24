@@ -5,7 +5,7 @@ import time
 import logging
 import numpy as np
 import csv
-from typing import List, Tuple, Dict, Any, Optional, Iterable
+from typing import List, Dict, Any, Optional, Iterable
 
 # Optional modules — gracefully degrade
 try:
@@ -31,7 +31,7 @@ from src.tournament.solver import get_variant_5_structure
 # Tournament Simulation Workers
 # ----------------------------
 
-def _pure_swiss_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
+def _pure_swiss_worker(args: tuple) -> tuple[np.ndarray, np.ndarray]:
     """
     Simulates a standard, fast, single-phase Swiss tournament using fast array slicing.
     """
@@ -71,7 +71,6 @@ def _pure_swiss_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
                 mu = matchup_details.get((deck_names[d1], deck_names[d2]), {"win_rate": 0.5, "match_count": 0})
                 wr, mc = mu["win_rate"], mu["match_count"]
                 
-                # Default to 0.5 if no real data exists, don't invent confidence
                 if mc > 0:
                     win_probs[idx] = local_rng.beta(wr * mc + 1, (1 - wr) * mc + 1)
                 else:
@@ -89,7 +88,7 @@ def _pure_swiss_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
 
     return wins_per_deck, matches_per_deck
 
-def _championship_series_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
+def _championship_series_worker(args: tuple) -> tuple[np.ndarray, np.ndarray]:
     """
     Simulates a full 2-Day Play! Pokémon Regional/International (Variant #5).
     Incorporates Parabolic Tie Convergence and vectorized memory allocation.
@@ -123,17 +122,17 @@ def _championship_series_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
             order = np.argsort(-match_points[current_active], kind='mergesort')
             sorted_active = current_active[order]
             
-            p1s = sorted_active[0::2]
-            p2s = sorted_active[1::2]
-            if len(p1s) > len(p2s): p1s = p1s[:-1] 
+            sw_p1s = sorted_active[0::2]
+            sw_p2s = sorted_active[1::2]
+            if len(sw_p1s) > len(sw_p2s): sw_p1s = sw_p1s[:-1]
             
-            p1_decks = field_indices[p1s]
-            p2_decks = field_indices[p2s]
+            p1_decks = field_indices[sw_p1s]
+            p2_decks = field_indices[sw_p2s]
             win_probs = bo3_win_matrix[p1_decks, p2_decks]
             
             # Parabolic Tie Convergence
             tie_probs = global_tie_rate * 4.0 * win_probs * (1.0 - win_probs)
-            rolls = local_rng.random(len(p1s))
+            rolls = local_rng.random(len(sw_p1s))
             
             p1_win_thresh = np.clip(win_probs - (tie_probs / 2.0), 0.0, 1.0)
             tie_thresh = np.clip(p1_win_thresh + tie_probs, 0.0, 1.0)
@@ -142,16 +141,16 @@ def _championship_series_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
             p2_wins_mask = rolls >= tie_thresh
             ties_mask = ~(p1_wins_mask | p2_wins_mask)
             
-            match_points[p1s[p1_wins_mask]] += 3
-            match_points[p2s[p2_wins_mask]] += 3
-            match_points[p1s[ties_mask]] += 1
-            match_points[p2s[ties_mask]] += 1
+            match_points[sw_p1s[p1_wins_mask]] += 3
+            match_points[sw_p2s[p2_wins_mask]] += 3
+            match_points[sw_p1s[ties_mask]] += 1
+            match_points[sw_p2s[ties_mask]] += 1
             
             # Vectorized history tracking
-            opponents_matrix[p1s, rounds_played[p1s]] = p2s
-            opponents_matrix[p2s, rounds_played[p2s]] = p1s
-            rounds_played[p1s] += 1
-            rounds_played[p2s] += 1
+            opponents_matrix[sw_p1s, rounds_played[sw_p1s]] = sw_p2s
+            opponents_matrix[sw_p2s, rounds_played[sw_p2s]] = sw_p1s
+            rounds_played[sw_p1s] += 1
+            rounds_played[sw_p2s] += 1
 
     # Phase 1 (Day 1)
     simulate_swiss_phase(d1_rounds, active_players)
@@ -164,8 +163,6 @@ def _championship_series_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
     simulate_swiss_phase(d2_rounds, day2_players)
     
     # Tiebreakers & Top Cut
-    top_players = []
-    champion = None
     
     if len(day2_players) > 0 and top_cut > 0:
         owp = np.zeros(num_players)
@@ -183,27 +180,25 @@ def _championship_series_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray]:
         top_players = day2_players[top_order][:top_cut]
         
         # Single Elimination Playoffs (No ties)
-        standings = list(top_players)
+        standings = top_players.copy()
         while len(standings) > 1:
             next_round = []
-            p1s = np.array(standings[0::2])
-            p2s = np.array(standings[1::2])
-            if len(p1s) > len(p2s): p1s = p1s[:-1]
+            tc_p1s = np.array(standings[0::2])
+            tc_p2s  = np.array(standings[1::2])
+            if len(tc_p1s) > len(tc_p2s ): tc_p1s = tc_p1s[:-1]
 
-            p1_decks = field_indices[p1s]
-            p2_decks = field_indices[p2s]
-            p1_wins = local_rng.random(len(p1s)) < bo3_win_matrix[p1_decks, p2_decks]
+            tc_p1_decks = field_indices[tc_p1s]
+            tc_p2_decks = field_indices[tc_p2s ]
+            p1_wins = local_rng.random(len(tc_p1s)) < bo3_win_matrix[tc_p1_decks, tc_p2_decks]
 
-            next_round.extend(p1s[p1_wins])
-            next_round.extend(p2s[~p1_wins])
-            standings = next_round
+            next_round.extend(tc_p1s[p1_wins])
+            next_round.extend(tc_p2s [~p1_wins])
+            standings = np.array(next_round)
             
             # Grant extra equivalent points for advancing in Top Cut
             match_points[next_round] += 3
-            rounds_played[p1s] += 1
-            rounds_played[p2s] += 1
-            
-        champion = standings[0] if standings else None
+            rounds_played[tc_p1s] += 1
+            rounds_played[tc_p2s] += 1
 
     # Pure scaling based on actual match points acquired
     wins_equiv = match_points / 3.0
@@ -223,7 +218,7 @@ def run_tournament_generation(
         matchup_details: Dict[Tuple[str, str], Dict[str, Any]],
         config: Dict[str, Any],
         rng: np.random.Generator,
-        pool: Optional[mp.Pool] = None, # 🛠️ Accept the pre-allocated pool
+        pool: Optional[mp.Pool] = None,
 ) -> np.ndarray:
     n_decks = len(deck_names)
     tasks = []
@@ -248,7 +243,6 @@ def run_tournament_generation(
     
     worker_func = _championship_series_worker if tournament_style == "championship_series" else _pure_swiss_worker
 
-    # 🛠️ Execute tasks on the passed-in pool
     if pool is not None and len(tasks) > 1:
         for wins, matches in pool.imap_unordered(worker_func, tasks):
             deck_wins += wins
@@ -349,7 +343,6 @@ def find_evolutionary_stable_state(
         gens_iter = tqdm(gens_iter, desc=f"Simulating Metagame ({mode})", leave=False)
 
     start_time = time.time()
-    converged = False
     pool = None
     if mode == "tournament" and use_multiproc and MULTIPROC_AVAILABLE and mp is not None:
         pool = mp.Pool()
@@ -417,10 +410,9 @@ def find_evolutionary_stable_state(
 
             if gen >= min_generations:
                 is_stable = np.max(recent_max_changes) < stability_threshold
-                if is_stable and not converged:
+                if is_stable:
                     logging.info(f"✅ Metagame stabilized after {gen + 1} generations.")
-                    converged = True
-                    break 
+                    break
 
             current_freq = next_freq
 
@@ -471,8 +463,8 @@ def reintroduce_extinct_decks(
     # Purged the global mutation_floor application that broke Replicator purity.
     if len(extinct_indices) > 0 and rng.random() < intro_prob:
         chosen_idx = rng.choice(extinct_indices)
-        current_freq[chosen_idx] = max(mutation_floor * 10, 1e-5) # Ensure it has enough weight to survive an epoch
-        extinction_gens[chosen_idx] = None 
+        current_freq[chosen_idx] = max(mutation_floor * 10, 1e-5)
+        extinction_gens[chosen_idx] = None
         logging.debug(f"Reintroduced deck '{deck_names[chosen_idx]}' at generation {current_generation}.")
 
     return safe_normalize(current_freq)

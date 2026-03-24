@@ -70,11 +70,11 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                     losses[p1s[p2_wins]] += 1
                     losses[p2s[p1_wins]] += 1
                 else:
-                    p1_wins = rng.random(len(p1s)) < win_probs
-                    match_points[p1s[p1_wins]] += 3
-                    match_points[p2s[~p1_wins]] += 3
-                    losses[p1s[~p1_wins]] += 1
-                    losses[p2s[p1_wins]] += 1
+                    p1_basic_wins = rng.random(len(p1s)) < win_probs
+                    match_points[p1s[p1_basic_wins]] += 3
+                    match_points[p2s[~p1_basic_wins]] += 3
+                    losses[p1s[~p1_basic_wins]] += 1
+                    losses[p2s[p1_basic_wins]] += 1
                 
                 for p1, p2 in zip(p1s, p2s):
                     opponents_history[p1].append(p2)
@@ -104,7 +104,9 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                 for i in pool_for_owp:
                     opps = opponents_history[i]
                     if not opps: continue
-                    opp_win_pcts = np.clip([match_points[o] / (max(1, len(opponents_history[o])) * 3) for o in opps], 0.25, 1.0)
+                    opp_win_pcts = np.clip(
+                        np.array([match_points[o] / (max(1, len(opponents_history[o])) * 3) for o in opps],
+                                 dtype=float), 0.25, 1.0)
                     owp[i] = np.mean(opp_win_pcts)
 
                 top_order = np.lexsort((-owp[pool_for_owp], -match_points[pool_for_owp]))
@@ -113,33 +115,33 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
             
         # 4. Playoffs
         if len(top_players) > 0:
-            standings = list(top_players)
+            standings = top_players.copy()
             while len(standings) > 1:
                 half = len(standings) // 2
-                p1s = np.array(standings[:half])
-                p2s = np.array(standings[half:][::-1]) 
+                tc_p1s = standings[:half]
+                tc_p2s = standings[half:][::-1]
                 
                 unpaired = []
-                if len(p2s) > len(p1s):
-                    unpaired.append(p2s[-1])
-                    p2s = p2s[:-1]
-                elif len(p1s) > len(p2s):
-                    unpaired.append(p1s[-1])
-                    p1s = p1s[:-1]
+                if len(tc_p2s) > len(tc_p1s):
+                    unpaired.append(tc_p2s[-1])
+                    tc_p2s = tc_p2s[:-1]
+                elif len(tc_p1s) > len(tc_p2s):
+                    unpaired.append(tc_p1s[-1])
+                    tc_p1s = tc_p1s[:-1]
                 
-                p1_decks = field_indices[p1s]
-                p2_decks = field_indices[p2s]
-                p1_wins = rng.random(len(p1s)) < win_matrix[p1_decks, p2_decks]
+                tc_p1_decks = field_indices[tc_p1s]
+                tc_p2_decks = field_indices[tc_p2s]
+                tc_p1_wins = rng.random(len(tc_p1s)) < win_matrix[tc_p1_decks, tc_p2_decks]
                 
                 next_round = []
-                for i, p1_won in enumerate(p1_wins):
-                    next_round.append(p1s[i] if p1_won else p2s[i])
+                for i, p1_won in enumerate(tc_p1_wins):
+                    next_round.append(tc_p1s[i] if p1_won else tc_p2s[i])
                 
                 next_round.extend(unpaired)  # advancing the player with the bye
-                standings = next_round
+                standings = np.array(next_round)
                 
-            if standings:
-                total_champ[field_indices[standings[0]]] += 1
+            if len(standings) > 0:
+                total_champ[field_indices[int(standings[0])]] += 1
 
     return total_initial, total_day2, total_topcut, total_champ, np.zeros(n_decks), np.zeros(n_decks)
 
