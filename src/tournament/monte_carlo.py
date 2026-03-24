@@ -114,7 +114,7 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
                 top_players = np.array(pool_for_owp[top_order][:top_cut], dtype=int)
                 total_topcut += np.bincount(field_indices[top_players], minlength=n_decks)
             
-        # 4. Playoffs
+        # 4. Playoffs 
         if len(top_players) > 0:
             standings = top_players.copy()
             while len(standings) > 1:
