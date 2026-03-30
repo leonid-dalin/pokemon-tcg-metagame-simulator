@@ -29,7 +29,7 @@ The former is integrated with a Streamlit dashboard, vectorized Swiss metrics, a
 *   **Vectorised Metagame Constraints.** A high-speed, pure NumPy water-filling algorithm strictly enforces user-defined exact, minimum, or maximum field share constraints.
 *   **Dynamic Clustering & RPS.** Uses K-Means with Silhouette Optimisation and `StandardScaler` to accurately group archetypes based on their strategic matchup shape. Network graphing helps identify non-transitive Rock-Paper-Scissors cycles.
 
-###💻 Containerized Microservice Architecture
+### 💻 Containerized Microservice Architecture
 * **RESTful API.** A FastAPI entry point validates requests via Pydantic schemas and delegates heavy mathematical computation safely.
 * **Headless Worker.** A Huey background task runner isolates execution of computationally heavy Monte Carlo arrays and ESS replications, writing back to a lightweight SQLite broker.
 * **Professional Streamlit Interface.** An interactive, tool-tipped dashboard with instant perspective toggles to seamlessly swap data between Individual EV and Macro Impact without recalculating.

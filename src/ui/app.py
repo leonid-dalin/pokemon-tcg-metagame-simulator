@@ -251,7 +251,7 @@ def main():
 
                 # 2. POST to FastAPI
                 status.update(label="Dispatching to API...", state="running")
-                api_url = "http://localhost:8000/api/v1"
+                api_url = os.environ.get("API_URL", "http://localhost:8000/api/v1")
                 response = requests.post(f"{api_url}/predict", json=payload)
                 response.raise_for_status()
 
