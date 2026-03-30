@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# main.py | CLI entry point, experiment batching, logging control, reproducibility.
+# cli.py | Command Line Interface entry point, experiment batching, logging control, reproducibility
 
 from __future__ import annotations
 import json
@@ -7,7 +7,7 @@ import logging
 import time
 import os
 import csv
-from typing import cast, Any, Optional, Literal
+from typing import cast, Any, Optional
 
 # Local modules
 from src.core.config import *
@@ -29,7 +29,7 @@ from src.evolution.plotting import (
     plot_matchup_heatmap_interactive,
     plot_matchup_network,
 )
-from src.interfaces.cli_args import parse_args, Args
+from src.ui.cli_args import parse_args, Args
 from src.tournament.solver import predict_best_decks
 
 # ----------------------------

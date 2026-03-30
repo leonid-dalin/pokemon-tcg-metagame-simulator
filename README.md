@@ -169,7 +169,7 @@ Use this mode for **Expected Value (EV)** calculations. It evaluates specific to
 The Streamlit UI provides a dual-perspective dashboard for real-time equity evaluation and "Day 2 bubble" analysis.
 
 ```bash
-streamlit run src/interfaces/app.py
+streamlit run src/ui/app.py
 ```
 
 ### Option B: CLI Prediction Mode
