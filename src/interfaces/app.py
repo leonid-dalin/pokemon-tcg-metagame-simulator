@@ -3,6 +3,8 @@ import streamlit as st
 import os
 import sys
 import uuid
+import requests
+import time
 import json
 import re
 import numpy as np
@@ -234,30 +236,46 @@ def main():
     if st.button("🚀 Generate Metagame & Predict", type="primary", width="stretch", disabled=(total_min > 1.0)):
         with st.status("⚙️ Initializing Engine...", expanded=True) as status:
             try:
-                full_deck_names, full_win_matrix = load_full_win_matrix()
-                res = predict_best_decks(user_meta_spec=user_meta, total_players=players, min_sample_threshold=min_sample_threshold, match_format=cast(MatchFormat, match_format))
-                
-                mc_progress = st.progress(0, text="Dispatching parallel workers...")
-                def mc_progress_callback(completed, total):
-                    pct = int((completed / total) * 100)
-                    mc_progress.progress(completed / total, text=f"Processing Monte Carlo brackets... {pct}% ({completed}/{total} cores complete)")
+                # 1. Prepare the payload
+                payload = {
+                    "user_meta_spec": user_meta,
+                    "total_players": players,
+                    "min_sample_threshold": min_sample_threshold,
+                    "match_format": match_format,
+                    "mc_iterations": mc_iterations,
+                    "use_tie_convergence": use_tie_convergence,
+                    "global_tie_rate": global_tie_rate,
+                    "use_drop_feature": use_drop_feature,
+                    "tournament_style": tourney_structure.lower().replace(" ", "_")
+                }
 
-                mc_res = run_monte_carlo_analytics(
-                    deck_names=full_deck_names, win_matrix=full_win_matrix, meta_distribution=res["full_meta"],
-                    d1_rounds=d1_rounds, cut_points=cut_points, d2_rounds=d2_rounds, top_cut=top_cut,
-                    players=players, iterations=mc_iterations, match_format=match_format,
-                    progress_callback=mc_progress_callback, use_tie_convergence=use_tie_convergence, global_tie_rate=global_tie_rate,
-                    use_drop_feature=use_drop_feature
-                )
-                
-                status.update(label="✅ Simulation Complete!", state="complete", expanded=False)
-                
-                st.session_state.prediction_result = res
-                st.session_state.mc_result = mc_res
-                st.session_state.rec_limit = 3
-                st.session_state.avoid_limit = 3
+                # 2. POST to FastAPI
+                status.update(label="Dispatching to API...", state="running")
+                api_url = "http://localhost:8000/api/v1"
+                response = requests.post(f"{api_url}/predict", json=payload)
+                response.raise_for_status()
+
+                task_id = response.json()["task_id"]
+
+                # 3. Poll for results
+                status.update(label="Processing Monte Carlo Brackets in background...", state="running")
+                while True:
+                    task_res = requests.get(f"{api_url}/tasks/{task_id}").json()
+
+                    if task_res["status"] == "complete":
+                        st.session_state.prediction_result = task_res["data"]["solver_results"]
+                        st.session_state.mc_result = task_res["data"]["mc_results"]
+                        status.update(label="✅ Simulation Complete!", state="complete", expanded=False)
+                        break
+                    elif task_res["status"] == "failed":
+                        raise Exception(task_res["error"])
+
+                    time.sleep(1.5)  # Poll every 1.5 seconds
+
             except Exception as e:
-                status.update(label="❌ Simulation Failed", state="error", expanded=True); st.exception(e); st.stop()
+                status.update(label="❌ Simulation Failed", state="error", expanded=True)
+                st.exception(e)
+                st.stop()
 
     # ==========================================
     # DATAFRAME RESULTS

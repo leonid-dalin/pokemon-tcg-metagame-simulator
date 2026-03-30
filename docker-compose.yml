@@ -1,0 +1,32 @@
+# docker-compose.yml
+services:
+  api:
+    build: .
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: huey_consumer src.worker.queue.huey -w 4 -k thread
+    volumes:
+      - .:/app
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  ui:
+    build: .
+    command: streamlit run src/interfaces/app.py --server.address=0.0.0.0 --server.port=8501
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    environment:
+      - API_URL=http://api:8000/api/v1
+    depends_on:
+      - api
+    restart: unless-stopped

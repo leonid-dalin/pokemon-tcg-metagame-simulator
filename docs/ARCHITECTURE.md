@@ -21,22 +21,31 @@ To maintain high-speed parallel performance and prevent statistical noise from o
 
 ---
 
-## Directory Structure
+## System Architecture (Decoupled Microservices)
 
-The codebase utilizes a domain-driven layout to strictly separate long-term evolutionary mechanics from immediate tournament equity evaluation:
+As of March 2026, the simulator utilizes a containerized, three-tier architecture orchestrated via **Docker Compose**
 
 ```text
-pokemon-tcg-metagame-simulator/
-├── data/                       # Raw and processed JSON/CSV data
-├── output/                     # Simulation results, interactive Plotly HTML, and logs
-└── src/                        # Source code
-    ├── main.py                 # Top-level CLI orchestrator
-    ├── scraper.py              # Limitless TCG HTML data ingestion
-    ├── core/                   # Shared infrastructure and truths
-    ├── evolution/              # Engine 1: Long-term ESS Replicator Engine & Analytics (Game Theory)
-    ├── tournament/             # Engine 2: Short-term Tournament Solver (Monte Carlo Bracket Engine)
-    └── interfaces/             # User entry points (Streamlit & CLI parsers)
+┌─────────────────┐       HTTP / REST       ┌──────────────────┐
+│                 │  (1) POST /predict      │                  │
+│  Streamlit UI   ├────────────────────────►│  FastAPI Server  │
+│  (Thin Client)  │                         │  (Entry Point)   │
+│                 │◄────────────────────────┤                  │
+└─────────────────┘  (4) Return Task ID     └────────┬─────────┘
+        ▲                                            │
+        │ (5) Poll GET /task/{id}                    │ (2) Enqueue Job
+        │                                            ▼
+┌───────┴─────────┐                       ┌──────────────────┐
+│                 │◄──── (3) Pull Job ────│                  │
+│   Huey Worker   │                       │  SQLite Broker   │
+│ (Heavy Compute) │───── (6) Write Res ──►│ (tcg_tasks.db)   │
+│                 │                       │                  │
+└─────────────────┘                       └──────────────────┘
 ```
+
+1. `api` **(FastAPI)**: Serves as the gateway. Validates incoming simulation requests using strict Pydantic data contracts (`src.api.models`) and pushes tasks to the queue.
+2. `worker` **(Huey):** A headless background processor running `huey_consumer`. It listens for tasks, executes the computationally expensive `monte_carlo.py` and `solver.py` logic, and writes the results back to the database. It uses a lightweight SQLite backend to avoid requiring external services like Redis.
+3. `ui` **(Streamlit)**: The visual frontend. It gathers user parameters, dispatches them to the API, and renders the resulting Plotly charts and Pandas dataframes.
 
 ---
 

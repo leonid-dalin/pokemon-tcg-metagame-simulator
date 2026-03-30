@@ -1,4 +1,21 @@
-## Commit `?` (Mar 24, 2026)
+## Commit `?` (Mar 30, 2026)
+### 🚀 major: Decoupled Asynchronous Architecture & Containerization
+This update transitions the project from a synchronous, locally-bound Streamlit application to a production-ready, three-tier distributed system. 
+At least conceptually. 
+
+#### **🏗️ Architecture & Decoupling**
+* **FastAPI Gateway:** Extracted the core simulation engines (`solver.py` and `monte_carlo.py`) behind a high-performance REST API. 
+* **Huey Background Worker:** Offloaded the heavy NumPy Monte Carlo calculations to a dedicated background task queue (`huey`). This completely resolves the Windows `multiprocessing.Pool` caching bugs by isolating the compute pool from the Streamlit UI thread.
+* **SQLite Broker:** Configured `Huey` to use a local SQLite database (`tcg_tasks.db`) as its message broker, achieving an asynchronous task queue without the bloat of requiring a local Redis or RabbitMQ installation.
+* **Pydantic Contracts:** Implemented strict data validation for tournament generation payloads via Pydantic models.
+
+#### **🐳 Docker Orchestration**
+* **Docker Compose:** Containerized the entire suite into three isolated microservices (`api`, `worker`, and `ui`). The system can now be booted on any OS with a single `docker compose up -d` command, ensuring perfect environment parity between Linux and Windows development machines.
+* **Thin Client UI:** Streamlit has been refactored into a "dumb" thin client. It now dispatches HTTP `POST` requests to the API and runs a non-blocking polling loop until the background worker completes the tournament bracket calculations.
+
+---
+
+## Commit `5b74ae3` (Mar 24, 2026)
 ### 🚀 major: transition to high-fidelity Evolutionary Game Theory (EGT) solver
 This massive architectural update transitions the project from a heuristic simulation to a rigorous Quantal Response Equilibrium (QRE) solver, achieving point-wise convergence to a true Evolutionary Stable State (ESS).
 
