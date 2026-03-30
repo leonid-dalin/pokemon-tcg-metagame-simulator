@@ -29,10 +29,10 @@ The former is integrated with a Streamlit dashboard, vectorized Swiss metrics, a
 *   **Vectorised Metagame Constraints.** A high-speed, pure NumPy water-filling algorithm strictly enforces user-defined exact, minimum, or maximum field share constraints.
 *   **Dynamic Clustering & RPS.** Uses K-Means with Silhouette Optimisation and `StandardScaler` to accurately group archetypes based on their strategic matchup shape. Network graphing helps identify non-transitive Rock-Paper-Scissors cycles.
 
-### 💻 Professional Streamlit Interface
-*   **Interactive Dashboard.** A sortable, tool-tipped dashboard with instant perspective toggles to seamlessly swap data between Individual EV and Macro Impact without recalculating.
-*   **Head-to-Head Comparator.** A side-by-side "A vs. B" tool featuring native colour-coding to highlight favourable (≥ 55%) and unfavourable (≤ 45%) matchups across the predicted field.
-*   **Limitless HTML Ingestion.** A native parser extracts metagame shares directly from Limitless Labs exports to instantly pre-populate simulation constraints.
+###💻 Containerized Microservice Architecture
+* **RESTful API.** A FastAPI entry point validates requests via Pydantic schemas and delegates heavy mathematical computation safely.
+* **Headless Worker.** A Huey background task runner isolates execution of computationally heavy Monte Carlo arrays and ESS replications, writing back to a lightweight SQLite broker.
+* **Professional Streamlit Interface.** An interactive, tool-tipped dashboard with instant perspective toggles to seamlessly swap data between Individual EV and Macro Impact without recalculating.
 
 ### 🧬 Metagame Evolution (Replicator Dynamics)
 *   **Evolutionary Stability.** Models the "Game Theory" of a metagame using Replicator Dynamics. Successful decks grow in frequency proportional to their meta-weighted performance.
@@ -42,13 +42,30 @@ The former is integrated with a Streamlit dashboard, vectorized Swiss metrics, a
 
 ## 📦 Installation
 
+### Option 1: Docker Compose (Recommended)
+
+The application is orchestrated as a three-tier microservice using Docker Compose.
+
+1. **Clone the repository:**
+```bash
+git clone https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator.git
+cd pokemon-tcg-metagame-simulator
+```
+2. **Build and launch the services:**
+```bash
+docker-compose up --build -d
+```
+
+This spins up three containers: `api` (FastAPI on port 8000), `worker` (Huey task runner), and `ui` (Streamlit on port 8501).
+
+### Option 2: Local Python Environment
+
 0. **Get [Python 3.12](https://www.python.org/downloads/)**
 
     **Windows:**
     ```PowerShell
     winget install -e --id Python.Python.3.12
     ```
-    *Note: Restart your terminal after installation.*
 
 1.  **Clone the repository:**
     ```bash
@@ -56,21 +73,13 @@ The former is integrated with a Streamlit dashboard, vectorized Swiss metrics, a
     cd pokemon-tcg-metagame-simulator
     ```
 
-2.  **Set up a virtual environment (Recommended):**
-
-    **Windows:**
+2.  **Set up a virtual environment:**
     ```bash
     python3.12 -m venv venv
-    venv\Scripts\activate
-    ```
-    **Linux:**
-    ```bash
-    python3.12 -m venv venv
-    source venv/bin/activate
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
     ```
 
 3.  **Install dependencies:**
-    Install all required Python packages using the provided `requirements.txt` file:
     ```bash
     pip install -r requirements.txt
     ```
@@ -79,82 +88,21 @@ The former is integrated with a Streamlit dashboard, vectorized Swiss metrics, a
 
 ## 🛠️ Usage
 
-The simulator requires a JSON input file containing the matchup data between decks. You can either create this file manually or use the provided scraper to generate it from HTML files.
+### Running the Web Dashboard
+If running via Docker, navigate to `http://localhost:8501` in your browser to access the Streamlit UI.
 
-### Option 1: Using the Data Scraper
+If running locally:
+1. Start the API: ```uvicorn src.api.main:app --host 0.0.0.0 --port 8000```
+2. Start the worker: ```huey_consumer src.worker.queue.huey -w 4 -k thread```
+3. Start the UI: ```streamlit run src/ui/app.py```
 
-The `scraper.py` script can convert HTML matchup data, specifically from LimitlessTCG, into the `ea_input.json` format required by this tool.
+### CLI Executions
 
-1.  Place your HTML files in a directory named `data/matchups`
-2.  Run the scraper:
-    ```bash
-    python -m src.scraper
-    ```
-3. The script will process the files and, by default, create `ea_input.json` inside the `data/input` directory, which you can then use with the main simulator.
-
-### Option 2: Manual Input Data
-
-Your input file should be a JSON object. An example structure is provided in `data/input/ea_input.json`.
-
-**Input Data Format (`ea_input.json`)**
-
-```json
-{
-  "archetypes": [
-    "Blissey",
-    "Dragapult Dusknoir",
-    "Gholdengo"
-  ],
-  "win_rate_matrix": {
-    "Blissey": {
-      "Blissey": {
-        "win_rate": 0.5,
-        "match_count": 0
-      },
-      "Dragapult Dusknoir": {
-        "win_rate": 0.5675675675675675,
-        "match_count": 74
-      },
-      "Gholdengo": {
-        "win_rate": 0.5588235294117647,
-        "match_count": 68
-      }
-    },
-    "Dragapult Dusknoir": {
-      "Blissey": {
-        "win_rate": 0.43243243243243246,
-        "match_count": 74
-      },
-      "Dragapult Dusknoir": {
-        "win_rate": 0.5,
-        "match_count": 0
-      },
-      "Gholdengo": {
-        "win_rate": 0.47058823529411764,
-        "match_count": 85
-      }
-    },
-    "Gholdengo": {
-      "Blissey": {
-        "win_rate": 0.4411764705882353,
-        "match_count": 68
-      },
-      "Dragapult Dusknoir": {
-        "win_rate": 0.5294117647058824,
-        "match_count": 85
-      },
-      "Gholdengo": {
-        "win_rate": 0.5,
-        "match_count": 0
-      }
-    }
-  }
-}
-```
+The simulator also supports robust headless operations through the Command Line Interface.
 
 ## 🧬 Engine 1: Long-Term Metagame Evolution (ESS)
 
-Use this mode to predict the **Evolutionary Stable State** (the point where a metagame becomes unexploitable) over thousands of generations using Replicator Dynamics.
+Predict the Evolutionary Stable State over thousands of generations using Replicator Dynamics.
 
 ```bash
 python -m src.main -i data/input/ea_input.json -g 10_000 --mode replicator
@@ -162,21 +110,10 @@ python -m src.main -i data/input/ea_input.json -g 10_000 --mode replicator
 
 ## 🏆 Engine 2: Immediate Tournament Solver (Monte Carlo)
 
-Use this mode for **Expected Value (EV)** calculations. It evaluates specific tournament equity by simulating up to 1,000,000 brackets based on given data.
-
-### Option A: Interactive Dashboard (Recommended)
-
-The Streamlit UI provides a dual-perspective dashboard for real-time equity evaluation and "Day 2 bubble" analysis.
+Run a quick tournament simulation directly from the terminal to fetch Expected Value (EV).
 
 ```bash
-streamlit run src/ui/app.py
-```
-
-### Option B: CLI Prediction Mode
-
-Run a quick tournament simulation directly from the terminal.
-```bash
-python -m src.main -i data/input/ea_input.json --predict --players 512 
+python -m src.ui.cli -i data/input/ea_input.json --predict --players 512
 ```
 
 ## Key Command-Line Arguments
@@ -217,55 +154,13 @@ After running the simulation, a uniquely named directory (e.g., `YYYYMMDD_HHmmss
 *   `metagame_evolution.html`: An interactive Plotly graph showing the frequency of each deck over time.
 *   `matchup_heatmap.html`: An interactive heatmap of the win rate matrix.
 *   `matchup_network.html`: An interactive network graph visualizing deck matchups and identified RPS cycles.
-*   `metagame_history_full.csv`: (If enabled) A full record of the metagame state at every generation, for deep analysis.
-
+*   `deck_similarity.json`: Pairwise strategic similarity matrix using Pearson Correlation.
 	
----
-
-## 📈 Example Results | Replicator Dynamics
-
-**(Based on BLK/WHT Standard 2025 Data)** After running the simulation for **2,017,509 generations** using the **Replicator Dynamics** model, the metagame reached a stable equilibrium. Below are the key insights derived from the final state.
-
-> **Note**: The simulation intelligently filters out extinct decks for similarity and clustering analysis, ensuring results reflect only the *active, relevant* metagame.
-
----
-
-### 🏆 Final State Tier List
-
-This tier list reflects the **endgame meta**, prioritizing decks with high win rates against the final field and strong presence.
-
-| Tier | Deck              | Win Rate | Metagame Share |
-| :--- | :---------------- | :------- | :------------- |
-| **T0.5** | **Gholdengo**     | 52.51%   | 5.13%          |
-| **T0.5** | **Joltik Box**    | 50.22%   | **34.67%**     |
-| **T1** | Dragapult Dusknoir| 50.67%   | 11.15%         |
-| **T1** | Ogerpon           | 51.15%   | 5.54%          |
-| **T1** | Gardevoir         | 49.47%   | 15.58%         |
-| **T1** | Crustle           | **54.09%**   | 0.02%          |
-| **T1** | Miraidon          | 49.23%   | 11.82%         |
-
-
-✅ **Joltik Box** is the metagame king by sheer volume, commanding over a third of the final meta. **Gholdengo** boasts with the highest win rate, but a lower metagame share. **Crustle**, while nearly extinct, boasts the highest win rate, indicating it's a powerful but niche counter-strategy.
-
-> **43 unique Rock-Paper-Scissors cycles** were identified (e.g., `Blissey → Festival Lead → Raging Bolt Ogerpon → Blissey`), indicating a healthy, non-transitive metagame with no single unbeatable deck.
-
-> The most dominant deck against an even field at the start was **Blissey** (55.18%), showcasing how the meta can shift dramatically over time.
-
----
-
-### 🧩 Strategic Archetype Clusters
-
-Decks were grouped into clusters based on the similarity of their matchup profiles. This reveals hidden strategic families:
-
-*   **Cluster 0 (Midrange):** `['Dragapult Dusknoir', 'Gardevoir', 'Dragapult Charizard', 'Ogerpon']`
-*   **Cluster 1 (Tempo):** `['Blissey', 'Gholdengo', 'Joltik Box', 'Miraidon']`
-*   **Cluster 2 (Niche):** `['Conkeldurr']`
-
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please open an issue to discuss a feature or bug, and submit a pull request for any changes.
+Contributions are welcome! :D Please open an issue to discuss a feature or bug, and submit a pull request for any changes.
 
 ---
 
