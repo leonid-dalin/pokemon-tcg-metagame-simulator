@@ -105,7 +105,7 @@ The simulator also supports robust headless operations through the Command Line 
 Predict the Evolutionary Stable State over thousands of generations using Replicator Dynamics.
 
 ```bash
-python -m src.main -i data/input/ea_input.json -g 10_000 --mode replicator
+python -m src.ui.cli -i data/input/ea_input.json -g 10_000 --mode replicator
 ```
 
 ## 🏆 Engine 2: Immediate Tournament Solver (Monte Carlo)
