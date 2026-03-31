@@ -3,6 +3,7 @@ import os
 import json
 import csv
 import re
+import requests
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from typing import List, Dict, Tuple, Set, Any, cast
@@ -30,7 +31,6 @@ def extract_deck_info_from_filename(filename):
         
     raise ValueError(f"Could not parse filename under new convention: {filename}")
 
-
 def get_deck_archetype(file_path: str, filename: str) -> Tuple[str, str]:
     try:
         return extract_deck_info_from_filename(filename)
@@ -51,6 +51,125 @@ def get_deck_archetype(file_path: str, filename: str) -> Tuple[str, str]:
                     return deck_name, deck_format
                     
         raise ValueError(f"Archetype extraction failed for {filename}")
+
+
+def fetch_live_matchup_data(target_urls: List[str], canonical_map: Dict[str, str]) -> List[Dict[str, Any]]:
+    """
+    Automates the HTTP requests to Limitless TCG to grab live HTML,
+    bypassing the need for manual file downloads.
+    """
+    all_matchups = []
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    fetched_pages = []
+
+    # --- Fetch pages and build the canonical whitelist ---
+    for url in target_urls:
+        print(f"Fetching live data from: {url}")
+        try:
+            response = requests.get(url, headers=headers, timeout=10)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, "html.parser")
+
+            infobox_elem = soup.find("div", class_="infobox")
+            if not isinstance(infobox_elem, Tag):
+                print(f"  ! Skipping {url}: Could not find infobox.")
+                continue
+
+            name_elem = infobox_elem.find("div", class_="name")
+            if not isinstance(name_elem, Tag):
+                print(f"  ! Skipping {url}: Could not find deck name in infobox.")
+                continue
+
+            deck_archetype = name_elem.get_text(strip=True)
+            format_name = "Standard"
+
+            norm_name = normalize_archetype(deck_archetype)
+            if norm_name not in canonical_map:
+                canonical_map[norm_name] = deck_archetype
+
+            fetched_pages.append((soup, deck_archetype, format_name))
+
+        except Exception as e:
+            print(f"  ! Error fetching {url}: {str(e)}")
+
+    # --- Parse the matchup tables now that the whitelist is fully populated ---
+    for soup, deck_archetype, format_name in fetched_pages:
+        try:
+            matchups = scrape_matchup_soup(soup, deck_archetype, format_name, canonical_map)
+            all_matchups.extend(matchups)
+        except Exception as e:
+            print(f"  ! Error parsing matchups for {deck_archetype}: {str(e)}")
+
+    return all_matchups
+
+def scrape_matchup_soup(soup: BeautifulSoup, deck_archetype: str, format_name: str, canonical_map: Dict[str, str]) -> \
+List[Dict[str, Any]]:
+    """
+    Parses the matchup table from a BeautifulSoup object directly.
+    Extracts Opponents, Matches, and W-L-T scores to build the win rate matrix.
+    """
+    excluded_opponents = {"bye", "unknown", "", "other"}
+
+    table_elem = soup.find("table", class_="striped")
+    if not isinstance(table_elem, Tag):
+        raise ValueError(f"Matchups table missing or not a Tag for archetype: {deck_archetype}")
+
+    matchups = []
+
+    for row in table_elem.find_all("tr")[1:]:
+        if not isinstance(row, Tag):
+            continue
+
+        opponent_str = str(row.get("data-name", "")).strip()
+        if not opponent_str or opponent_str.lower() in excluded_opponents:
+            continue
+
+        norm_opponent = normalize_archetype(opponent_str)
+        if norm_opponent not in canonical_map:
+            continue
+
+        opponent_archetype = canonical_map[norm_opponent]
+
+        matches_attr = row.get("data-matches")
+        matches = int(matches_attr) if matches_attr is not None else 0
+
+        wins = losses = ties = 0
+        score_tds = row.find_all("td")
+        if len(score_tds) > 3:
+            score_text = score_tds[3].get_text(strip=True)
+            # Parse the "W - L - T" string (e.g., "6 - 12 - 5")
+            parts = [p.strip() for p in score_text.split("-") if p.strip()]
+
+            try:
+                if len(parts) >= 3:
+                    wins, losses, ties = map(int, parts[:3])
+                elif len(parts) == 2:
+                    wins, losses = map(int, parts)
+            except (ValueError, TypeError):
+                pass
+
+        if matches > 0:
+            # Formula: (Wins + 0.5 * Ties) / Total Matches
+            winrate = (wins + (0.5 * ties)) / matches
+        else:
+            winrate = 0.5
+
+        matchups.append({
+            "deck_archetype": deck_archetype,
+            "format": format_name,
+            "opponent_archetype": opponent_archetype,
+            "total_matches": matches,
+            "wins": wins,
+            "losses": losses,
+            "ties": ties,
+            "win_rate": winrate,
+        })
+
+    return matchups
 
 def scrape_matchup_data(file_path: str, deck_archetype: str, format_name: str, canonical_map: Dict[str, str]) -> List[Dict[str, Any]]:
     excluded_opponents = {"bye", "unknown", "", "other"}

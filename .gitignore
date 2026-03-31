@@ -58,3 +58,4 @@ temp/
 # Tests
 tests/
 diagnose.py
+test_scraper.py

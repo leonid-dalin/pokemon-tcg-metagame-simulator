@@ -1,3 +1,22 @@
+## Commit `?` (Mar 31, 2026)
+### 🚀 feat: fully autonomous live-scraping pipeline with Pydantic validation and Huey scheduling
+
+This update completely eliminates the need for manual HTML file downloads from Limitless. The simulator is now able to fetch, normalise, validate, and ingest live Limitless TCG data automatically, as long as it knows the URLs.
+
+#### **🕸️ Live Web Scraping (`scraper.py`)**
+* **Direct HTML Fetching:** Replaced the local file-reading logic with Python's `requests` library. The scraper now dynamically fetches live matchup pages using a predefined list of active format URLs (`urls.py`). The offline/manual version will become **legacy** for now.
+* **Memory-Based Soup Parsing:** `scrape_matchup_soup` was refactored to parse the HTML and extract the W-L-T matrix directly in memory, bypassing the need for an intermediate `/data/matchups/` storage folder.
+
+#### **🛡️ Thermodynamic Data Validation (`models.py`)**
+* **Strict Pydantic Bouncer:** Implemented a rigid Pydantic schema (`ScrapedMatrix`) that acts as a firewall between Limitless TCG and the `ea_input.json` matrix.
+* **Mathematical Purity Enforcement:** The `@model_validator` instantly aborts the data write if the scraped data violates thermodynamic purity (e.g., if win rates fall outside the `0.0-1.0` boundary, or if a mirror match diagonal is anything other than exactly `0.5`). 
+
+#### **⏰ Automated Background Pipeline (`queue.py`)**
+* **Huey Cron Scheduler:** Built a native `@huey.periodic_task` that wakes up at 2:00 AM every day. It executes the web scraper, runs the Pydantic validation, and updates the `ea_input.json` matrix asynchronously.
+* **Zero UI Interruption:** Because this runs entirely within the decoupled Huey background worker (`tcg_tasks.db`), the daily data refresh happens invisibly and does not block or freeze the Streamlit dashboard for end-users.
+
+---
+
 ## Commit `088e98f` (Mar 30, 2026)
 ### 🚀 major: Decoupled Asynchronous Architecture & Containerization
 This update transitions the project from a synchronous, locally-bound Streamlit application to a production-ready, three-tier distributed system. 

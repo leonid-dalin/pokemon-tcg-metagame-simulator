@@ -1,4 +1,7 @@
-from huey import SqliteHuey
+import json
+from huey import SqliteHuey, crontab
+from src.api.models import ScrapedMatrix
+from src.scraper import fetch_live_matchup_data, build_complete_matchup_matrix
 from src.core.config import INPUT_DATA, MIN_GAMES
 from src.core.data import load_matchup_data
 from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
@@ -50,3 +53,54 @@ def execute_simulation_job(payload: dict):
         "solver_results": solver_res,
         "mc_results": mc_res
     }
+
+@huey.periodic_task(crontab(minute='0', hour='2'))
+def automated_daily_pipeline():
+    print("Starting automated daily Limitless TCG data scrape...")
+
+    from src.core.urls import ASC_URLS, POR_URLS
+    TARGET_URLS = ASC_URLS
+
+    try:
+        canonical_map = {}
+        raw_matchups = fetch_live_matchup_data(TARGET_URLS, canonical_map)
+
+        if not raw_matchups:
+            raise ValueError("Scraper returned zero matchups. Limitless HTML structure may have changed.")
+
+        matrix_data = build_complete_matchup_matrix(raw_matchups)
+
+        payload_for_validation = {
+            "format_name": "Standard",
+            "archetypes": [
+                {
+                    "archetype_name": arch,
+                    "matchups": matrix_data["matchup_matrix"][arch]
+                }
+                for arch in matrix_data["archetypes"]
+            ]
+        }
+
+        validated_data = ScrapedMatrix(**payload_for_validation)
+
+        output_path = INPUT_DATA
+
+        dumped_data = validated_data.model_dump()
+
+        final_json_structure = {
+            "archetypes": matrix_data["archetypes"],
+            "win_rate_matrix": {
+                arch["archetype_name"]: arch["matchups"]
+                for arch in dumped_data["archetypes"]
+            }
+        }
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(final_json_structure, f, indent=2)
+
+        print(f"Pipeline successful! Matrix updated and thermodynamic purity verified.")
+
+    except ValueError as ve:
+        print(f"DATA VALIDATION FAILED. Aborting update. Reason: {ve}")
+    except Exception as e:
+        print(f"CRITICAL PIPELINE FAILURE: {e}")

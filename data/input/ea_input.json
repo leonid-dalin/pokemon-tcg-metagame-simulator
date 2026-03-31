@@ -1,6 +1,5 @@
 {
   "archetypes": [
-    "Alakazam Dudunsparce",
     "Ceruledge",
     "Charizard Noctowl",
     "Charizard Pidgeot",
@@ -21,9 +20,9 @@
     "Grimmsnarl Froslass",
     "Joltik Box",
     "Kangaskhan Bouffalant",
-    "Lopunny Dusknoir",
     "Lucario Hariyama",
     "Mega Absol Box",
+    "Mega Lucario",
     "Mega Venusaur",
     "N's Zoroark",
     "Ogerpon Meganium",
@@ -35,145 +34,7 @@
     "Tera Box"
   ],
   "win_rate_matrix": {
-    "Alakazam Dudunsparce": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.5,
-        "match_count": 0
-      },
-      "Ceruledge": {
-        "win_rate": 0.7040816326530612,
-        "match_count": 49
-      },
-      "Charizard Noctowl": {
-        "win_rate": 0.42934782608695654,
-        "match_count": 92
-      },
-      "Charizard Pidgeot": {
-        "win_rate": 0.5227272727272727,
-        "match_count": 66
-      },
-      "Crustle": {
-        "win_rate": 0.5806451612903226,
-        "match_count": 31
-      },
-      "Cynthia's Garchomp": {
-        "win_rate": 0.6375,
-        "match_count": 40
-      },
-      "Dragapult": {
-        "win_rate": 0.3611111111111111,
-        "match_count": 36
-      },
-      "Dragapult Charizard": {
-        "win_rate": 0.4157303370786517,
-        "match_count": 89
-      },
-      "Dragapult Dusknoir": {
-        "win_rate": 0.3901673640167364,
-        "match_count": 478
-      },
-      "Dragonite Eelektrik": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 30
-      },
-      "Festival Lead": {
-        "win_rate": 0.4583333333333333,
-        "match_count": 72
-      },
-      "Flareon Noctowl": {
-        "win_rate": 0.6511627906976745,
-        "match_count": 43
-      },
-      "Froslass Munkidori": {
-        "win_rate": 0.47706422018348627,
-        "match_count": 109
-      },
-      "Gardevoir": {
-        "win_rate": 0.3317757009345794,
-        "match_count": 107
-      },
-      "Gardevoir Jellicent": {
-        "win_rate": 0.5057471264367817,
-        "match_count": 87
-      },
-      "Gholdengo": {
-        "win_rate": 0.6153846153846154,
-        "match_count": 39
-      },
-      "Gholdengo Lunatone": {
-        "win_rate": 0.59375,
-        "match_count": 160
-      },
-      "Greninja": {
-        "win_rate": 0.40625,
-        "match_count": 48
-      },
-      "Grimmsnarl Froslass": {
-        "win_rate": 0.41232227488151657,
-        "match_count": 211
-      },
-      "Joltik Box": {
-        "win_rate": 0.56,
-        "match_count": 50
-      },
-      "Kangaskhan Bouffalant": {
-        "win_rate": 0.7203389830508474,
-        "match_count": 59
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.5789473684210527,
-        "match_count": 19
-      },
-      "Lucario Hariyama": {
-        "win_rate": 0.6262135922330098,
-        "match_count": 103
-      },
-      "Mega Absol Box": {
-        "win_rate": 0.4367469879518072,
-        "match_count": 166
-      },
-      "Mega Venusaur": {
-        "win_rate": 0.5652173913043478,
-        "match_count": 69
-      },
-      "N's Zoroark": {
-        "win_rate": 0.4724576271186441,
-        "match_count": 236
-      },
-      "Ogerpon Meganium": {
-        "win_rate": 0.5555555555555556,
-        "match_count": 36
-      },
-      "Pidgeot Control": {
-        "win_rate": 0.23529411764705882,
-        "match_count": 17
-      },
-      "Raging Bolt Ogerpon": {
-        "win_rate": 0.6421568627450981,
-        "match_count": 102
-      },
-      "Rocket's Honchkrow": {
-        "win_rate": 0.25961538461538464,
-        "match_count": 52
-      },
-      "Rocket's Mewtwo": {
-        "win_rate": 0.23684210526315788,
-        "match_count": 76
-      },
-      "Slowking": {
-        "win_rate": 0.5660377358490566,
-        "match_count": 53
-      },
-      "Tera Box": {
-        "win_rate": 0.5,
-        "match_count": 41
-      }
-    },
     "Ceruledge": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.29591836734693877,
-        "match_count": 49
-      },
       "Ceruledge": {
         "win_rate": 0.5,
         "match_count": 0
@@ -187,8 +48,8 @@
         "match_count": 32
       },
       "Crustle": {
-        "win_rate": 0.18181818181818182,
-        "match_count": 22
+        "win_rate": 0.17391304347826086,
+        "match_count": 23
       },
       "Cynthia's Garchomp": {
         "win_rate": 0.7333333333333333,
@@ -203,28 +64,28 @@
         "match_count": 44
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.5252293577981652,
-        "match_count": 218
+        "win_rate": 0.5134529147982063,
+        "match_count": 223
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.36363636363636365,
         "match_count": 11
       },
       "Festival Lead": {
-        "win_rate": 0.23076923076923078,
-        "match_count": 26
+        "win_rate": 0.2222222222222222,
+        "match_count": 27
       },
       "Flareon Noctowl": {
         "win_rate": 0.5357142857142857,
         "match_count": 14
       },
       "Froslass Munkidori": {
-        "win_rate": 0.5,
-        "match_count": 43
+        "win_rate": 0.48863636363636365,
+        "match_count": 44
       },
       "Gardevoir": {
-        "win_rate": 0.4489795918367347,
-        "match_count": 49
+        "win_rate": 0.47058823529411764,
+        "match_count": 51
       },
       "Gardevoir Jellicent": {
         "win_rate": 0.5263157894736842,
@@ -235,16 +96,16 @@
         "match_count": 14
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.581081081081081,
-        "match_count": 74
+        "win_rate": 0.5866666666666667,
+        "match_count": 75
       },
       "Greninja": {
         "win_rate": 0.5,
         "match_count": 24
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.5421052631578948,
-        "match_count": 95
+        "win_rate": 0.5515463917525774,
+        "match_count": 97
       },
       "Joltik Box": {
         "win_rate": 0.5,
@@ -254,45 +115,45 @@
         "win_rate": 0.3695652173913043,
         "match_count": 23
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 12
-      },
       "Lucario Hariyama": {
-        "win_rate": 0.5,
-        "match_count": 52
+        "win_rate": 0.5185185185185185,
+        "match_count": 54
       },
       "Mega Absol Box": {
-        "win_rate": 0.5774647887323944,
-        "match_count": 71
+        "win_rate": 0.5733333333333334,
+        "match_count": 75
+      },
+      "Mega Lucario": {
+        "win_rate": 0.5,
+        "match_count": 17
       },
       "Mega Venusaur": {
         "win_rate": 0.717391304347826,
         "match_count": 23
       },
       "N's Zoroark": {
-        "win_rate": 0.4891304347826087,
-        "match_count": 92
+        "win_rate": 0.4845360824742268,
+        "match_count": 97
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.7777777777777778,
-        "match_count": 18
+        "win_rate": 0.7368421052631579,
+        "match_count": 19
       },
       "Pidgeot Control": {
         "win_rate": 0.4166666666666667,
         "match_count": 12
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.5111111111111111,
-        "match_count": 45
+        "win_rate": 0.5,
+        "match_count": 46
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.2962962962962963,
-        "match_count": 27
+        "win_rate": 0.32142857142857145,
+        "match_count": 28
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.5806451612903226,
-        "match_count": 31
+        "win_rate": 0.5294117647058824,
+        "match_count": 34
       },
       "Slowking": {
         "win_rate": 0.2962962962962963,
@@ -304,10 +165,6 @@
       }
     },
     "Charizard Noctowl": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.5706521739130435,
-        "match_count": 92
-      },
       "Ceruledge": {
         "win_rate": 0.6896551724137931,
         "match_count": 29
@@ -325,8 +182,8 @@
         "match_count": 26
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.6904761904761905,
-        "match_count": 21
+        "win_rate": 0.7045454545454546,
+        "match_count": 22
       },
       "Dragapult": {
         "win_rate": 0.5517241379310345,
@@ -337,8 +194,8 @@
         "match_count": 63
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.32988165680473375,
-        "match_count": 338
+        "win_rate": 0.32794117647058824,
+        "match_count": 340
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.6428571428571429,
@@ -353,95 +210,91 @@
         "match_count": 26
       },
       "Froslass Munkidori": {
-        "win_rate": 0.5901639344262295,
-        "match_count": 61
+        "win_rate": 0.5873015873015873,
+        "match_count": 63
       },
       "Gardevoir": {
-        "win_rate": 0.5933333333333334,
-        "match_count": 75
+        "win_rate": 0.5986842105263158,
+        "match_count": 76
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.5416666666666666,
-        "match_count": 72
+        "win_rate": 0.547945205479452,
+        "match_count": 73
       },
       "Gholdengo": {
         "win_rate": 0.6060606060606061,
         "match_count": 33
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.543859649122807,
-        "match_count": 114
+        "win_rate": 0.5391304347826087,
+        "match_count": 115
       },
       "Greninja": {
         "win_rate": 0.6142857142857143,
         "match_count": 35
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.3993055555555556,
-        "match_count": 144
+        "win_rate": 0.3938356164383562,
+        "match_count": 146
       },
       "Joltik Box": {
-        "win_rate": 0.48214285714285715,
-        "match_count": 28
+        "win_rate": 0.48333333333333334,
+        "match_count": 30
       },
       "Kangaskhan Bouffalant": {
         "win_rate": 0.46,
         "match_count": 50
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.6,
-        "match_count": 10
       },
       "Lucario Hariyama": {
         "win_rate": 0.5,
         "match_count": 54
       },
       "Mega Absol Box": {
-        "win_rate": 0.48031496062992124,
-        "match_count": 127
+        "win_rate": 0.47692307692307695,
+        "match_count": 130
+      },
+      "Mega Lucario": {
+        "win_rate": 0.46153846153846156,
+        "match_count": 13
       },
       "Mega Venusaur": {
         "win_rate": 0.5108695652173914,
         "match_count": 46
       },
       "N's Zoroark": {
-        "win_rate": 0.5,
-        "match_count": 152
+        "win_rate": 0.4840764331210191,
+        "match_count": 157
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.45,
-        "match_count": 20
+        "win_rate": 0.47619047619047616,
+        "match_count": 21
       },
       "Pidgeot Control": {
         "win_rate": 0.325,
         "match_count": 20
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.6204819277108434,
-        "match_count": 83
+        "win_rate": 0.622093023255814,
+        "match_count": 86
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.6097560975609756,
-        "match_count": 41
+        "win_rate": 0.6195652173913043,
+        "match_count": 46
       },
       "Rocket's Mewtwo": {
         "win_rate": 0.6219512195121951,
         "match_count": 41
       },
       "Slowking": {
-        "win_rate": 0.4444444444444444,
-        "match_count": 27
+        "win_rate": 0.4642857142857143,
+        "match_count": 28
       },
       "Tera Box": {
-        "win_rate": 0.5666666666666667,
-        "match_count": 30
+        "win_rate": 0.5483870967741935,
+        "match_count": 31
       }
     },
     "Charizard Pidgeot": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.4772727272727273,
-        "match_count": 66
-      },
       "Ceruledge": {
         "win_rate": 0.59375,
         "match_count": 32
@@ -463,16 +316,16 @@
         "match_count": 21
       },
       "Dragapult": {
-        "win_rate": 0.5263157894736842,
-        "match_count": 19
+        "win_rate": 0.5238095238095238,
+        "match_count": 21
       },
       "Dragapult Charizard": {
         "win_rate": 0.5,
         "match_count": 55
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.43724696356275305,
-        "match_count": 247
+        "win_rate": 0.44047619047619047,
+        "match_count": 252
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.5333333333333333,
@@ -487,8 +340,8 @@
         "match_count": 24
       },
       "Froslass Munkidori": {
-        "win_rate": 0.32,
-        "match_count": 50
+        "win_rate": 0.32727272727272727,
+        "match_count": 55
       },
       "Gardevoir": {
         "win_rate": 0.5263157894736842,
@@ -507,40 +360,40 @@
         "match_count": 71
       },
       "Greninja": {
-        "win_rate": 0.5151515151515151,
-        "match_count": 33
+        "win_rate": 0.5,
+        "match_count": 34
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.4051724137931034,
-        "match_count": 116
+        "win_rate": 0.3983050847457627,
+        "match_count": 118
       },
       "Joltik Box": {
-        "win_rate": 0.421875,
-        "match_count": 32
+        "win_rate": 0.4264705882352941,
+        "match_count": 34
       },
       "Kangaskhan Bouffalant": {
         "win_rate": 0.3103448275862069,
         "match_count": 29
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.78125,
-        "match_count": 16
-      },
       "Lucario Hariyama": {
-        "win_rate": 0.5196078431372549,
-        "match_count": 51
+        "win_rate": 0.5288461538461539,
+        "match_count": 52
       },
       "Mega Absol Box": {
-        "win_rate": 0.5168539325842697,
-        "match_count": 89
+        "win_rate": 0.5268817204301075,
+        "match_count": 93
+      },
+      "Mega Lucario": {
+        "win_rate": 0.6363636363636364,
+        "match_count": 11
       },
       "Mega Venusaur": {
-        "win_rate": 0.5434782608695652,
-        "match_count": 23
+        "win_rate": 0.5208333333333334,
+        "match_count": 24
       },
       "N's Zoroark": {
-        "win_rate": 0.5190476190476191,
-        "match_count": 105
+        "win_rate": 0.5409090909090909,
+        "match_count": 110
       },
       "Ogerpon Meganium": {
         "win_rate": 0.6,
@@ -551,12 +404,12 @@
         "match_count": 9
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.6416666666666667,
-        "match_count": 60
+        "win_rate": 0.6475409836065574,
+        "match_count": 61
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.52,
-        "match_count": 25
+        "win_rate": 0.5555555555555556,
+        "match_count": 27
       },
       "Rocket's Mewtwo": {
         "win_rate": 0.5714285714285714,
@@ -572,13 +425,9 @@
       }
     },
     "Crustle": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.41935483870967744,
-        "match_count": 31
-      },
       "Ceruledge": {
-        "win_rate": 0.8181818181818182,
-        "match_count": 22
+        "win_rate": 0.8260869565217391,
+        "match_count": 23
       },
       "Charizard Noctowl": {
         "win_rate": 0.5192307692307693,
@@ -593,8 +442,8 @@
         "match_count": 0
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.4666666666666667,
-        "match_count": 15
+        "win_rate": 0.5,
+        "match_count": 16
       },
       "Dragapult": {
         "win_rate": 0.6333333333333333,
@@ -605,142 +454,138 @@
         "match_count": 27
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.47368421052631576,
-        "match_count": 152
+        "win_rate": 0.4723926380368098,
+        "match_count": 163
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.9285714285714286,
         "match_count": 7
       },
       "Festival Lead": {
-        "win_rate": 0.25,
-        "match_count": 24
+        "win_rate": 0.25925925925925924,
+        "match_count": 27
       },
       "Flareon Noctowl": {
         "win_rate": 0.9444444444444444,
         "match_count": 18
       },
       "Froslass Munkidori": {
-        "win_rate": 0.37142857142857144,
-        "match_count": 35
+        "win_rate": 0.3333333333333333,
+        "match_count": 42
       },
       "Gardevoir": {
-        "win_rate": 0.1724137931034483,
-        "match_count": 29
+        "win_rate": 0.18181818181818182,
+        "match_count": 33
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.14285714285714285,
-        "match_count": 28
+        "win_rate": 0.16666666666666666,
+        "match_count": 30
       },
       "Gholdengo": {
         "win_rate": 0.5,
         "match_count": 4
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.6923076923076923,
-        "match_count": 52
+        "win_rate": 0.6545454545454545,
+        "match_count": 55
       },
       "Greninja": {
-        "win_rate": 0.9166666666666666,
-        "match_count": 12
+        "win_rate": 0.8,
+        "match_count": 15
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.6363636363636364,
-        "match_count": 77
+        "win_rate": 0.654320987654321,
+        "match_count": 81
       },
       "Joltik Box": {
-        "win_rate": 0.8888888888888888,
-        "match_count": 18
+        "win_rate": 0.85,
+        "match_count": 20
       },
       "Kangaskhan Bouffalant": {
         "win_rate": 0.59375,
         "match_count": 16
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.25,
-        "match_count": 8
-      },
       "Lucario Hariyama": {
-        "win_rate": 0.5606060606060606,
-        "match_count": 33
+        "win_rate": 0.6025641025641025,
+        "match_count": 39
       },
       "Mega Absol Box": {
-        "win_rate": 0.5943396226415094,
-        "match_count": 53
+        "win_rate": 0.6209677419354839,
+        "match_count": 62
+      },
+      "Mega Lucario": {
+        "win_rate": 0.5454545454545454,
+        "match_count": 11
       },
       "Mega Venusaur": {
         "win_rate": 0.6,
         "match_count": 25
       },
       "N's Zoroark": {
-        "win_rate": 0.5671641791044776,
-        "match_count": 67
+        "win_rate": 0.5555555555555556,
+        "match_count": 72
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.7222222222222222,
-        "match_count": 9
-      },
-      "Pidgeot Control": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 3
-      },
-      "Raging Bolt Ogerpon": {
-        "win_rate": 0.5535714285714286,
-        "match_count": 28
-      },
-      "Rocket's Honchkrow": {
-        "win_rate": 0.05263157894736842,
-        "match_count": 19
-      },
-      "Rocket's Mewtwo": {
-        "win_rate": 0.4090909090909091,
+        "win_rate": 0.7727272727272727,
         "match_count": 11
       },
+      "Pidgeot Control": {
+        "win_rate": 0.5,
+        "match_count": 4
+      },
+      "Raging Bolt Ogerpon": {
+        "win_rate": 0.55,
+        "match_count": 30
+      },
+      "Rocket's Honchkrow": {
+        "win_rate": 0.07407407407407407,
+        "match_count": 27
+      },
+      "Rocket's Mewtwo": {
+        "win_rate": 0.375,
+        "match_count": 12
+      },
       "Slowking": {
-        "win_rate": 0.1875,
-        "match_count": 16
+        "win_rate": 0.17391304347826086,
+        "match_count": 23
       },
       "Tera Box": {
-        "win_rate": 0.6086956521739131,
-        "match_count": 23
+        "win_rate": 0.625,
+        "match_count": 24
       }
     },
     "Cynthia's Garchomp": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.3625,
-        "match_count": 40
-      },
       "Ceruledge": {
         "win_rate": 0.26666666666666666,
         "match_count": 15
       },
       "Charizard Noctowl": {
-        "win_rate": 0.30952380952380953,
-        "match_count": 21
+        "win_rate": 0.29545454545454547,
+        "match_count": 22
       },
       "Charizard Pidgeot": {
         "win_rate": 0.5238095238095238,
         "match_count": 21
       },
       "Crustle": {
-        "win_rate": 0.5333333333333333,
-        "match_count": 15
+        "win_rate": 0.5,
+        "match_count": 16
       },
       "Cynthia's Garchomp": {
         "win_rate": 0.5,
         "match_count": 0
       },
       "Dragapult": {
-        "win_rate": 0.6923076923076923,
-        "match_count": 13
+        "win_rate": 0.7142857142857143,
+        "match_count": 14
       },
       "Dragapult Charizard": {
-        "win_rate": 0.47619047619047616,
-        "match_count": 21
+        "win_rate": 0.5,
+        "match_count": 22
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.4471830985915493,
-        "match_count": 142
+        "win_rate": 0.44039735099337746,
+        "match_count": 151
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.36363636363636365,
@@ -755,12 +600,12 @@
         "match_count": 10
       },
       "Froslass Munkidori": {
-        "win_rate": 0.6153846153846154,
-        "match_count": 26
+        "win_rate": 0.5862068965517241,
+        "match_count": 29
       },
       "Gardevoir": {
-        "win_rate": 0.35714285714285715,
-        "match_count": 21
+        "win_rate": 0.3695652173913043,
+        "match_count": 23
       },
       "Gardevoir Jellicent": {
         "win_rate": 0.37037037037037035,
@@ -771,68 +616,68 @@
         "match_count": 11
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.39,
-        "match_count": 50
+        "win_rate": 0.3942307692307692,
+        "match_count": 52
       },
       "Greninja": {
-        "win_rate": 0.3125,
-        "match_count": 16
+        "win_rate": 0.35294117647058826,
+        "match_count": 17
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.6574074074074074,
-        "match_count": 54
+        "win_rate": 0.6636363636363637,
+        "match_count": 55
       },
       "Joltik Box": {
-        "win_rate": 0.5454545454545454,
-        "match_count": 11
+        "win_rate": 0.5833333333333334,
+        "match_count": 12
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.8181818181818182,
-        "match_count": 11
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.0,
-        "match_count": 1
+        "win_rate": 0.8333333333333334,
+        "match_count": 12
       },
       "Lucario Hariyama": {
-        "win_rate": 0.4393939393939394,
-        "match_count": 33
+        "win_rate": 0.45588235294117646,
+        "match_count": 34
       },
       "Mega Absol Box": {
-        "win_rate": 0.49019607843137253,
-        "match_count": 51
+        "win_rate": 0.4716981132075472,
+        "match_count": 53
+      },
+      "Mega Lucario": {
+        "win_rate": 0.5,
+        "match_count": 10
       },
       "Mega Venusaur": {
         "win_rate": 0.14285714285714285,
         "match_count": 21
       },
       "N's Zoroark": {
-        "win_rate": 0.4927536231884058,
-        "match_count": 69
+        "win_rate": 0.5454545454545454,
+        "match_count": 77
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.375,
-        "match_count": 16
+        "win_rate": 0.3684210526315789,
+        "match_count": 19
       },
       "Pidgeot Control": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 3
+        "win_rate": 0.75,
+        "match_count": 4
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.42857142857142855,
-        "match_count": 21
+        "win_rate": 0.45454545454545453,
+        "match_count": 22
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.5833333333333334,
-        "match_count": 24
+        "win_rate": 0.5769230769230769,
+        "match_count": 26
       },
       "Rocket's Mewtwo": {
         "win_rate": 0.2833333333333333,
         "match_count": 30
       },
       "Slowking": {
-        "win_rate": 0.5833333333333334,
-        "match_count": 12
+        "win_rate": 0.5384615384615384,
+        "match_count": 13
       },
       "Tera Box": {
         "win_rate": 0.38095238095238093,
@@ -840,10 +685,6 @@
       }
     },
     "Dragapult": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.6388888888888888,
-        "match_count": 36
-      },
       "Ceruledge": {
         "win_rate": 0.4,
         "match_count": 20
@@ -853,16 +694,16 @@
         "match_count": 29
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.47368421052631576,
-        "match_count": 19
+        "win_rate": 0.47619047619047616,
+        "match_count": 21
       },
       "Crustle": {
         "win_rate": 0.36666666666666664,
         "match_count": 15
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.3076923076923077,
-        "match_count": 13
+        "win_rate": 0.2857142857142857,
+        "match_count": 14
       },
       "Dragapult": {
         "win_rate": 0.5,
@@ -873,76 +714,76 @@
         "match_count": 35
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.5617283950617284,
-        "match_count": 162
+        "win_rate": 0.558282208588957,
+        "match_count": 163
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.6666666666666666,
         "match_count": 12
       },
       "Festival Lead": {
-        "win_rate": 0.625,
-        "match_count": 32
+        "win_rate": 0.6363636363636364,
+        "match_count": 33
       },
       "Flareon Noctowl": {
-        "win_rate": 0.6923076923076923,
-        "match_count": 13
+        "win_rate": 0.6428571428571429,
+        "match_count": 14
       },
       "Froslass Munkidori": {
-        "win_rate": 0.4230769230769231,
-        "match_count": 39
+        "win_rate": 0.39285714285714285,
+        "match_count": 42
       },
       "Gardevoir": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 27
+        "win_rate": 0.3103448275862069,
+        "match_count": 29
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.24074074074074073,
-        "match_count": 27
+        "win_rate": 0.23214285714285715,
+        "match_count": 28
       },
       "Gholdengo": {
         "win_rate": 0.5454545454545454,
         "match_count": 11
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.22058823529411764,
-        "match_count": 34
+        "win_rate": 0.22972972972972974,
+        "match_count": 37
       },
       "Greninja": {
         "win_rate": 0.55,
         "match_count": 20
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.4351851851851852,
-        "match_count": 54
+        "win_rate": 0.44545454545454544,
+        "match_count": 55
       },
       "Joltik Box": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 15
+        "win_rate": 0.3,
+        "match_count": 20
       },
       "Kangaskhan Bouffalant": {
         "win_rate": 0.4772727272727273,
         "match_count": 22
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.375,
-        "match_count": 8
-      },
       "Lucario Hariyama": {
-        "win_rate": 0.46296296296296297,
-        "match_count": 27
-      },
-      "Mega Absol Box": {
-        "win_rate": 0.41836734693877553,
-        "match_count": 49
-      },
-      "Mega Venusaur": {
-        "win_rate": 0.41379310344827586,
+        "win_rate": 0.43103448275862066,
         "match_count": 29
       },
-      "N's Zoroark": {
-        "win_rate": 0.48,
+      "Mega Absol Box": {
+        "win_rate": 0.41,
         "match_count": 50
+      },
+      "Mega Lucario": {
+        "win_rate": 0.2857142857142857,
+        "match_count": 7
+      },
+      "Mega Venusaur": {
+        "win_rate": 0.3870967741935484,
+        "match_count": 31
+      },
+      "N's Zoroark": {
+        "win_rate": 0.4642857142857143,
+        "match_count": 56
       },
       "Ogerpon Meganium": {
         "win_rate": 0.4444444444444444,
@@ -957,12 +798,12 @@
         "match_count": 23
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.62,
-        "match_count": 25
+        "win_rate": 0.6346153846153846,
+        "match_count": 26
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.47619047619047616,
-        "match_count": 21
+        "win_rate": 0.4782608695652174,
+        "match_count": 23
       },
       "Slowking": {
         "win_rate": 0.65625,
@@ -974,10 +815,6 @@
       }
     },
     "Dragapult Charizard": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.5842696629213483,
-        "match_count": 89
-      },
       "Ceruledge": {
         "win_rate": 0.5,
         "match_count": 44
@@ -995,8 +832,8 @@
         "match_count": 27
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.5238095238095238,
-        "match_count": 21
+        "win_rate": 0.5,
+        "match_count": 22
       },
       "Dragapult": {
         "win_rate": 0.6,
@@ -1007,8 +844,8 @@
         "match_count": 0
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.5079365079365079,
-        "match_count": 315
+        "win_rate": 0.5063291139240507,
+        "match_count": 316
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.5555555555555556,
@@ -1023,8 +860,8 @@
         "match_count": 36
       },
       "Froslass Munkidori": {
-        "win_rate": 0.4358974358974359,
-        "match_count": 78
+        "win_rate": 0.4430379746835443,
+        "match_count": 79
       },
       "Gardevoir": {
         "win_rate": 0.5059523809523809,
@@ -1047,8 +884,8 @@
         "match_count": 39
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.3549382716049383,
-        "match_count": 162
+        "win_rate": 0.3567073170731707,
+        "match_count": 164
       },
       "Joltik Box": {
         "win_rate": 0.5681818181818182,
@@ -1058,10 +895,6 @@
         "win_rate": 0.48148148148148145,
         "match_count": 54
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.38461538461538464,
-        "match_count": 13
-      },
       "Lucario Hariyama": {
         "win_rate": 0.6951219512195121,
         "match_count": 41
@@ -1070,13 +903,17 @@
         "win_rate": 0.513986013986014,
         "match_count": 143
       },
+      "Mega Lucario": {
+        "win_rate": 0.5454545454545454,
+        "match_count": 22
+      },
       "Mega Venusaur": {
         "win_rate": 0.5,
         "match_count": 36
       },
       "N's Zoroark": {
-        "win_rate": 0.5629139072847682,
-        "match_count": 151
+        "win_rate": 0.5592105263157895,
+        "match_count": 152
       },
       "Ogerpon Meganium": {
         "win_rate": 0.7692307692307693,
@@ -1099,8 +936,8 @@
         "match_count": 31
       },
       "Slowking": {
-        "win_rate": 0.4838709677419355,
-        "match_count": 31
+        "win_rate": 0.46875,
+        "match_count": 32
       },
       "Tera Box": {
         "win_rate": 0.5909090909090909,
@@ -1108,37 +945,33 @@
       }
     },
     "Dragapult Dusknoir": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.6098326359832636,
-        "match_count": 478
-      },
       "Ceruledge": {
-        "win_rate": 0.47477064220183485,
-        "match_count": 218
+        "win_rate": 0.48654708520179374,
+        "match_count": 223
       },
       "Charizard Noctowl": {
-        "win_rate": 0.6701183431952663,
-        "match_count": 338
+        "win_rate": 0.6720588235294118,
+        "match_count": 340
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.562753036437247,
-        "match_count": 247
+        "win_rate": 0.5595238095238095,
+        "match_count": 252
       },
       "Crustle": {
-        "win_rate": 0.5263157894736842,
-        "match_count": 152
+        "win_rate": 0.5276073619631901,
+        "match_count": 163
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.5528169014084507,
-        "match_count": 142
+        "win_rate": 0.5596026490066225,
+        "match_count": 151
       },
       "Dragapult": {
-        "win_rate": 0.4382716049382716,
-        "match_count": 162
+        "win_rate": 0.44171779141104295,
+        "match_count": 163
       },
       "Dragapult Charizard": {
-        "win_rate": 0.49206349206349204,
-        "match_count": 315
+        "win_rate": 0.4936708860759494,
+        "match_count": 316
       },
       "Dragapult Dusknoir": {
         "win_rate": 0.5,
@@ -1149,92 +982,92 @@
         "match_count": 87
       },
       "Festival Lead": {
-        "win_rate": 0.7044444444444444,
-        "match_count": 225
+        "win_rate": 0.7052401746724891,
+        "match_count": 229
       },
       "Flareon Noctowl": {
-        "win_rate": 0.6384615384615384,
-        "match_count": 130
+        "win_rate": 0.6390977443609023,
+        "match_count": 133
       },
       "Froslass Munkidori": {
-        "win_rate": 0.5043352601156069,
-        "match_count": 346
+        "win_rate": 0.5013297872340425,
+        "match_count": 376
       },
       "Gardevoir": {
-        "win_rate": 0.42786069651741293,
-        "match_count": 402
+        "win_rate": 0.41904761904761906,
+        "match_count": 420
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.4803030303030303,
-        "match_count": 330
+        "win_rate": 0.481981981981982,
+        "match_count": 333
       },
       "Gholdengo": {
         "win_rate": 0.494475138121547,
         "match_count": 181
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.4483333333333333,
-        "match_count": 600
+        "win_rate": 0.4483870967741935,
+        "match_count": 620
       },
       "Greninja": {
-        "win_rate": 0.5157894736842106,
-        "match_count": 190
+        "win_rate": 0.5025380710659898,
+        "match_count": 197
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.4292149292149292,
-        "match_count": 777
+        "win_rate": 0.42740926157697123,
+        "match_count": 799
       },
       "Joltik Box": {
-        "win_rate": 0.4748743718592965,
-        "match_count": 199
+        "win_rate": 0.4735576923076923,
+        "match_count": 208
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.40131578947368424,
-        "match_count": 228
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.5821917808219178,
-        "match_count": 73
+        "win_rate": 0.4012875536480687,
+        "match_count": 233
       },
       "Lucario Hariyama": {
-        "win_rate": 0.5269121813031161,
-        "match_count": 353
+        "win_rate": 0.5271739130434783,
+        "match_count": 368
       },
       "Mega Absol Box": {
-        "win_rate": 0.4399696048632219,
-        "match_count": 658
+        "win_rate": 0.43932748538011696,
+        "match_count": 684
+      },
+      "Mega Lucario": {
+        "win_rate": 0.4375,
+        "match_count": 120
       },
       "Mega Venusaur": {
-        "win_rate": 0.6067961165048543,
-        "match_count": 206
+        "win_rate": 0.6150234741784038,
+        "match_count": 213
       },
       "N's Zoroark": {
-        "win_rate": 0.487546699875467,
-        "match_count": 803
+        "win_rate": 0.48092967818831944,
+        "match_count": 839
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.484251968503937,
-        "match_count": 127
+        "win_rate": 0.5036231884057971,
+        "match_count": 138
       },
       "Pidgeot Control": {
-        "win_rate": 0.2722222222222222,
-        "match_count": 90
+        "win_rate": 0.2903225806451613,
+        "match_count": 93
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.5283018867924528,
-        "match_count": 424
+        "win_rate": 0.5272727272727272,
+        "match_count": 440
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.628158844765343,
-        "match_count": 277
+        "win_rate": 0.6245733788395904,
+        "match_count": 293
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.49583333333333335,
-        "match_count": 240
+        "win_rate": 0.4939759036144578,
+        "match_count": 249
       },
       "Slowking": {
-        "win_rate": 0.5088235294117647,
-        "match_count": 170
+        "win_rate": 0.5083333333333333,
+        "match_count": 180
       },
       "Tera Box": {
         "win_rate": 0.5202312138728323,
@@ -1242,10 +1075,6 @@
       }
     },
     "Dragonite Eelektrik": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 30
-      },
       "Ceruledge": {
         "win_rate": 0.6363636363636364,
         "match_count": 11
@@ -1291,8 +1120,8 @@
         "match_count": 15
       },
       "Froslass Munkidori": {
-        "win_rate": 0.16216216216216217,
-        "match_count": 37
+        "win_rate": 0.15789473684210525,
+        "match_count": 38
       },
       "Gardevoir": {
         "win_rate": 0.25,
@@ -1326,10 +1155,6 @@
         "win_rate": 0.26666666666666666,
         "match_count": 15
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.5,
-        "match_count": 6
-      },
       "Lucario Hariyama": {
         "win_rate": 0.41935483870967744,
         "match_count": 31
@@ -1338,17 +1163,21 @@
         "win_rate": 0.4772727272727273,
         "match_count": 44
       },
+      "Mega Lucario": {
+        "win_rate": 0.375,
+        "match_count": 8
+      },
       "Mega Venusaur": {
         "win_rate": 0.38,
         "match_count": 25
       },
       "N's Zoroark": {
-        "win_rate": 0.4827586206896552,
-        "match_count": 58
+        "win_rate": 0.4745762711864407,
+        "match_count": 59
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 6
+        "win_rate": 0.5714285714285714,
+        "match_count": 7
       },
       "Pidgeot Control": {
         "win_rate": 0.7142857142857143,
@@ -1359,8 +1188,8 @@
         "match_count": 18
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.4782608695652174,
-        "match_count": 23
+        "win_rate": 0.4583333333333333,
+        "match_count": 24
       },
       "Rocket's Mewtwo": {
         "win_rate": 0.375,
@@ -1376,13 +1205,9 @@
       }
     },
     "Festival Lead": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.5416666666666666,
-        "match_count": 72
-      },
       "Ceruledge": {
-        "win_rate": 0.7692307692307693,
-        "match_count": 26
+        "win_rate": 0.7777777777777778,
+        "match_count": 27
       },
       "Charizard Noctowl": {
         "win_rate": 0.6025641025641025,
@@ -1393,24 +1218,24 @@
         "match_count": 36
       },
       "Crustle": {
-        "win_rate": 0.75,
-        "match_count": 24
+        "win_rate": 0.7407407407407407,
+        "match_count": 27
       },
       "Cynthia's Garchomp": {
         "win_rate": 0.875,
         "match_count": 16
       },
       "Dragapult": {
-        "win_rate": 0.375,
-        "match_count": 32
+        "win_rate": 0.36363636363636365,
+        "match_count": 33
       },
       "Dragapult Charizard": {
         "win_rate": 0.4393939393939394,
         "match_count": 33
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.29555555555555557,
-        "match_count": 225
+        "win_rate": 0.29475982532751094,
+        "match_count": 229
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.6,
@@ -1425,12 +1250,12 @@
         "match_count": 31
       },
       "Froslass Munkidori": {
-        "win_rate": 0.29850746268656714,
-        "match_count": 67
+        "win_rate": 0.30985915492957744,
+        "match_count": 71
       },
       "Gardevoir": {
-        "win_rate": 0.3951612903225806,
-        "match_count": 62
+        "win_rate": 0.3923076923076923,
+        "match_count": 65
       },
       "Gardevoir Jellicent": {
         "win_rate": 0.37755102040816324,
@@ -1441,79 +1266,75 @@
         "match_count": 11
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.5316455696202531,
-        "match_count": 79
+        "win_rate": 0.5301204819277109,
+        "match_count": 83
       },
       "Greninja": {
         "win_rate": 0.4594594594594595,
         "match_count": 37
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.48484848484848486,
-        "match_count": 99
+        "win_rate": 0.4803921568627451,
+        "match_count": 102
       },
       "Joltik Box": {
-        "win_rate": 0.5714285714285714,
-        "match_count": 28
+        "win_rate": 0.5862068965517241,
+        "match_count": 29
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.14285714285714285,
-        "match_count": 28
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.5909090909090909,
-        "match_count": 11
+        "win_rate": 0.13793103448275862,
+        "match_count": 29
       },
       "Lucario Hariyama": {
-        "win_rate": 0.6176470588235294,
-        "match_count": 51
+        "win_rate": 0.6018518518518519,
+        "match_count": 54
       },
       "Mega Absol Box": {
-        "win_rate": 0.5357142857142857,
-        "match_count": 98
+        "win_rate": 0.5245098039215687,
+        "match_count": 102
+      },
+      "Mega Lucario": {
+        "win_rate": 0.6470588235294118,
+        "match_count": 17
       },
       "Mega Venusaur": {
         "win_rate": 0.6,
         "match_count": 40
       },
       "N's Zoroark": {
-        "win_rate": 0.64453125,
-        "match_count": 128
+        "win_rate": 0.6423076923076924,
+        "match_count": 130
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.47619047619047616,
-        "match_count": 21
+        "win_rate": 0.5,
+        "match_count": 22
       },
       "Pidgeot Control": {
         "win_rate": 0.4,
         "match_count": 10
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.532258064516129,
-        "match_count": 62
+        "win_rate": 0.5238095238095238,
+        "match_count": 63
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.7857142857142857,
-        "match_count": 42
+        "win_rate": 0.7906976744186046,
+        "match_count": 43
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.7142857142857143,
-        "match_count": 35
+        "win_rate": 0.7027027027027027,
+        "match_count": 37
       },
       "Slowking": {
-        "win_rate": 0.4838709677419355,
-        "match_count": 31
+        "win_rate": 0.5,
+        "match_count": 32
       },
       "Tera Box": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 18
+        "win_rate": 0.631578947368421,
+        "match_count": 19
       }
     },
     "Flareon Noctowl": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.3488372093023256,
-        "match_count": 43
-      },
       "Ceruledge": {
         "win_rate": 0.4642857142857143,
         "match_count": 14
@@ -1535,16 +1356,16 @@
         "match_count": 10
       },
       "Dragapult": {
-        "win_rate": 0.3076923076923077,
-        "match_count": 13
+        "win_rate": 0.35714285714285715,
+        "match_count": 14
       },
       "Dragapult Charizard": {
         "win_rate": 0.4305555555555556,
         "match_count": 36
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.36153846153846153,
-        "match_count": 130
+        "win_rate": 0.3609022556390977,
+        "match_count": 133
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.5333333333333333,
@@ -1559,12 +1380,12 @@
         "match_count": 0
       },
       "Froslass Munkidori": {
-        "win_rate": 0.4230769230769231,
-        "match_count": 39
+        "win_rate": 0.4024390243902439,
+        "match_count": 41
       },
       "Gardevoir": {
-        "win_rate": 0.328125,
-        "match_count": 32
+        "win_rate": 0.3181818181818182,
+        "match_count": 33
       },
       "Gardevoir Jellicent": {
         "win_rate": 0.3787878787878788,
@@ -1575,16 +1396,16 @@
         "match_count": 13
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.5348837209302325,
-        "match_count": 43
+        "win_rate": 0.5227272727272727,
+        "match_count": 44
       },
       "Greninja": {
         "win_rate": 0.46875,
         "match_count": 16
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.6120689655172413,
-        "match_count": 58
+        "win_rate": 0.6186440677966102,
+        "match_count": 59
       },
       "Joltik Box": {
         "win_rate": 0.34210526315789475,
@@ -1594,41 +1415,41 @@
         "win_rate": 0.5,
         "match_count": 20
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 6
-      },
       "Lucario Hariyama": {
-        "win_rate": 0.524390243902439,
-        "match_count": 41
+        "win_rate": 0.5119047619047619,
+        "match_count": 42
       },
       "Mega Absol Box": {
-        "win_rate": 0.3698630136986301,
-        "match_count": 73
+        "win_rate": 0.3783783783783784,
+        "match_count": 74
+      },
+      "Mega Lucario": {
+        "win_rate": 0.36363636363636365,
+        "match_count": 11
       },
       "Mega Venusaur": {
         "win_rate": 0.6944444444444444,
         "match_count": 18
       },
       "N's Zoroark": {
-        "win_rate": 0.41358024691358025,
-        "match_count": 81
+        "win_rate": 0.42073170731707316,
+        "match_count": 82
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.5,
-        "match_count": 12
+        "win_rate": 0.42857142857142855,
+        "match_count": 14
       },
       "Pidgeot Control": {
         "win_rate": 0.4,
         "match_count": 5
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.5454545454545454,
-        "match_count": 22
+        "win_rate": 0.56,
+        "match_count": 25
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.3392857142857143,
-        "match_count": 28
+        "win_rate": 0.3620689655172414,
+        "match_count": 29
       },
       "Rocket's Mewtwo": {
         "win_rate": 0.5,
@@ -1644,309 +1465,297 @@
       }
     },
     "Froslass Munkidori": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.5229357798165137,
-        "match_count": 109
-      },
       "Ceruledge": {
-        "win_rate": 0.5,
-        "match_count": 43
+        "win_rate": 0.5113636363636364,
+        "match_count": 44
       },
       "Charizard Noctowl": {
-        "win_rate": 0.4098360655737705,
-        "match_count": 61
+        "win_rate": 0.4126984126984127,
+        "match_count": 63
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.68,
-        "match_count": 50
+        "win_rate": 0.6727272727272727,
+        "match_count": 55
       },
       "Crustle": {
-        "win_rate": 0.6285714285714286,
-        "match_count": 35
+        "win_rate": 0.6666666666666666,
+        "match_count": 42
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.38461538461538464,
-        "match_count": 26
+        "win_rate": 0.41379310344827586,
+        "match_count": 29
       },
       "Dragapult": {
-        "win_rate": 0.5769230769230769,
-        "match_count": 39
+        "win_rate": 0.6071428571428571,
+        "match_count": 42
       },
       "Dragapult Charizard": {
-        "win_rate": 0.5641025641025641,
-        "match_count": 78
+        "win_rate": 0.5569620253164557,
+        "match_count": 79
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.4956647398843931,
-        "match_count": 346
+        "win_rate": 0.49867021276595747,
+        "match_count": 376
       },
       "Dragonite Eelektrik": {
-        "win_rate": 0.8378378378378378,
-        "match_count": 37
+        "win_rate": 0.8421052631578947,
+        "match_count": 38
       },
       "Festival Lead": {
-        "win_rate": 0.7014925373134329,
-        "match_count": 67
+        "win_rate": 0.6901408450704225,
+        "match_count": 71
       },
       "Flareon Noctowl": {
-        "win_rate": 0.5769230769230769,
-        "match_count": 39
+        "win_rate": 0.5975609756097561,
+        "match_count": 41
       },
       "Froslass Munkidori": {
         "win_rate": 0.5,
         "match_count": 0
       },
       "Gardevoir": {
-        "win_rate": 0.53125,
-        "match_count": 80
+        "win_rate": 0.5384615384615384,
+        "match_count": 91
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.4056603773584906,
-        "match_count": 53
+        "win_rate": 0.39814814814814814,
+        "match_count": 54
       },
       "Gholdengo": {
         "win_rate": 0.5384615384615384,
         "match_count": 39
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.47307692307692306,
-        "match_count": 130
+        "win_rate": 0.4854014598540146,
+        "match_count": 137
       },
       "Greninja": {
-        "win_rate": 0.48936170212765956,
-        "match_count": 47
+        "win_rate": 0.46,
+        "match_count": 50
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.37719298245614036,
-        "match_count": 171
+        "win_rate": 0.3848314606741573,
+        "match_count": 178
       },
       "Joltik Box": {
-        "win_rate": 0.32786885245901637,
-        "match_count": 61
+        "win_rate": 0.3582089552238806,
+        "match_count": 67
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.4166666666666667,
-        "match_count": 54
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.09090909090909091,
-        "match_count": 11
-      },
-      "Lucario Hariyama": {
-        "win_rate": 0.49411764705882355,
-        "match_count": 85
-      },
-      "Mega Absol Box": {
-        "win_rate": 0.3741496598639456,
-        "match_count": 147
-      },
-      "Mega Venusaur": {
-        "win_rate": 0.6736111111111112,
-        "match_count": 72
-      },
-      "N's Zoroark": {
-        "win_rate": 0.5785340314136126,
-        "match_count": 191
-      },
-      "Ogerpon Meganium": {
-        "win_rate": 0.7027027027027027,
-        "match_count": 37
-      },
-      "Pidgeot Control": {
-        "win_rate": 0.825,
-        "match_count": 20
-      },
-      "Raging Bolt Ogerpon": {
-        "win_rate": 0.4482758620689655,
-        "match_count": 87
-      },
-      "Rocket's Honchkrow": {
-        "win_rate": 0.48214285714285715,
-        "match_count": 84
-      },
-      "Rocket's Mewtwo": {
-        "win_rate": 0.6744186046511628,
-        "match_count": 43
-      },
-      "Slowking": {
-        "win_rate": 0.6090909090909091,
+        "win_rate": 0.4090909090909091,
         "match_count": 55
       },
-      "Tera Box": {
-        "win_rate": 0.625,
+      "Lucario Hariyama": {
+        "win_rate": 0.4838709677419355,
+        "match_count": 93
+      },
+      "Mega Absol Box": {
+        "win_rate": 0.38650306748466257,
+        "match_count": 163
+      },
+      "Mega Lucario": {
+        "win_rate": 0.3225806451612903,
+        "match_count": 31
+      },
+      "Mega Venusaur": {
+        "win_rate": 0.668918918918919,
+        "match_count": 74
+      },
+      "N's Zoroark": {
+        "win_rate": 0.5697115384615384,
+        "match_count": 208
+      },
+      "Ogerpon Meganium": {
+        "win_rate": 0.725,
         "match_count": 40
+      },
+      "Pidgeot Control": {
+        "win_rate": 0.7954545454545454,
+        "match_count": 22
+      },
+      "Raging Bolt Ogerpon": {
+        "win_rate": 0.43157894736842106,
+        "match_count": 95
+      },
+      "Rocket's Honchkrow": {
+        "win_rate": 0.47802197802197804,
+        "match_count": 91
+      },
+      "Rocket's Mewtwo": {
+        "win_rate": 0.6382978723404256,
+        "match_count": 47
+      },
+      "Slowking": {
+        "win_rate": 0.626984126984127,
+        "match_count": 63
+      },
+      "Tera Box": {
+        "win_rate": 0.627906976744186,
+        "match_count": 43
       }
     },
     "Gardevoir": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.6682242990654206,
-        "match_count": 107
-      },
       "Ceruledge": {
-        "win_rate": 0.5510204081632653,
-        "match_count": 49
+        "win_rate": 0.5294117647058824,
+        "match_count": 51
       },
       "Charizard Noctowl": {
-        "win_rate": 0.4066666666666667,
-        "match_count": 75
+        "win_rate": 0.40131578947368424,
+        "match_count": 76
       },
       "Charizard Pidgeot": {
         "win_rate": 0.47368421052631576,
         "match_count": 76
       },
       "Crustle": {
-        "win_rate": 0.8275862068965517,
-        "match_count": 29
+        "win_rate": 0.8181818181818182,
+        "match_count": 33
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.6428571428571429,
-        "match_count": 21
+        "win_rate": 0.6304347826086957,
+        "match_count": 23
       },
       "Dragapult": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 27
+        "win_rate": 0.6896551724137931,
+        "match_count": 29
       },
       "Dragapult Charizard": {
         "win_rate": 0.49404761904761907,
         "match_count": 84
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.572139303482587,
-        "match_count": 402
+        "win_rate": 0.580952380952381,
+        "match_count": 420
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.75,
         "match_count": 16
       },
       "Festival Lead": {
-        "win_rate": 0.6048387096774194,
-        "match_count": 62
+        "win_rate": 0.6076923076923076,
+        "match_count": 65
       },
       "Flareon Noctowl": {
-        "win_rate": 0.671875,
-        "match_count": 32
+        "win_rate": 0.6818181818181818,
+        "match_count": 33
       },
       "Froslass Munkidori": {
-        "win_rate": 0.46875,
-        "match_count": 80
+        "win_rate": 0.46153846153846156,
+        "match_count": 91
       },
       "Gardevoir": {
         "win_rate": 0.5,
         "match_count": 0
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.5486111111111112,
-        "match_count": 72
+        "win_rate": 0.5394736842105263,
+        "match_count": 76
       },
       "Gholdengo": {
         "win_rate": 0.4803921568627451,
         "match_count": 51
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.5151515151515151,
-        "match_count": 165
+        "win_rate": 0.5173410404624278,
+        "match_count": 173
       },
       "Greninja": {
-        "win_rate": 0.5925925925925926,
-        "match_count": 54
+        "win_rate": 0.6,
+        "match_count": 55
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.4636363636363636,
-        "match_count": 165
+        "win_rate": 0.4680232558139535,
+        "match_count": 172
       },
       "Joltik Box": {
-        "win_rate": 0.46511627906976744,
-        "match_count": 43
+        "win_rate": 0.5,
+        "match_count": 48
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.4672131147540984,
-        "match_count": 61
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.8,
-        "match_count": 10
+        "win_rate": 0.47619047619047616,
+        "match_count": 63
       },
       "Lucario Hariyama": {
-        "win_rate": 0.8461538461538461,
-        "match_count": 65
+        "win_rate": 0.8441558441558441,
+        "match_count": 77
       },
       "Mega Absol Box": {
-        "win_rate": 0.4471830985915493,
-        "match_count": 142
+        "win_rate": 0.46381578947368424,
+        "match_count": 152
+      },
+      "Mega Lucario": {
+        "win_rate": 0.84375,
+        "match_count": 16
       },
       "Mega Venusaur": {
-        "win_rate": 0.5116279069767442,
-        "match_count": 43
+        "win_rate": 0.5227272727272727,
+        "match_count": 44
       },
       "N's Zoroark": {
-        "win_rate": 0.4890710382513661,
-        "match_count": 183
+        "win_rate": 0.4921875,
+        "match_count": 192
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.6,
-        "match_count": 15
+        "win_rate": 0.6176470588235294,
+        "match_count": 17
       },
       "Pidgeot Control": {
-        "win_rate": 0.3695652173913043,
-        "match_count": 23
+        "win_rate": 0.3958333333333333,
+        "match_count": 24
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.5588235294117647,
-        "match_count": 102
+        "win_rate": 0.5714285714285714,
+        "match_count": 112
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.575,
-        "match_count": 60
+        "win_rate": 0.5476190476190477,
+        "match_count": 63
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.8023255813953488,
-        "match_count": 43
+        "win_rate": 0.8068181818181818,
+        "match_count": 44
       },
       "Slowking": {
-        "win_rate": 0.5,
-        "match_count": 32
+        "win_rate": 0.5294117647058824,
+        "match_count": 34
       },
       "Tera Box": {
-        "win_rate": 0.58,
-        "match_count": 50
+        "win_rate": 0.5961538461538461,
+        "match_count": 52
       }
     },
     "Gardevoir Jellicent": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.4942528735632184,
-        "match_count": 87
-      },
       "Ceruledge": {
         "win_rate": 0.47368421052631576,
         "match_count": 38
       },
       "Charizard Noctowl": {
-        "win_rate": 0.4583333333333333,
-        "match_count": 72
+        "win_rate": 0.4520547945205479,
+        "match_count": 73
       },
       "Charizard Pidgeot": {
         "win_rate": 0.4224137931034483,
         "match_count": 58
       },
       "Crustle": {
-        "win_rate": 0.8571428571428571,
-        "match_count": 28
+        "win_rate": 0.8333333333333334,
+        "match_count": 30
       },
       "Cynthia's Garchomp": {
         "win_rate": 0.6296296296296297,
         "match_count": 27
       },
       "Dragapult": {
-        "win_rate": 0.7592592592592593,
-        "match_count": 27
+        "win_rate": 0.7678571428571429,
+        "match_count": 28
       },
       "Dragapult Charizard": {
         "win_rate": 0.49038461538461536,
         "match_count": 52
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.5196969696969697,
-        "match_count": 330
+        "win_rate": 0.5180180180180181,
+        "match_count": 333
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.5833333333333334,
@@ -1961,12 +1770,12 @@
         "match_count": 33
       },
       "Froslass Munkidori": {
-        "win_rate": 0.5943396226415094,
-        "match_count": 53
+        "win_rate": 0.6018518518518519,
+        "match_count": 54
       },
       "Gardevoir": {
-        "win_rate": 0.4513888888888889,
-        "match_count": 72
+        "win_rate": 0.4605263157894737,
+        "match_count": 76
       },
       "Gardevoir Jellicent": {
         "win_rate": 0.5,
@@ -1977,44 +1786,44 @@
         "match_count": 31
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.5093457943925234,
-        "match_count": 107
+        "win_rate": 0.5046296296296297,
+        "match_count": 108
       },
       "Greninja": {
-        "win_rate": 0.7236842105263158,
-        "match_count": 38
+        "win_rate": 0.7051282051282052,
+        "match_count": 39
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.34814814814814815,
-        "match_count": 135
+        "win_rate": 0.35,
+        "match_count": 140
       },
       "Joltik Box": {
-        "win_rate": 0.45714285714285713,
-        "match_count": 35
+        "win_rate": 0.4722222222222222,
+        "match_count": 36
       },
       "Kangaskhan Bouffalant": {
         "win_rate": 0.46875,
         "match_count": 64
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.19230769230769232,
-        "match_count": 13
-      },
       "Lucario Hariyama": {
-        "win_rate": 0.7222222222222222,
-        "match_count": 63
+        "win_rate": 0.7109375,
+        "match_count": 64
       },
       "Mega Absol Box": {
-        "win_rate": 0.3902439024390244,
-        "match_count": 123
+        "win_rate": 0.4,
+        "match_count": 125
+      },
+      "Mega Lucario": {
+        "win_rate": 0.9166666666666666,
+        "match_count": 18
       },
       "Mega Venusaur": {
-        "win_rate": 0.6320754716981132,
-        "match_count": 53
+        "win_rate": 0.6203703703703703,
+        "match_count": 54
       },
       "N's Zoroark": {
-        "win_rate": 0.33916083916083917,
-        "match_count": 143
+        "win_rate": 0.33448275862068966,
+        "match_count": 145
       },
       "Ogerpon Meganium": {
         "win_rate": 0.575,
@@ -2025,20 +1834,20 @@
         "match_count": 26
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.6097560975609756,
-        "match_count": 82
+        "win_rate": 0.611764705882353,
+        "match_count": 85
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.59375,
-        "match_count": 32
+        "win_rate": 0.6176470588235294,
+        "match_count": 34
       },
       "Rocket's Mewtwo": {
         "win_rate": 0.625,
         "match_count": 40
       },
       "Slowking": {
-        "win_rate": 0.6538461538461539,
-        "match_count": 39
+        "win_rate": 0.6625,
+        "match_count": 40
       },
       "Tera Box": {
         "win_rate": 0.5,
@@ -2046,10 +1855,6 @@
       }
     },
     "Gholdengo": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.38461538461538464,
-        "match_count": 39
-      },
       "Ceruledge": {
         "win_rate": 0.2857142857142857,
         "match_count": 14
@@ -2130,10 +1935,6 @@
         "win_rate": 0.6388888888888888,
         "match_count": 36
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.6363636363636364,
-        "match_count": 11
-      },
       "Lucario Hariyama": {
         "win_rate": 0.5869565217391305,
         "match_count": 23
@@ -2141,6 +1942,10 @@
       "Mega Absol Box": {
         "win_rate": 0.5975609756097561,
         "match_count": 41
+      },
+      "Mega Lucario": {
+        "win_rate": 0.6,
+        "match_count": 5
       },
       "Mega Venusaur": {
         "win_rate": 0.72,
@@ -2180,65 +1985,61 @@
       }
     },
     "Gholdengo Lunatone": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.40625,
-        "match_count": 160
-      },
       "Ceruledge": {
-        "win_rate": 0.4189189189189189,
-        "match_count": 74
+        "win_rate": 0.41333333333333333,
+        "match_count": 75
       },
       "Charizard Noctowl": {
-        "win_rate": 0.45614035087719296,
-        "match_count": 114
+        "win_rate": 0.4608695652173913,
+        "match_count": 115
       },
       "Charizard Pidgeot": {
         "win_rate": 0.5140845070422535,
         "match_count": 71
       },
       "Crustle": {
-        "win_rate": 0.3076923076923077,
-        "match_count": 52
+        "win_rate": 0.34545454545454546,
+        "match_count": 55
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.61,
-        "match_count": 50
+        "win_rate": 0.6057692307692307,
+        "match_count": 52
       },
       "Dragapult": {
-        "win_rate": 0.7794117647058824,
-        "match_count": 34
+        "win_rate": 0.7702702702702703,
+        "match_count": 37
       },
       "Dragapult Charizard": {
         "win_rate": 0.5373831775700935,
         "match_count": 107
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.5516666666666666,
-        "match_count": 600
+        "win_rate": 0.5516129032258065,
+        "match_count": 620
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.7428571428571429,
         "match_count": 35
       },
       "Festival Lead": {
-        "win_rate": 0.46835443037974683,
-        "match_count": 79
+        "win_rate": 0.46987951807228917,
+        "match_count": 83
       },
       "Flareon Noctowl": {
-        "win_rate": 0.46511627906976744,
-        "match_count": 43
+        "win_rate": 0.4772727272727273,
+        "match_count": 44
       },
       "Froslass Munkidori": {
-        "win_rate": 0.5269230769230769,
-        "match_count": 130
+        "win_rate": 0.5145985401459854,
+        "match_count": 137
       },
       "Gardevoir": {
-        "win_rate": 0.48484848484848486,
-        "match_count": 165
+        "win_rate": 0.48265895953757226,
+        "match_count": 173
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.49065420560747663,
-        "match_count": 107
+        "win_rate": 0.49537037037037035,
+        "match_count": 108
       },
       "Gholdengo": {
         "win_rate": 0.75,
@@ -2249,64 +2050,64 @@
         "match_count": 0
       },
       "Greninja": {
-        "win_rate": 0.4426229508196721,
-        "match_count": 61
+        "win_rate": 0.43548387096774194,
+        "match_count": 62
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.5,
-        "match_count": 249
+        "win_rate": 0.4940944881889764,
+        "match_count": 254
       },
       "Joltik Box": {
-        "win_rate": 0.5797101449275363,
-        "match_count": 69
+        "win_rate": 0.5616438356164384,
+        "match_count": 73
       },
       "Kangaskhan Bouffalant": {
         "win_rate": 0.4567901234567901,
         "match_count": 81
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.5454545454545454,
-        "match_count": 22
-      },
       "Lucario Hariyama": {
-        "win_rate": 0.6752136752136753,
-        "match_count": 117
+        "win_rate": 0.6859504132231405,
+        "match_count": 121
       },
       "Mega Absol Box": {
-        "win_rate": 0.4817813765182186,
-        "match_count": 247
+        "win_rate": 0.4864864864864865,
+        "match_count": 259
+      },
+      "Mega Lucario": {
+        "win_rate": 0.5543478260869565,
+        "match_count": 46
       },
       "Mega Venusaur": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 72
+        "win_rate": 0.6533333333333333,
+        "match_count": 75
       },
       "N's Zoroark": {
-        "win_rate": 0.5642361111111112,
-        "match_count": 288
+        "win_rate": 0.566006600660066,
+        "match_count": 303
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.5921052631578947,
-        "match_count": 38
+        "win_rate": 0.6162790697674418,
+        "match_count": 43
       },
       "Pidgeot Control": {
-        "win_rate": 0.5735294117647058,
-        "match_count": 34
+        "win_rate": 0.5694444444444444,
+        "match_count": 36
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.4967948717948718,
-        "match_count": 156
+        "win_rate": 0.5092592592592593,
+        "match_count": 162
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.40555555555555556,
-        "match_count": 90
+        "win_rate": 0.39690721649484534,
+        "match_count": 97
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.7313432835820896,
-        "match_count": 67
+        "win_rate": 0.7391304347826086,
+        "match_count": 69
       },
       "Slowking": {
-        "win_rate": 0.45454545454545453,
-        "match_count": 66
+        "win_rate": 0.463768115942029,
+        "match_count": 69
       },
       "Tera Box": {
         "win_rate": 0.6159420289855072,
@@ -2314,10 +2115,6 @@
       }
     },
     "Greninja": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.59375,
-        "match_count": 48
-      },
       "Ceruledge": {
         "win_rate": 0.5,
         "match_count": 24
@@ -2327,16 +2124,16 @@
         "match_count": 35
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.48484848484848486,
-        "match_count": 33
+        "win_rate": 0.5,
+        "match_count": 34
       },
       "Crustle": {
-        "win_rate": 0.08333333333333333,
-        "match_count": 12
+        "win_rate": 0.2,
+        "match_count": 15
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.6875,
-        "match_count": 16
+        "win_rate": 0.6470588235294118,
+        "match_count": 17
       },
       "Dragapult": {
         "win_rate": 0.45,
@@ -2347,8 +2144,8 @@
         "match_count": 39
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.4842105263157895,
-        "match_count": 190
+        "win_rate": 0.49746192893401014,
+        "match_count": 197
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.7692307692307693,
@@ -2363,76 +2160,76 @@
         "match_count": 16
       },
       "Froslass Munkidori": {
-        "win_rate": 0.5106382978723404,
-        "match_count": 47
+        "win_rate": 0.54,
+        "match_count": 50
       },
       "Gardevoir": {
-        "win_rate": 0.4074074074074074,
-        "match_count": 54
+        "win_rate": 0.4,
+        "match_count": 55
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.27631578947368424,
-        "match_count": 38
+        "win_rate": 0.2948717948717949,
+        "match_count": 39
       },
       "Gholdengo": {
         "win_rate": 0.3888888888888889,
         "match_count": 18
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.5573770491803278,
-        "match_count": 61
+        "win_rate": 0.5645161290322581,
+        "match_count": 62
       },
       "Greninja": {
         "win_rate": 0.5,
         "match_count": 0
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.532051282051282,
-        "match_count": 78
+        "win_rate": 0.54375,
+        "match_count": 80
       },
       "Joltik Box": {
         "win_rate": 0.56,
         "match_count": 25
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.6896551724137931,
-        "match_count": 29
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.7272727272727273,
-        "match_count": 11
+        "win_rate": 0.7,
+        "match_count": 30
       },
       "Lucario Hariyama": {
-        "win_rate": 0.453125,
-        "match_count": 32
+        "win_rate": 0.4264705882352941,
+        "match_count": 34
       },
       "Mega Absol Box": {
-        "win_rate": 0.5461538461538461,
-        "match_count": 65
+        "win_rate": 0.5298507462686567,
+        "match_count": 67
+      },
+      "Mega Lucario": {
+        "win_rate": 0.5833333333333334,
+        "match_count": 6
       },
       "Mega Venusaur": {
         "win_rate": 0.6923076923076923,
         "match_count": 26
       },
       "N's Zoroark": {
-        "win_rate": 0.4476744186046512,
-        "match_count": 86
+        "win_rate": 0.4388888888888889,
+        "match_count": 90
       },
       "Ogerpon Meganium": {
         "win_rate": 0.6,
         "match_count": 20
       },
       "Pidgeot Control": {
-        "win_rate": 0.7142857142857143,
-        "match_count": 7
+        "win_rate": 0.75,
+        "match_count": 8
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.4636363636363636,
-        "match_count": 55
+        "win_rate": 0.4732142857142857,
+        "match_count": 56
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.8076923076923077,
-        "match_count": 26
+        "win_rate": 0.8214285714285714,
+        "match_count": 28
       },
       "Rocket's Mewtwo": {
         "win_rate": 0.5263157894736842,
@@ -2448,267 +2245,259 @@
       }
     },
     "Grimmsnarl Froslass": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.5876777251184834,
-        "match_count": 211
-      },
       "Ceruledge": {
-        "win_rate": 0.45789473684210524,
-        "match_count": 95
+        "win_rate": 0.4484536082474227,
+        "match_count": 97
       },
       "Charizard Noctowl": {
-        "win_rate": 0.6006944444444444,
-        "match_count": 144
+        "win_rate": 0.6061643835616438,
+        "match_count": 146
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.5948275862068966,
-        "match_count": 116
+        "win_rate": 0.6016949152542372,
+        "match_count": 118
       },
       "Crustle": {
-        "win_rate": 0.36363636363636365,
-        "match_count": 77
+        "win_rate": 0.345679012345679,
+        "match_count": 81
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.3425925925925926,
-        "match_count": 54
+        "win_rate": 0.33636363636363636,
+        "match_count": 55
       },
       "Dragapult": {
-        "win_rate": 0.5648148148148148,
-        "match_count": 54
+        "win_rate": 0.5545454545454546,
+        "match_count": 55
       },
       "Dragapult Charizard": {
-        "win_rate": 0.6450617283950617,
-        "match_count": 162
+        "win_rate": 0.6432926829268293,
+        "match_count": 164
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.5707850707850708,
-        "match_count": 777
+        "win_rate": 0.5725907384230288,
+        "match_count": 799
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.7674418604651163,
         "match_count": 43
       },
       "Festival Lead": {
-        "win_rate": 0.5151515151515151,
-        "match_count": 99
+        "win_rate": 0.5196078431372549,
+        "match_count": 102
       },
       "Flareon Noctowl": {
-        "win_rate": 0.3879310344827586,
-        "match_count": 58
+        "win_rate": 0.3813559322033898,
+        "match_count": 59
       },
       "Froslass Munkidori": {
-        "win_rate": 0.6228070175438597,
-        "match_count": 171
+        "win_rate": 0.6151685393258427,
+        "match_count": 178
       },
       "Gardevoir": {
-        "win_rate": 0.5363636363636364,
-        "match_count": 165
+        "win_rate": 0.5319767441860465,
+        "match_count": 172
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.6518518518518519,
-        "match_count": 135
+        "win_rate": 0.65,
+        "match_count": 140
       },
       "Gholdengo": {
         "win_rate": 0.4716981132075472,
         "match_count": 53
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.5,
-        "match_count": 249
+        "win_rate": 0.5059055118110236,
+        "match_count": 254
       },
       "Greninja": {
-        "win_rate": 0.46794871794871795,
-        "match_count": 78
+        "win_rate": 0.45625,
+        "match_count": 80
       },
       "Grimmsnarl Froslass": {
         "win_rate": 0.5,
         "match_count": 0
       },
       "Joltik Box": {
-        "win_rate": 0.35542168674698793,
-        "match_count": 83
+        "win_rate": 0.33516483516483514,
+        "match_count": 91
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.43258426966292135,
-        "match_count": 89
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.7166666666666667,
-        "match_count": 30
-      },
-      "Lucario Hariyama": {
-        "win_rate": 0.5314465408805031,
-        "match_count": 159
-      },
-      "Mega Absol Box": {
-        "win_rate": 0.4253968253968254,
-        "match_count": 315
-      },
-      "Mega Venusaur": {
-        "win_rate": 0.3858695652173913,
+        "win_rate": 0.42934782608695654,
         "match_count": 92
       },
+      "Lucario Hariyama": {
+        "win_rate": 0.5350877192982456,
+        "match_count": 171
+      },
+      "Mega Absol Box": {
+        "win_rate": 0.4228395061728395,
+        "match_count": 324
+      },
+      "Mega Lucario": {
+        "win_rate": 0.5555555555555556,
+        "match_count": 54
+      },
+      "Mega Venusaur": {
+        "win_rate": 0.39893617021276595,
+        "match_count": 94
+      },
       "N's Zoroark": {
-        "win_rate": 0.5720338983050848,
-        "match_count": 354
+        "win_rate": 0.572,
+        "match_count": 375
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.43636363636363634,
-        "match_count": 55
+        "win_rate": 0.3968253968253968,
+        "match_count": 63
       },
       "Pidgeot Control": {
-        "win_rate": 0.6547619047619048,
-        "match_count": 42
+        "win_rate": 0.6627906976744186,
+        "match_count": 43
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.48128342245989303,
-        "match_count": 187
+        "win_rate": 0.47715736040609136,
+        "match_count": 197
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.5043859649122807,
-        "match_count": 114
+        "win_rate": 0.5247933884297521,
+        "match_count": 121
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.6464646464646465,
-        "match_count": 99
+        "win_rate": 0.6435643564356436,
+        "match_count": 101
       },
       "Slowking": {
-        "win_rate": 0.42857142857142855,
-        "match_count": 84
+        "win_rate": 0.4318181818181818,
+        "match_count": 88
       },
       "Tera Box": {
-        "win_rate": 0.45,
-        "match_count": 90
+        "win_rate": 0.44148936170212766,
+        "match_count": 94
       }
     },
     "Joltik Box": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.44,
-        "match_count": 50
-      },
       "Ceruledge": {
         "win_rate": 0.5,
         "match_count": 23
       },
       "Charizard Noctowl": {
-        "win_rate": 0.5178571428571429,
-        "match_count": 28
+        "win_rate": 0.5166666666666667,
+        "match_count": 30
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.578125,
-        "match_count": 32
+        "win_rate": 0.5735294117647058,
+        "match_count": 34
       },
       "Crustle": {
-        "win_rate": 0.1111111111111111,
-        "match_count": 18
+        "win_rate": 0.15,
+        "match_count": 20
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.45454545454545453,
-        "match_count": 11
+        "win_rate": 0.4166666666666667,
+        "match_count": 12
       },
       "Dragapult": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 15
+        "win_rate": 0.7,
+        "match_count": 20
       },
       "Dragapult Charizard": {
         "win_rate": 0.4318181818181818,
         "match_count": 44
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.5251256281407035,
-        "match_count": 199
+        "win_rate": 0.5264423076923077,
+        "match_count": 208
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.8181818181818182,
         "match_count": 11
       },
       "Festival Lead": {
-        "win_rate": 0.42857142857142855,
-        "match_count": 28
+        "win_rate": 0.41379310344827586,
+        "match_count": 29
       },
       "Flareon Noctowl": {
         "win_rate": 0.6578947368421053,
         "match_count": 19
       },
       "Froslass Munkidori": {
-        "win_rate": 0.6721311475409836,
-        "match_count": 61
+        "win_rate": 0.6417910447761194,
+        "match_count": 67
       },
       "Gardevoir": {
-        "win_rate": 0.5348837209302325,
-        "match_count": 43
+        "win_rate": 0.5,
+        "match_count": 48
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.5428571428571428,
-        "match_count": 35
+        "win_rate": 0.5277777777777778,
+        "match_count": 36
       },
       "Gholdengo": {
         "win_rate": 0.4583333333333333,
         "match_count": 24
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.42028985507246375,
-        "match_count": 69
+        "win_rate": 0.4383561643835616,
+        "match_count": 73
       },
       "Greninja": {
         "win_rate": 0.44,
         "match_count": 25
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.6445783132530121,
-        "match_count": 83
+        "win_rate": 0.6648351648351648,
+        "match_count": 91
       },
       "Joltik Box": {
         "win_rate": 0.5,
         "match_count": 0
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.21875,
-        "match_count": 32
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 3
+        "win_rate": 0.23529411764705882,
+        "match_count": 34
       },
       "Lucario Hariyama": {
-        "win_rate": 0.5789473684210527,
-        "match_count": 38
+        "win_rate": 0.5714285714285714,
+        "match_count": 42
       },
       "Mega Absol Box": {
-        "win_rate": 0.601063829787234,
-        "match_count": 94
+        "win_rate": 0.5927835051546392,
+        "match_count": 97
+      },
+      "Mega Lucario": {
+        "win_rate": 0.29411764705882354,
+        "match_count": 17
       },
       "Mega Venusaur": {
-        "win_rate": 0.5967741935483871,
-        "match_count": 31
+        "win_rate": 0.5606060606060606,
+        "match_count": 33
       },
       "N's Zoroark": {
-        "win_rate": 0.5963302752293578,
-        "match_count": 109
+        "win_rate": 0.5819672131147541,
+        "match_count": 122
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.8235294117647058,
-        "match_count": 17
+        "win_rate": 0.7727272727272727,
+        "match_count": 22
       },
       "Pidgeot Control": {
         "win_rate": 0.7727272727272727,
         "match_count": 11
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.5641025641025641,
-        "match_count": 39
+        "win_rate": 0.5476190476190477,
+        "match_count": 42
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.5222222222222223,
-        "match_count": 45
+        "win_rate": 0.4895833333333333,
+        "match_count": 48
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.5925925925925926,
-        "match_count": 27
+        "win_rate": 0.6071428571428571,
+        "match_count": 28
       },
       "Slowking": {
-        "win_rate": 0.7297297297297297,
-        "match_count": 37
+        "win_rate": 0.7105263157894737,
+        "match_count": 38
       },
       "Tera Box": {
         "win_rate": 0.7272727272727273,
@@ -2716,10 +2505,6 @@
       }
     },
     "Kangaskhan Bouffalant": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.2796610169491525,
-        "match_count": 59
-      },
       "Ceruledge": {
         "win_rate": 0.6304347826086957,
         "match_count": 23
@@ -2737,8 +2522,8 @@
         "match_count": 16
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.18181818181818182,
-        "match_count": 11
+        "win_rate": 0.16666666666666666,
+        "match_count": 12
       },
       "Dragapult": {
         "win_rate": 0.5227272727272727,
@@ -2749,28 +2534,28 @@
         "match_count": 54
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.5986842105263158,
-        "match_count": 228
+        "win_rate": 0.5987124463519313,
+        "match_count": 233
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.7333333333333333,
         "match_count": 15
       },
       "Festival Lead": {
-        "win_rate": 0.8571428571428571,
-        "match_count": 28
+        "win_rate": 0.8620689655172413,
+        "match_count": 29
       },
       "Flareon Noctowl": {
         "win_rate": 0.5,
         "match_count": 20
       },
       "Froslass Munkidori": {
-        "win_rate": 0.5833333333333334,
-        "match_count": 54
+        "win_rate": 0.5909090909090909,
+        "match_count": 55
       },
       "Gardevoir": {
-        "win_rate": 0.5327868852459017,
-        "match_count": 61
+        "win_rate": 0.5238095238095238,
+        "match_count": 63
       },
       "Gardevoir Jellicent": {
         "win_rate": 0.53125,
@@ -2785,40 +2570,40 @@
         "match_count": 81
       },
       "Greninja": {
-        "win_rate": 0.3103448275862069,
-        "match_count": 29
+        "win_rate": 0.3,
+        "match_count": 30
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.5674157303370787,
-        "match_count": 89
+        "win_rate": 0.5706521739130435,
+        "match_count": 92
       },
       "Joltik Box": {
-        "win_rate": 0.78125,
-        "match_count": 32
+        "win_rate": 0.7647058823529411,
+        "match_count": 34
       },
       "Kangaskhan Bouffalant": {
         "win_rate": 0.5,
         "match_count": 0
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.2857142857142857,
-        "match_count": 7
-      },
       "Lucario Hariyama": {
-        "win_rate": 0.20408163265306123,
-        "match_count": 49
+        "win_rate": 0.21153846153846154,
+        "match_count": 52
       },
       "Mega Absol Box": {
-        "win_rate": 0.6063829787234043,
-        "match_count": 94
+        "win_rate": 0.6060606060606061,
+        "match_count": 99
+      },
+      "Mega Lucario": {
+        "win_rate": 0.375,
+        "match_count": 16
       },
       "Mega Venusaur": {
-        "win_rate": 0.42857142857142855,
-        "match_count": 35
+        "win_rate": 0.4444444444444444,
+        "match_count": 36
       },
       "N's Zoroark": {
-        "win_rate": 0.5225225225225225,
-        "match_count": 111
+        "win_rate": 0.5210084033613446,
+        "match_count": 119
       },
       "Ogerpon Meganium": {
         "win_rate": 0.4090909090909091,
@@ -2829,288 +2614,150 @@
         "match_count": 15
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.36428571428571427,
-        "match_count": 70
+        "win_rate": 0.35333333333333333,
+        "match_count": 75
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.5,
-        "match_count": 24
+        "win_rate": 0.4807692307692308,
+        "match_count": 26
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.7833333333333333,
-        "match_count": 30
+        "win_rate": 0.734375,
+        "match_count": 32
       },
       "Slowking": {
         "win_rate": 0.42857142857142855,
         "match_count": 21
       },
       "Tera Box": {
-        "win_rate": 0.5526315789473685,
-        "match_count": 19
-      }
-    },
-    "Lopunny Dusknoir": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.42105263157894735,
-        "match_count": 19
-      },
-      "Ceruledge": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 12
-      },
-      "Charizard Noctowl": {
-        "win_rate": 0.4,
-        "match_count": 10
-      },
-      "Charizard Pidgeot": {
-        "win_rate": 0.21875,
-        "match_count": 16
-      },
-      "Crustle": {
-        "win_rate": 0.75,
-        "match_count": 8
-      },
-      "Cynthia's Garchomp": {
-        "win_rate": 1.0,
-        "match_count": 1
-      },
-      "Dragapult": {
-        "win_rate": 0.625,
-        "match_count": 8
-      },
-      "Dragapult Charizard": {
-        "win_rate": 0.6153846153846154,
-        "match_count": 13
-      },
-      "Dragapult Dusknoir": {
-        "win_rate": 0.4178082191780822,
-        "match_count": 73
-      },
-      "Dragonite Eelektrik": {
-        "win_rate": 0.5,
-        "match_count": 6
-      },
-      "Festival Lead": {
-        "win_rate": 0.4090909090909091,
-        "match_count": 11
-      },
-      "Flareon Noctowl": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 6
-      },
-      "Froslass Munkidori": {
-        "win_rate": 0.9090909090909091,
-        "match_count": 11
-      },
-      "Gardevoir": {
-        "win_rate": 0.2,
-        "match_count": 10
-      },
-      "Gardevoir Jellicent": {
-        "win_rate": 0.8076923076923077,
-        "match_count": 13
-      },
-      "Gholdengo": {
-        "win_rate": 0.36363636363636365,
-        "match_count": 11
-      },
-      "Gholdengo Lunatone": {
-        "win_rate": 0.45454545454545453,
-        "match_count": 22
-      },
-      "Greninja": {
-        "win_rate": 0.2727272727272727,
-        "match_count": 11
-      },
-      "Grimmsnarl Froslass": {
-        "win_rate": 0.2833333333333333,
-        "match_count": 30
-      },
-      "Joltik Box": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 3
-      },
-      "Kangaskhan Bouffalant": {
-        "win_rate": 0.7142857142857143,
-        "match_count": 7
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.5,
-        "match_count": 0
-      },
-      "Lucario Hariyama": {
-        "win_rate": 0.3541666666666667,
-        "match_count": 24
-      },
-      "Mega Absol Box": {
-        "win_rate": 0.46153846153846156,
-        "match_count": 26
-      },
-      "Mega Venusaur": {
-        "win_rate": 0.7272727272727273,
-        "match_count": 11
-      },
-      "N's Zoroark": {
-        "win_rate": 0.4358974358974359,
-        "match_count": 39
-      },
-      "Ogerpon Meganium": {
-        "win_rate": 0.7857142857142857,
-        "match_count": 7
-      },
-      "Pidgeot Control": {
-        "win_rate": 0.0,
-        "match_count": 3
-      },
-      "Raging Bolt Ogerpon": {
-        "win_rate": 0.2,
+        "win_rate": 0.525,
         "match_count": 20
-      },
-      "Rocket's Honchkrow": {
-        "win_rate": 0.2916666666666667,
-        "match_count": 12
-      },
-      "Rocket's Mewtwo": {
-        "win_rate": 0.6666666666666666,
-        "match_count": 3
-      },
-      "Slowking": {
-        "win_rate": 0.4,
-        "match_count": 5
-      },
-      "Tera Box": {
-        "win_rate": 0.25,
-        "match_count": 8
       }
     },
     "Lucario Hariyama": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.3737864077669903,
-        "match_count": 103
-      },
       "Ceruledge": {
-        "win_rate": 0.5,
-        "match_count": 52
+        "win_rate": 0.48148148148148145,
+        "match_count": 54
       },
       "Charizard Noctowl": {
         "win_rate": 0.5,
         "match_count": 54
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.4803921568627451,
-        "match_count": 51
+        "win_rate": 0.47115384615384615,
+        "match_count": 52
       },
       "Crustle": {
-        "win_rate": 0.4393939393939394,
-        "match_count": 33
+        "win_rate": 0.3974358974358974,
+        "match_count": 39
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.5606060606060606,
-        "match_count": 33
+        "win_rate": 0.5441176470588235,
+        "match_count": 34
       },
       "Dragapult": {
-        "win_rate": 0.5370370370370371,
-        "match_count": 27
+        "win_rate": 0.5689655172413793,
+        "match_count": 29
       },
       "Dragapult Charizard": {
         "win_rate": 0.3048780487804878,
         "match_count": 41
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.4730878186968839,
-        "match_count": 353
+        "win_rate": 0.47282608695652173,
+        "match_count": 368
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.5806451612903226,
         "match_count": 31
       },
       "Festival Lead": {
-        "win_rate": 0.38235294117647056,
-        "match_count": 51
+        "win_rate": 0.39814814814814814,
+        "match_count": 54
       },
       "Flareon Noctowl": {
-        "win_rate": 0.47560975609756095,
-        "match_count": 41
+        "win_rate": 0.4880952380952381,
+        "match_count": 42
       },
       "Froslass Munkidori": {
-        "win_rate": 0.5058823529411764,
-        "match_count": 85
+        "win_rate": 0.5161290322580645,
+        "match_count": 93
       },
       "Gardevoir": {
-        "win_rate": 0.15384615384615385,
-        "match_count": 65
+        "win_rate": 0.15584415584415584,
+        "match_count": 77
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.2777777777777778,
-        "match_count": 63
+        "win_rate": 0.2890625,
+        "match_count": 64
       },
       "Gholdengo": {
         "win_rate": 0.41304347826086957,
         "match_count": 23
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.3247863247863248,
-        "match_count": 117
+        "win_rate": 0.3140495867768595,
+        "match_count": 121
       },
       "Greninja": {
-        "win_rate": 0.546875,
-        "match_count": 32
+        "win_rate": 0.5735294117647058,
+        "match_count": 34
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.46855345911949686,
-        "match_count": 159
+        "win_rate": 0.4649122807017544,
+        "match_count": 171
       },
       "Joltik Box": {
-        "win_rate": 0.42105263157894735,
-        "match_count": 38
+        "win_rate": 0.42857142857142855,
+        "match_count": 42
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.7959183673469388,
-        "match_count": 49
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.6458333333333334,
-        "match_count": 24
+        "win_rate": 0.7884615384615384,
+        "match_count": 52
       },
       "Lucario Hariyama": {
         "win_rate": 0.5,
         "match_count": 0
       },
       "Mega Absol Box": {
-        "win_rate": 0.5726495726495726,
-        "match_count": 117
+        "win_rate": 0.5819672131147541,
+        "match_count": 122
+      },
+      "Mega Lucario": {
+        "win_rate": 0.6206896551724138,
+        "match_count": 29
       },
       "Mega Venusaur": {
-        "win_rate": 0.35185185185185186,
-        "match_count": 54
+        "win_rate": 0.38596491228070173,
+        "match_count": 57
       },
       "N's Zoroark": {
-        "win_rate": 0.5252525252525253,
-        "match_count": 198
+        "win_rate": 0.5283018867924528,
+        "match_count": 212
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.515625,
-        "match_count": 32
+        "win_rate": 0.4861111111111111,
+        "match_count": 36
       },
       "Pidgeot Control": {
-        "win_rate": 0.7142857142857143,
-        "match_count": 14
+        "win_rate": 0.6875,
+        "match_count": 16
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.504950495049505,
-        "match_count": 101
+        "win_rate": 0.49056603773584906,
+        "match_count": 106
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.43333333333333335,
-        "match_count": 60
-      },
-      "Rocket's Mewtwo": {
-        "win_rate": 0.3484848484848485,
+        "win_rate": 0.4696969696969697,
         "match_count": 66
       },
+      "Rocket's Mewtwo": {
+        "win_rate": 0.34285714285714286,
+        "match_count": 70
+      },
       "Slowking": {
-        "win_rate": 0.33695652173913043,
-        "match_count": 46
+        "win_rate": 0.3431372549019608,
+        "match_count": 51
       },
       "Tera Box": {
         "win_rate": 0.17307692307692307,
@@ -3118,144 +2765,266 @@
       }
     },
     "Mega Absol Box": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.5632530120481928,
-        "match_count": 166
-      },
       "Ceruledge": {
-        "win_rate": 0.4225352112676056,
-        "match_count": 71
+        "win_rate": 0.4266666666666667,
+        "match_count": 75
       },
       "Charizard Noctowl": {
-        "win_rate": 0.5196850393700787,
-        "match_count": 127
+        "win_rate": 0.5230769230769231,
+        "match_count": 130
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.48314606741573035,
-        "match_count": 89
+        "win_rate": 0.4731182795698925,
+        "match_count": 93
       },
       "Crustle": {
-        "win_rate": 0.4056603773584906,
-        "match_count": 53
+        "win_rate": 0.3790322580645161,
+        "match_count": 62
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.5098039215686274,
-        "match_count": 51
+        "win_rate": 0.5283018867924528,
+        "match_count": 53
       },
       "Dragapult": {
-        "win_rate": 0.5816326530612245,
-        "match_count": 49
+        "win_rate": 0.59,
+        "match_count": 50
       },
       "Dragapult Charizard": {
         "win_rate": 0.486013986013986,
         "match_count": 143
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.5600303951367781,
-        "match_count": 658
+        "win_rate": 0.560672514619883,
+        "match_count": 684
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.5227272727272727,
         "match_count": 44
       },
       "Festival Lead": {
-        "win_rate": 0.4642857142857143,
-        "match_count": 98
+        "win_rate": 0.47549019607843135,
+        "match_count": 102
       },
       "Flareon Noctowl": {
-        "win_rate": 0.6301369863013698,
-        "match_count": 73
+        "win_rate": 0.6216216216216216,
+        "match_count": 74
       },
       "Froslass Munkidori": {
-        "win_rate": 0.6258503401360545,
-        "match_count": 147
+        "win_rate": 0.6134969325153374,
+        "match_count": 163
       },
       "Gardevoir": {
-        "win_rate": 0.5528169014084507,
-        "match_count": 142
+        "win_rate": 0.5361842105263158,
+        "match_count": 152
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.6097560975609756,
-        "match_count": 123
+        "win_rate": 0.6,
+        "match_count": 125
       },
       "Gholdengo": {
         "win_rate": 0.4024390243902439,
         "match_count": 41
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.5182186234817814,
-        "match_count": 247
+        "win_rate": 0.5135135135135135,
+        "match_count": 259
       },
       "Greninja": {
-        "win_rate": 0.45384615384615384,
-        "match_count": 65
+        "win_rate": 0.4701492537313433,
+        "match_count": 67
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.5746031746031746,
-        "match_count": 315
+        "win_rate": 0.5771604938271605,
+        "match_count": 324
       },
       "Joltik Box": {
-        "win_rate": 0.39893617021276595,
-        "match_count": 94
+        "win_rate": 0.4072164948453608,
+        "match_count": 97
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.39361702127659576,
-        "match_count": 94
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.5384615384615384,
-        "match_count": 26
+        "win_rate": 0.3939393939393939,
+        "match_count": 99
       },
       "Lucario Hariyama": {
-        "win_rate": 0.42735042735042733,
-        "match_count": 117
+        "win_rate": 0.4180327868852459,
+        "match_count": 122
       },
       "Mega Absol Box": {
         "win_rate": 0.5,
         "match_count": 0
       },
+      "Mega Lucario": {
+        "win_rate": 0.4868421052631579,
+        "match_count": 38
+      },
       "Mega Venusaur": {
-        "win_rate": 0.4166666666666667,
-        "match_count": 84
+        "win_rate": 0.42528735632183906,
+        "match_count": 87
       },
       "N's Zoroark": {
-        "win_rate": 0.443217665615142,
-        "match_count": 317
+        "win_rate": 0.4402332361516035,
+        "match_count": 343
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.3125,
-        "match_count": 48
+        "win_rate": 0.32,
+        "match_count": 50
       },
       "Pidgeot Control": {
-        "win_rate": 0.6029411764705882,
-        "match_count": 34
+        "win_rate": 0.625,
+        "match_count": 36
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.3397790055248619,
-        "match_count": 181
+        "win_rate": 0.3377659574468085,
+        "match_count": 188
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.51010101010101,
-        "match_count": 99
+        "win_rate": 0.5,
+        "match_count": 109
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.5064102564102564,
-        "match_count": 78
+        "win_rate": 0.5304878048780488,
+        "match_count": 82
       },
       "Slowking": {
-        "win_rate": 0.5063291139240507,
-        "match_count": 79
+        "win_rate": 0.5,
+        "match_count": 90
       },
       "Tera Box": {
-        "win_rate": 0.5405405405405406,
-        "match_count": 74
+        "win_rate": 0.5454545454545454,
+        "match_count": 77
+      }
+    },
+    "Mega Lucario": {
+      "Ceruledge": {
+        "win_rate": 0.5,
+        "match_count": 17
+      },
+      "Charizard Noctowl": {
+        "win_rate": 0.5384615384615384,
+        "match_count": 13
+      },
+      "Charizard Pidgeot": {
+        "win_rate": 0.36363636363636365,
+        "match_count": 11
+      },
+      "Crustle": {
+        "win_rate": 0.45454545454545453,
+        "match_count": 11
+      },
+      "Cynthia's Garchomp": {
+        "win_rate": 0.5,
+        "match_count": 10
+      },
+      "Dragapult": {
+        "win_rate": 0.7142857142857143,
+        "match_count": 7
+      },
+      "Dragapult Charizard": {
+        "win_rate": 0.45454545454545453,
+        "match_count": 22
+      },
+      "Dragapult Dusknoir": {
+        "win_rate": 0.5625,
+        "match_count": 120
+      },
+      "Dragonite Eelektrik": {
+        "win_rate": 0.625,
+        "match_count": 8
+      },
+      "Festival Lead": {
+        "win_rate": 0.35294117647058826,
+        "match_count": 17
+      },
+      "Flareon Noctowl": {
+        "win_rate": 0.6363636363636364,
+        "match_count": 11
+      },
+      "Froslass Munkidori": {
+        "win_rate": 0.6774193548387096,
+        "match_count": 31
+      },
+      "Gardevoir": {
+        "win_rate": 0.15625,
+        "match_count": 16
+      },
+      "Gardevoir Jellicent": {
+        "win_rate": 0.08333333333333333,
+        "match_count": 18
+      },
+      "Gholdengo": {
+        "win_rate": 0.4,
+        "match_count": 5
+      },
+      "Gholdengo Lunatone": {
+        "win_rate": 0.44565217391304346,
+        "match_count": 46
+      },
+      "Greninja": {
+        "win_rate": 0.4166666666666667,
+        "match_count": 6
+      },
+      "Grimmsnarl Froslass": {
+        "win_rate": 0.4444444444444444,
+        "match_count": 54
+      },
+      "Joltik Box": {
+        "win_rate": 0.7058823529411765,
+        "match_count": 17
+      },
+      "Kangaskhan Bouffalant": {
+        "win_rate": 0.625,
+        "match_count": 16
+      },
+      "Lucario Hariyama": {
+        "win_rate": 0.3793103448275862,
+        "match_count": 29
+      },
+      "Mega Absol Box": {
+        "win_rate": 0.5131578947368421,
+        "match_count": 38
+      },
+      "Mega Lucario": {
+        "win_rate": 0.5,
+        "match_count": 0
+      },
+      "Mega Venusaur": {
+        "win_rate": 0.6470588235294118,
+        "match_count": 17
+      },
+      "N's Zoroark": {
+        "win_rate": 0.5555555555555556,
+        "match_count": 81
+      },
+      "Ogerpon Meganium": {
+        "win_rate": 0.3181818181818182,
+        "match_count": 11
+      },
+      "Pidgeot Control": {
+        "win_rate": 0.9285714285714286,
+        "match_count": 7
+      },
+      "Raging Bolt Ogerpon": {
+        "win_rate": 0.4864864864864865,
+        "match_count": 37
+      },
+      "Rocket's Honchkrow": {
+        "win_rate": 0.4,
+        "match_count": 20
+      },
+      "Rocket's Mewtwo": {
+        "win_rate": 0.4166666666666667,
+        "match_count": 12
+      },
+      "Slowking": {
+        "win_rate": 0.4375,
+        "match_count": 16
+      },
+      "Tera Box": {
+        "win_rate": 0.475,
+        "match_count": 20
       }
     },
     "Mega Venusaur": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.43478260869565216,
-        "match_count": 69
-      },
       "Ceruledge": {
         "win_rate": 0.2826086956521739,
         "match_count": 23
@@ -3265,8 +3034,8 @@
         "match_count": 46
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.45652173913043476,
-        "match_count": 23
+        "win_rate": 0.4791666666666667,
+        "match_count": 24
       },
       "Crustle": {
         "win_rate": 0.4,
@@ -3277,16 +3046,16 @@
         "match_count": 21
       },
       "Dragapult": {
-        "win_rate": 0.5862068965517241,
-        "match_count": 29
+        "win_rate": 0.6129032258064516,
+        "match_count": 31
       },
       "Dragapult Charizard": {
         "win_rate": 0.5,
         "match_count": 36
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.3932038834951456,
-        "match_count": 206
+        "win_rate": 0.38497652582159625,
+        "match_count": 213
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.62,
@@ -3301,64 +3070,64 @@
         "match_count": 18
       },
       "Froslass Munkidori": {
-        "win_rate": 0.3263888888888889,
-        "match_count": 72
+        "win_rate": 0.3310810810810811,
+        "match_count": 74
       },
       "Gardevoir": {
-        "win_rate": 0.4883720930232558,
-        "match_count": 43
+        "win_rate": 0.4772727272727273,
+        "match_count": 44
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.36792452830188677,
-        "match_count": 53
+        "win_rate": 0.37962962962962965,
+        "match_count": 54
       },
       "Gholdengo": {
         "win_rate": 0.28,
         "match_count": 25
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 72
+        "win_rate": 0.3466666666666667,
+        "match_count": 75
       },
       "Greninja": {
         "win_rate": 0.3076923076923077,
         "match_count": 26
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.6141304347826086,
-        "match_count": 92
+        "win_rate": 0.601063829787234,
+        "match_count": 94
       },
       "Joltik Box": {
-        "win_rate": 0.4032258064516129,
-        "match_count": 31
+        "win_rate": 0.4393939393939394,
+        "match_count": 33
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.5714285714285714,
-        "match_count": 35
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.2727272727272727,
-        "match_count": 11
+        "win_rate": 0.5555555555555556,
+        "match_count": 36
       },
       "Lucario Hariyama": {
-        "win_rate": 0.6481481481481481,
-        "match_count": 54
+        "win_rate": 0.6140350877192983,
+        "match_count": 57
       },
       "Mega Absol Box": {
-        "win_rate": 0.5833333333333334,
-        "match_count": 84
+        "win_rate": 0.5747126436781609,
+        "match_count": 87
+      },
+      "Mega Lucario": {
+        "win_rate": 0.35294117647058826,
+        "match_count": 17
       },
       "Mega Venusaur": {
         "win_rate": 0.5,
         "match_count": 0
       },
       "N's Zoroark": {
-        "win_rate": 0.6147540983606558,
-        "match_count": 122
+        "win_rate": 0.6097560975609756,
+        "match_count": 123
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.6,
-        "match_count": 25
+        "win_rate": 0.5892857142857143,
+        "match_count": 28
       },
       "Pidgeot Control": {
         "win_rate": 0.7333333333333333,
@@ -3369,8 +3138,8 @@
         "match_count": 67
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.4625,
-        "match_count": 40
+        "win_rate": 0.4642857142857143,
+        "match_count": 42
       },
       "Rocket's Mewtwo": {
         "win_rate": 0.4090909090909091,
@@ -3386,163 +3155,155 @@
       }
     },
     "N's Zoroark": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.527542372881356,
-        "match_count": 236
-      },
       "Ceruledge": {
-        "win_rate": 0.5108695652173914,
-        "match_count": 92
+        "win_rate": 0.5154639175257731,
+        "match_count": 97
       },
       "Charizard Noctowl": {
-        "win_rate": 0.5,
-        "match_count": 152
+        "win_rate": 0.5159235668789809,
+        "match_count": 157
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.48095238095238096,
-        "match_count": 105
+        "win_rate": 0.4590909090909091,
+        "match_count": 110
       },
       "Crustle": {
-        "win_rate": 0.43283582089552236,
-        "match_count": 67
+        "win_rate": 0.4444444444444444,
+        "match_count": 72
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.5072463768115942,
-        "match_count": 69
+        "win_rate": 0.45454545454545453,
+        "match_count": 77
       },
       "Dragapult": {
-        "win_rate": 0.52,
-        "match_count": 50
+        "win_rate": 0.5357142857142857,
+        "match_count": 56
       },
       "Dragapult Charizard": {
-        "win_rate": 0.4370860927152318,
-        "match_count": 151
+        "win_rate": 0.4407894736842105,
+        "match_count": 152
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.512453300124533,
-        "match_count": 803
+        "win_rate": 0.5190703218116806,
+        "match_count": 839
       },
       "Dragonite Eelektrik": {
-        "win_rate": 0.5172413793103449,
-        "match_count": 58
+        "win_rate": 0.5254237288135594,
+        "match_count": 59
       },
       "Festival Lead": {
-        "win_rate": 0.35546875,
-        "match_count": 128
+        "win_rate": 0.3576923076923077,
+        "match_count": 130
       },
       "Flareon Noctowl": {
-        "win_rate": 0.5864197530864198,
-        "match_count": 81
+        "win_rate": 0.5792682926829268,
+        "match_count": 82
       },
       "Froslass Munkidori": {
-        "win_rate": 0.4214659685863874,
-        "match_count": 191
+        "win_rate": 0.43028846153846156,
+        "match_count": 208
       },
       "Gardevoir": {
-        "win_rate": 0.5109289617486339,
-        "match_count": 183
+        "win_rate": 0.5078125,
+        "match_count": 192
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.6608391608391608,
-        "match_count": 143
+        "win_rate": 0.6655172413793103,
+        "match_count": 145
       },
       "Gholdengo": {
         "win_rate": 0.4391891891891892,
         "match_count": 74
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.4357638888888889,
-        "match_count": 288
+        "win_rate": 0.43399339933993397,
+        "match_count": 303
       },
       "Greninja": {
-        "win_rate": 0.5523255813953488,
-        "match_count": 86
+        "win_rate": 0.5611111111111111,
+        "match_count": 90
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.4279661016949153,
-        "match_count": 354
+        "win_rate": 0.428,
+        "match_count": 375
       },
       "Joltik Box": {
-        "win_rate": 0.4036697247706422,
-        "match_count": 109
+        "win_rate": 0.4180327868852459,
+        "match_count": 122
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.4774774774774775,
-        "match_count": 111
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.5641025641025641,
-        "match_count": 39
+        "win_rate": 0.4789915966386555,
+        "match_count": 119
       },
       "Lucario Hariyama": {
-        "win_rate": 0.47474747474747475,
-        "match_count": 198
+        "win_rate": 0.4716981132075472,
+        "match_count": 212
       },
       "Mega Absol Box": {
-        "win_rate": 0.556782334384858,
-        "match_count": 317
+        "win_rate": 0.5597667638483965,
+        "match_count": 343
+      },
+      "Mega Lucario": {
+        "win_rate": 0.4444444444444444,
+        "match_count": 81
       },
       "Mega Venusaur": {
-        "win_rate": 0.38524590163934425,
-        "match_count": 122
+        "win_rate": 0.3902439024390244,
+        "match_count": 123
       },
       "N's Zoroark": {
         "win_rate": 0.5,
         "match_count": 0
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.4,
-        "match_count": 65
+        "win_rate": 0.4057971014492754,
+        "match_count": 69
       },
       "Pidgeot Control": {
-        "win_rate": 0.6323529411764706,
-        "match_count": 34
+        "win_rate": 0.6142857142857143,
+        "match_count": 35
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.5102040816326531,
-        "match_count": 196
+        "win_rate": 0.5167464114832536,
+        "match_count": 209
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.4673913043478261,
-        "match_count": 138
+        "win_rate": 0.45302013422818793,
+        "match_count": 149
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.3403361344537815,
-        "match_count": 119
+        "win_rate": 0.3375,
+        "match_count": 120
       },
       "Slowking": {
-        "win_rate": 0.5848214285714286,
-        "match_count": 112
+        "win_rate": 0.5818965517241379,
+        "match_count": 116
       },
       "Tera Box": {
-        "win_rate": 0.6020408163265306,
-        "match_count": 98
+        "win_rate": 0.5961538461538461,
+        "match_count": 104
       }
     },
     "Ogerpon Meganium": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.4444444444444444,
-        "match_count": 36
-      },
       "Ceruledge": {
-        "win_rate": 0.2222222222222222,
-        "match_count": 18
+        "win_rate": 0.2631578947368421,
+        "match_count": 19
       },
       "Charizard Noctowl": {
-        "win_rate": 0.55,
-        "match_count": 20
+        "win_rate": 0.5238095238095238,
+        "match_count": 21
       },
       "Charizard Pidgeot": {
         "win_rate": 0.4,
         "match_count": 20
       },
       "Crustle": {
-        "win_rate": 0.2777777777777778,
-        "match_count": 9
+        "win_rate": 0.22727272727272727,
+        "match_count": 11
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.625,
-        "match_count": 16
+        "win_rate": 0.631578947368421,
+        "match_count": 19
       },
       "Dragapult": {
         "win_rate": 0.5555555555555556,
@@ -3553,28 +3314,28 @@
         "match_count": 13
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.515748031496063,
-        "match_count": 127
+        "win_rate": 0.4963768115942029,
+        "match_count": 138
       },
       "Dragonite Eelektrik": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 6
+        "win_rate": 0.42857142857142855,
+        "match_count": 7
       },
       "Festival Lead": {
-        "win_rate": 0.5238095238095238,
-        "match_count": 21
+        "win_rate": 0.5,
+        "match_count": 22
       },
       "Flareon Noctowl": {
-        "win_rate": 0.5,
-        "match_count": 12
+        "win_rate": 0.5714285714285714,
+        "match_count": 14
       },
       "Froslass Munkidori": {
-        "win_rate": 0.2972972972972973,
-        "match_count": 37
+        "win_rate": 0.275,
+        "match_count": 40
       },
       "Gardevoir": {
-        "win_rate": 0.4,
-        "match_count": 15
+        "win_rate": 0.38235294117647056,
+        "match_count": 17
       },
       "Gardevoir Jellicent": {
         "win_rate": 0.425,
@@ -3585,44 +3346,44 @@
         "match_count": 7
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.40789473684210525,
-        "match_count": 38
+        "win_rate": 0.38372093023255816,
+        "match_count": 43
       },
       "Greninja": {
         "win_rate": 0.4,
         "match_count": 20
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.5636363636363636,
-        "match_count": 55
+        "win_rate": 0.6031746031746031,
+        "match_count": 63
       },
       "Joltik Box": {
-        "win_rate": 0.17647058823529413,
-        "match_count": 17
+        "win_rate": 0.22727272727272727,
+        "match_count": 22
       },
       "Kangaskhan Bouffalant": {
         "win_rate": 0.5909090909090909,
         "match_count": 22
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.21428571428571427,
-        "match_count": 7
-      },
       "Lucario Hariyama": {
-        "win_rate": 0.484375,
-        "match_count": 32
+        "win_rate": 0.5138888888888888,
+        "match_count": 36
       },
       "Mega Absol Box": {
-        "win_rate": 0.6875,
-        "match_count": 48
+        "win_rate": 0.68,
+        "match_count": 50
+      },
+      "Mega Lucario": {
+        "win_rate": 0.6818181818181818,
+        "match_count": 11
       },
       "Mega Venusaur": {
-        "win_rate": 0.4,
-        "match_count": 25
+        "win_rate": 0.4107142857142857,
+        "match_count": 28
       },
       "N's Zoroark": {
-        "win_rate": 0.6,
-        "match_count": 65
+        "win_rate": 0.5942028985507246,
+        "match_count": 69
       },
       "Ogerpon Meganium": {
         "win_rate": 0.5,
@@ -3633,31 +3394,27 @@
         "match_count": 4
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.5,
-        "match_count": 27
-      },
-      "Rocket's Honchkrow": {
-        "win_rate": 0.41379310344827586,
-        "match_count": 29
-      },
-      "Rocket's Mewtwo": {
-        "win_rate": 0.6333333333333333,
+        "win_rate": 0.5166666666666667,
         "match_count": 30
       },
+      "Rocket's Honchkrow": {
+        "win_rate": 0.42424242424242425,
+        "match_count": 33
+      },
+      "Rocket's Mewtwo": {
+        "win_rate": 0.6451612903225806,
+        "match_count": 31
+      },
       "Slowking": {
-        "win_rate": 0.4444444444444444,
-        "match_count": 18
+        "win_rate": 0.5,
+        "match_count": 20
       },
       "Tera Box": {
-        "win_rate": 0.6153846153846154,
-        "match_count": 13
+        "win_rate": 0.5714285714285714,
+        "match_count": 14
       }
     },
     "Pidgeot Control": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.7647058823529411,
-        "match_count": 17
-      },
       "Ceruledge": {
         "win_rate": 0.5833333333333334,
         "match_count": 12
@@ -3671,12 +3428,12 @@
         "match_count": 9
       },
       "Crustle": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 3
+        "win_rate": 0.5,
+        "match_count": 4
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 3
+        "win_rate": 0.25,
+        "match_count": 4
       },
       "Dragapult": {
         "win_rate": 0.75,
@@ -3687,8 +3444,8 @@
         "match_count": 25
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.7277777777777777,
-        "match_count": 90
+        "win_rate": 0.7096774193548387,
+        "match_count": 93
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.2857142857142857,
@@ -3703,12 +3460,12 @@
         "match_count": 5
       },
       "Froslass Munkidori": {
-        "win_rate": 0.175,
-        "match_count": 20
+        "win_rate": 0.20454545454545456,
+        "match_count": 22
       },
       "Gardevoir": {
-        "win_rate": 0.6304347826086957,
-        "match_count": 23
+        "win_rate": 0.6041666666666666,
+        "match_count": 24
       },
       "Gardevoir Jellicent": {
         "win_rate": 0.5576923076923077,
@@ -3719,16 +3476,16 @@
         "match_count": 19
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.4264705882352941,
-        "match_count": 34
+        "win_rate": 0.4305555555555556,
+        "match_count": 36
       },
       "Greninja": {
-        "win_rate": 0.2857142857142857,
-        "match_count": 7
+        "win_rate": 0.25,
+        "match_count": 8
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.34523809523809523,
-        "match_count": 42
+        "win_rate": 0.3372093023255814,
+        "match_count": 43
       },
       "Joltik Box": {
         "win_rate": 0.22727272727272727,
@@ -3738,25 +3495,25 @@
         "win_rate": 0.8,
         "match_count": 15
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 1.0,
-        "match_count": 3
-      },
       "Lucario Hariyama": {
-        "win_rate": 0.2857142857142857,
-        "match_count": 14
+        "win_rate": 0.3125,
+        "match_count": 16
       },
       "Mega Absol Box": {
-        "win_rate": 0.39705882352941174,
-        "match_count": 34
+        "win_rate": 0.375,
+        "match_count": 36
+      },
+      "Mega Lucario": {
+        "win_rate": 0.07142857142857142,
+        "match_count": 7
       },
       "Mega Venusaur": {
         "win_rate": 0.26666666666666666,
         "match_count": 15
       },
       "N's Zoroark": {
-        "win_rate": 0.36764705882352944,
-        "match_count": 34
+        "win_rate": 0.38571428571428573,
+        "match_count": 35
       },
       "Ogerpon Meganium": {
         "win_rate": 0.25,
@@ -3771,12 +3528,12 @@
         "match_count": 23
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.5714285714285714,
-        "match_count": 7
+        "win_rate": 0.5,
+        "match_count": 8
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.9090909090909091,
-        "match_count": 11
+        "win_rate": 0.8333333333333334,
+        "match_count": 12
       },
       "Slowking": {
         "win_rate": 0.0,
@@ -3788,29 +3545,25 @@
       }
     },
     "Raging Bolt Ogerpon": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.35784313725490197,
-        "match_count": 102
-      },
       "Ceruledge": {
-        "win_rate": 0.4888888888888889,
-        "match_count": 45
+        "win_rate": 0.5,
+        "match_count": 46
       },
       "Charizard Noctowl": {
-        "win_rate": 0.3795180722891566,
-        "match_count": 83
+        "win_rate": 0.37790697674418605,
+        "match_count": 86
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.35833333333333334,
-        "match_count": 60
+        "win_rate": 0.3524590163934426,
+        "match_count": 61
       },
       "Crustle": {
-        "win_rate": 0.44642857142857145,
-        "match_count": 28
+        "win_rate": 0.45,
+        "match_count": 30
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.5714285714285714,
-        "match_count": 21
+        "win_rate": 0.5454545454545454,
+        "match_count": 22
       },
       "Dragapult": {
         "win_rate": 0.5217391304347826,
@@ -3821,80 +3574,80 @@
         "match_count": 68
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.4716981132075472,
-        "match_count": 424
+        "win_rate": 0.4727272727272727,
+        "match_count": 440
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.6666666666666666,
         "match_count": 18
       },
       "Festival Lead": {
-        "win_rate": 0.46774193548387094,
-        "match_count": 62
+        "win_rate": 0.47619047619047616,
+        "match_count": 63
       },
       "Flareon Noctowl": {
-        "win_rate": 0.45454545454545453,
-        "match_count": 22
+        "win_rate": 0.44,
+        "match_count": 25
       },
       "Froslass Munkidori": {
-        "win_rate": 0.5517241379310345,
-        "match_count": 87
+        "win_rate": 0.5684210526315789,
+        "match_count": 95
       },
       "Gardevoir": {
-        "win_rate": 0.4411764705882353,
-        "match_count": 102
+        "win_rate": 0.42857142857142855,
+        "match_count": 112
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.3902439024390244,
-        "match_count": 82
+        "win_rate": 0.38823529411764707,
+        "match_count": 85
       },
       "Gholdengo": {
         "win_rate": 0.5428571428571428,
         "match_count": 35
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.5032051282051282,
-        "match_count": 156
+        "win_rate": 0.49074074074074076,
+        "match_count": 162
       },
       "Greninja": {
-        "win_rate": 0.5363636363636364,
-        "match_count": 55
+        "win_rate": 0.5267857142857143,
+        "match_count": 56
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.5187165775401069,
-        "match_count": 187
+        "win_rate": 0.5228426395939086,
+        "match_count": 197
       },
       "Joltik Box": {
-        "win_rate": 0.4358974358974359,
-        "match_count": 39
+        "win_rate": 0.4523809523809524,
+        "match_count": 42
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.6357142857142857,
-        "match_count": 70
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.8,
-        "match_count": 20
+        "win_rate": 0.6466666666666666,
+        "match_count": 75
       },
       "Lucario Hariyama": {
-        "win_rate": 0.49504950495049505,
-        "match_count": 101
+        "win_rate": 0.5094339622641509,
+        "match_count": 106
       },
       "Mega Absol Box": {
-        "win_rate": 0.6602209944751382,
-        "match_count": 181
+        "win_rate": 0.6622340425531915,
+        "match_count": 188
+      },
+      "Mega Lucario": {
+        "win_rate": 0.5135135135135135,
+        "match_count": 37
       },
       "Mega Venusaur": {
         "win_rate": 0.44776119402985076,
         "match_count": 67
       },
       "N's Zoroark": {
-        "win_rate": 0.4897959183673469,
-        "match_count": 196
+        "win_rate": 0.48325358851674644,
+        "match_count": 209
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.5,
-        "match_count": 27
+        "win_rate": 0.48333333333333334,
+        "match_count": 30
       },
       "Pidgeot Control": {
         "win_rate": 0.45652173913043476,
@@ -3905,16 +3658,16 @@
         "match_count": 0
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.5,
-        "match_count": 44
-      },
-      "Rocket's Mewtwo": {
-        "win_rate": 0.6739130434782609,
+        "win_rate": 0.4782608695652174,
         "match_count": 46
       },
+      "Rocket's Mewtwo": {
+        "win_rate": 0.6808510638297872,
+        "match_count": 47
+      },
       "Slowking": {
-        "win_rate": 0.5227272727272727,
-        "match_count": 44
+        "win_rate": 0.5434782608695652,
+        "match_count": 46
       },
       "Tera Box": {
         "win_rate": 0.4264705882352941,
@@ -3922,133 +3675,129 @@
       }
     },
     "Rocket's Honchkrow": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.7403846153846154,
-        "match_count": 52
-      },
       "Ceruledge": {
-        "win_rate": 0.7037037037037037,
-        "match_count": 27
+        "win_rate": 0.6785714285714286,
+        "match_count": 28
       },
       "Charizard Noctowl": {
-        "win_rate": 0.3902439024390244,
-        "match_count": 41
+        "win_rate": 0.3804347826086957,
+        "match_count": 46
       },
       "Charizard Pidgeot": {
-        "win_rate": 0.48,
-        "match_count": 25
+        "win_rate": 0.4444444444444444,
+        "match_count": 27
       },
       "Crustle": {
-        "win_rate": 0.9473684210526315,
-        "match_count": 19
+        "win_rate": 0.9259259259259259,
+        "match_count": 27
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.4166666666666667,
-        "match_count": 24
+        "win_rate": 0.4230769230769231,
+        "match_count": 26
       },
       "Dragapult": {
-        "win_rate": 0.38,
-        "match_count": 25
+        "win_rate": 0.36538461538461536,
+        "match_count": 26
       },
       "Dragapult Charizard": {
         "win_rate": 0.4125,
         "match_count": 40
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.37184115523465705,
-        "match_count": 277
+        "win_rate": 0.37542662116040953,
+        "match_count": 293
       },
       "Dragonite Eelektrik": {
-        "win_rate": 0.5217391304347826,
-        "match_count": 23
+        "win_rate": 0.5416666666666666,
+        "match_count": 24
       },
       "Festival Lead": {
-        "win_rate": 0.21428571428571427,
-        "match_count": 42
+        "win_rate": 0.20930232558139536,
+        "match_count": 43
       },
       "Flareon Noctowl": {
-        "win_rate": 0.6607142857142857,
-        "match_count": 28
+        "win_rate": 0.6379310344827587,
+        "match_count": 29
       },
       "Froslass Munkidori": {
-        "win_rate": 0.5178571428571429,
-        "match_count": 84
+        "win_rate": 0.521978021978022,
+        "match_count": 91
       },
       "Gardevoir": {
-        "win_rate": 0.425,
-        "match_count": 60
+        "win_rate": 0.4523809523809524,
+        "match_count": 63
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.40625,
-        "match_count": 32
+        "win_rate": 0.38235294117647056,
+        "match_count": 34
       },
       "Gholdengo": {
         "win_rate": 0.6071428571428571,
         "match_count": 14
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.5944444444444444,
-        "match_count": 90
+        "win_rate": 0.6030927835051546,
+        "match_count": 97
       },
       "Greninja": {
-        "win_rate": 0.19230769230769232,
-        "match_count": 26
+        "win_rate": 0.17857142857142858,
+        "match_count": 28
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.4956140350877193,
-        "match_count": 114
+        "win_rate": 0.47520661157024796,
+        "match_count": 121
       },
       "Joltik Box": {
-        "win_rate": 0.4777777777777778,
-        "match_count": 45
+        "win_rate": 0.5104166666666666,
+        "match_count": 48
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.5,
-        "match_count": 24
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.7083333333333334,
-        "match_count": 12
+        "win_rate": 0.5192307692307693,
+        "match_count": 26
       },
       "Lucario Hariyama": {
-        "win_rate": 0.5666666666666667,
-        "match_count": 60
+        "win_rate": 0.5303030303030303,
+        "match_count": 66
       },
       "Mega Absol Box": {
-        "win_rate": 0.4898989898989899,
-        "match_count": 99
+        "win_rate": 0.5,
+        "match_count": 109
+      },
+      "Mega Lucario": {
+        "win_rate": 0.6,
+        "match_count": 20
       },
       "Mega Venusaur": {
-        "win_rate": 0.5375,
-        "match_count": 40
+        "win_rate": 0.5357142857142857,
+        "match_count": 42
       },
       "N's Zoroark": {
-        "win_rate": 0.532608695652174,
-        "match_count": 138
+        "win_rate": 0.5469798657718121,
+        "match_count": 149
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.5862068965517241,
-        "match_count": 29
+        "win_rate": 0.5757575757575758,
+        "match_count": 33
       },
       "Pidgeot Control": {
-        "win_rate": 0.42857142857142855,
-        "match_count": 7
+        "win_rate": 0.5,
+        "match_count": 8
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.5,
-        "match_count": 44
+        "win_rate": 0.5217391304347826,
+        "match_count": 46
       },
       "Rocket's Honchkrow": {
         "win_rate": 0.5,
         "match_count": 0
       },
       "Rocket's Mewtwo": {
-        "win_rate": 0.6170212765957447,
-        "match_count": 47
+        "win_rate": 0.6326530612244898,
+        "match_count": 49
       },
       "Slowking": {
-        "win_rate": 0.54,
-        "match_count": 25
+        "win_rate": 0.5740740740740741,
+        "match_count": 27
       },
       "Tera Box": {
         "win_rate": 0.6,
@@ -4056,13 +3805,9 @@
       }
     },
     "Rocket's Mewtwo": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.7631578947368421,
-        "match_count": 76
-      },
       "Ceruledge": {
-        "win_rate": 0.41935483870967744,
-        "match_count": 31
+        "win_rate": 0.47058823529411764,
+        "match_count": 34
       },
       "Charizard Noctowl": {
         "win_rate": 0.3780487804878049,
@@ -4073,44 +3818,44 @@
         "match_count": 28
       },
       "Crustle": {
-        "win_rate": 0.5909090909090909,
-        "match_count": 11
+        "win_rate": 0.625,
+        "match_count": 12
       },
       "Cynthia's Garchomp": {
         "win_rate": 0.7166666666666667,
         "match_count": 30
       },
       "Dragapult": {
-        "win_rate": 0.5238095238095238,
-        "match_count": 21
+        "win_rate": 0.5217391304347826,
+        "match_count": 23
       },
       "Dragapult Charizard": {
         "win_rate": 0.5161290322580645,
         "match_count": 31
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.5041666666666667,
-        "match_count": 240
+        "win_rate": 0.5060240963855421,
+        "match_count": 249
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.625,
         "match_count": 8
       },
       "Festival Lead": {
-        "win_rate": 0.2857142857142857,
-        "match_count": 35
+        "win_rate": 0.2972972972972973,
+        "match_count": 37
       },
       "Flareon Noctowl": {
         "win_rate": 0.5,
         "match_count": 14
       },
       "Froslass Munkidori": {
-        "win_rate": 0.32558139534883723,
-        "match_count": 43
+        "win_rate": 0.3617021276595745,
+        "match_count": 47
       },
       "Gardevoir": {
-        "win_rate": 0.19767441860465115,
-        "match_count": 43
+        "win_rate": 0.19318181818181818,
+        "match_count": 44
       },
       "Gardevoir Jellicent": {
         "win_rate": 0.375,
@@ -4121,60 +3866,60 @@
         "match_count": 15
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.26865671641791045,
-        "match_count": 67
+        "win_rate": 0.2608695652173913,
+        "match_count": 69
       },
       "Greninja": {
         "win_rate": 0.47368421052631576,
         "match_count": 19
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.35353535353535354,
-        "match_count": 99
+        "win_rate": 0.3564356435643564,
+        "match_count": 101
       },
       "Joltik Box": {
-        "win_rate": 0.4074074074074074,
-        "match_count": 27
+        "win_rate": 0.39285714285714285,
+        "match_count": 28
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.21666666666666667,
-        "match_count": 30
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 3
+        "win_rate": 0.265625,
+        "match_count": 32
       },
       "Lucario Hariyama": {
-        "win_rate": 0.6515151515151515,
-        "match_count": 66
+        "win_rate": 0.6571428571428571,
+        "match_count": 70
       },
       "Mega Absol Box": {
-        "win_rate": 0.4935897435897436,
-        "match_count": 78
+        "win_rate": 0.4695121951219512,
+        "match_count": 82
+      },
+      "Mega Lucario": {
+        "win_rate": 0.5833333333333334,
+        "match_count": 12
       },
       "Mega Venusaur": {
         "win_rate": 0.5909090909090909,
         "match_count": 44
       },
       "N's Zoroark": {
-        "win_rate": 0.6596638655462185,
-        "match_count": 119
+        "win_rate": 0.6625,
+        "match_count": 120
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.36666666666666664,
-        "match_count": 30
+        "win_rate": 0.3548387096774194,
+        "match_count": 31
       },
       "Pidgeot Control": {
-        "win_rate": 0.09090909090909091,
-        "match_count": 11
+        "win_rate": 0.16666666666666666,
+        "match_count": 12
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.32608695652173914,
-        "match_count": 46
+        "win_rate": 0.3191489361702128,
+        "match_count": 47
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.3829787234042553,
-        "match_count": 47
+        "win_rate": 0.3673469387755102,
+        "match_count": 49
       },
       "Rocket's Mewtwo": {
         "win_rate": 0.5,
@@ -4190,125 +3935,121 @@
       }
     },
     "Slowking": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.4339622641509434,
-        "match_count": 53
-      },
       "Ceruledge": {
         "win_rate": 0.7037037037037037,
         "match_count": 27
       },
       "Charizard Noctowl": {
-        "win_rate": 0.5555555555555556,
-        "match_count": 27
+        "win_rate": 0.5357142857142857,
+        "match_count": 28
       },
       "Charizard Pidgeot": {
         "win_rate": 0.5714285714285714,
         "match_count": 28
       },
       "Crustle": {
-        "win_rate": 0.8125,
-        "match_count": 16
+        "win_rate": 0.8260869565217391,
+        "match_count": 23
       },
       "Cynthia's Garchomp": {
-        "win_rate": 0.4166666666666667,
-        "match_count": 12
+        "win_rate": 0.46153846153846156,
+        "match_count": 13
       },
       "Dragapult": {
         "win_rate": 0.34375,
         "match_count": 16
       },
       "Dragapult Charizard": {
-        "win_rate": 0.5161290322580645,
-        "match_count": 31
+        "win_rate": 0.53125,
+        "match_count": 32
       },
       "Dragapult Dusknoir": {
-        "win_rate": 0.49117647058823527,
-        "match_count": 170
+        "win_rate": 0.49166666666666664,
+        "match_count": 180
       },
       "Dragonite Eelektrik": {
         "win_rate": 0.5,
         "match_count": 6
       },
       "Festival Lead": {
-        "win_rate": 0.5161290322580645,
-        "match_count": 31
+        "win_rate": 0.5,
+        "match_count": 32
       },
       "Flareon Noctowl": {
         "win_rate": 0.38235294117647056,
         "match_count": 17
       },
       "Froslass Munkidori": {
-        "win_rate": 0.39090909090909093,
-        "match_count": 55
+        "win_rate": 0.373015873015873,
+        "match_count": 63
       },
       "Gardevoir": {
-        "win_rate": 0.5,
-        "match_count": 32
+        "win_rate": 0.47058823529411764,
+        "match_count": 34
       },
       "Gardevoir Jellicent": {
-        "win_rate": 0.34615384615384615,
-        "match_count": 39
+        "win_rate": 0.3375,
+        "match_count": 40
       },
       "Gholdengo": {
         "win_rate": 0.6666666666666666,
         "match_count": 15
       },
       "Gholdengo Lunatone": {
-        "win_rate": 0.5454545454545454,
-        "match_count": 66
+        "win_rate": 0.5362318840579711,
+        "match_count": 69
       },
       "Greninja": {
         "win_rate": 0.48148148148148145,
         "match_count": 27
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.5714285714285714,
-        "match_count": 84
+        "win_rate": 0.5681818181818182,
+        "match_count": 88
       },
       "Joltik Box": {
-        "win_rate": 0.2702702702702703,
-        "match_count": 37
+        "win_rate": 0.2894736842105263,
+        "match_count": 38
       },
       "Kangaskhan Bouffalant": {
         "win_rate": 0.5714285714285714,
         "match_count": 21
       },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.6,
-        "match_count": 5
-      },
       "Lucario Hariyama": {
-        "win_rate": 0.6630434782608695,
-        "match_count": 46
+        "win_rate": 0.6568627450980392,
+        "match_count": 51
       },
       "Mega Absol Box": {
-        "win_rate": 0.4936708860759494,
-        "match_count": 79
+        "win_rate": 0.5,
+        "match_count": 90
+      },
+      "Mega Lucario": {
+        "win_rate": 0.5625,
+        "match_count": 16
       },
       "Mega Venusaur": {
         "win_rate": 0.5384615384615384,
         "match_count": 26
       },
       "N's Zoroark": {
-        "win_rate": 0.41517857142857145,
-        "match_count": 112
+        "win_rate": 0.41810344827586204,
+        "match_count": 116
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.5555555555555556,
-        "match_count": 18
+        "win_rate": 0.5,
+        "match_count": 20
       },
       "Pidgeot Control": {
         "win_rate": 1.0,
         "match_count": 3
       },
       "Raging Bolt Ogerpon": {
-        "win_rate": 0.4772727272727273,
-        "match_count": 44
+        "win_rate": 0.45652173913043476,
+        "match_count": 46
       },
       "Rocket's Honchkrow": {
-        "win_rate": 0.46,
-        "match_count": 25
+        "win_rate": 0.42592592592592593,
+        "match_count": 27
       },
       "Rocket's Mewtwo": {
         "win_rate": 0.4411764705882353,
@@ -4319,30 +4060,26 @@
         "match_count": 0
       },
       "Tera Box": {
-        "win_rate": 0.6470588235294118,
-        "match_count": 17
+        "win_rate": 0.65,
+        "match_count": 20
       }
     },
     "Tera Box": {
-      "Alakazam Dudunsparce": {
-        "win_rate": 0.5,
-        "match_count": 41
-      },
       "Ceruledge": {
         "win_rate": 0.5294117647058824,
         "match_count": 17
       },
       "Charizard Noctowl": {
-        "win_rate": 0.43333333333333335,
-        "match_count": 30
+        "win_rate": 0.45161290322580644,
+        "match_count": 31
       },
       "Charizard Pidgeot": {
         "win_rate": 0.5357142857142857,
         "match_count": 28
       },
       "Crustle": {
-        "win_rate": 0.391304347826087,
-        "match_count": 23
+        "win_rate": 0.375,
+        "match_count": 24
       },
       "Cynthia's Garchomp": {
         "win_rate": 0.6190476190476191,
@@ -4365,20 +4102,20 @@
         "match_count": 7
       },
       "Festival Lead": {
-        "win_rate": 0.3333333333333333,
-        "match_count": 18
+        "win_rate": 0.3684210526315789,
+        "match_count": 19
       },
       "Flareon Noctowl": {
         "win_rate": 0.47058823529411764,
         "match_count": 17
       },
       "Froslass Munkidori": {
-        "win_rate": 0.375,
-        "match_count": 40
+        "win_rate": 0.37209302325581395,
+        "match_count": 43
       },
       "Gardevoir": {
-        "win_rate": 0.42,
-        "match_count": 50
+        "win_rate": 0.40384615384615385,
+        "match_count": 52
       },
       "Gardevoir Jellicent": {
         "win_rate": 0.5,
@@ -4397,40 +4134,40 @@
         "match_count": 30
       },
       "Grimmsnarl Froslass": {
-        "win_rate": 0.55,
-        "match_count": 90
+        "win_rate": 0.5585106382978723,
+        "match_count": 94
       },
       "Joltik Box": {
         "win_rate": 0.2727272727272727,
         "match_count": 22
       },
       "Kangaskhan Bouffalant": {
-        "win_rate": 0.4473684210526316,
-        "match_count": 19
-      },
-      "Lopunny Dusknoir": {
-        "win_rate": 0.75,
-        "match_count": 8
+        "win_rate": 0.475,
+        "match_count": 20
       },
       "Lucario Hariyama": {
         "win_rate": 0.8269230769230769,
         "match_count": 52
       },
       "Mega Absol Box": {
-        "win_rate": 0.4594594594594595,
-        "match_count": 74
+        "win_rate": 0.45454545454545453,
+        "match_count": 77
+      },
+      "Mega Lucario": {
+        "win_rate": 0.525,
+        "match_count": 20
       },
       "Mega Venusaur": {
         "win_rate": 0.38095238095238093,
         "match_count": 21
       },
       "N's Zoroark": {
-        "win_rate": 0.3979591836734694,
-        "match_count": 98
+        "win_rate": 0.40384615384615385,
+        "match_count": 104
       },
       "Ogerpon Meganium": {
-        "win_rate": 0.38461538461538464,
-        "match_count": 13
+        "win_rate": 0.42857142857142855,
+        "match_count": 14
       },
       "Pidgeot Control": {
         "win_rate": 0.4166666666666667,
@@ -4449,8 +4186,8 @@
         "match_count": 23
       },
       "Slowking": {
-        "win_rate": 0.35294117647058826,
-        "match_count": 17
+        "win_rate": 0.35,
+        "match_count": 20
       },
       "Tera Box": {
         "win_rate": 0.5,
