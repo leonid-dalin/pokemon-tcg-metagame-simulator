@@ -1,7 +1,7 @@
 import json
 from huey import SqliteHuey, crontab
 from src.api.models import ScrapedMatrix
-from src.scraper import fetch_live_matchup_data, build_complete_matchup_matrix
+from src.core.scraper import fetch_live_matchup_data, build_complete_matchup_matrix
 from src.core.config import INPUT_DATA, MIN_GAMES
 from src.core.data import load_matchup_data
 from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
@@ -58,7 +58,7 @@ def execute_simulation_job(payload: dict):
 def automated_daily_pipeline():
     print("Starting automated daily Limitless TCG data scrape...")
 
-    from src.core.urls import ASC_URLS, POR_URLS
+    from src.core.urls import ASC_URLS
     TARGET_URLS = ASC_URLS
 
     try:

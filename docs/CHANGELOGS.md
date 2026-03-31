@@ -1,5 +1,5 @@
-## Commit `?` (Mar 31, 2026)
-### 🚀 feat: fully autonomous live-scraping pipeline with Pydantic validation and Huey scheduling
+## Commit `39d482d` (Mar 31, 2026)
+### 🚀 feat(pipeline): implement autonomous Limitless TCG live scraper, Pydantic matrix validation, and Huey cron scheduling
 
 This update completely eliminates the need for manual HTML file downloads from Limitless. The simulator is now able to fetch, normalise, validate, and ingest live Limitless TCG data automatically, as long as it knows the URLs.
 
