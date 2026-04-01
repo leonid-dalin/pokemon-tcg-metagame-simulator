@@ -6,9 +6,10 @@ huey==2.6.0
 networkx==3.6.1
 pydantic==2.12.5
 scikit_learn==1.7.2
-streamlit==1.55.0
+streamlit==1.56.0
 uvicorn==0.41.0
 
+maturin>=1.5.0
 pytest-cov>=7.0.0
 pytest>=9.0.0
 beautifulsoup4>=4.14.3

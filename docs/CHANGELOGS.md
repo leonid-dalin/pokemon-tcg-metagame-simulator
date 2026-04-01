@@ -1,3 +1,18 @@
+## Commit `[idk yet]` (Apr 02, 2026)
+### 🚀 major: Rust integration for high-speed Monte Carlo simulations
+
+This update replaces the Python/NumPy tournament bracket engine with a fully compiled, multi-threaded Rust extension (`tcg_engine`). Faster execution times! 🥳
+
+#### **🦀 Rust & PyO3 Integration**
+* **GIL Bypass & Rayon Parallelization:** The `_mc_worker` has been completely rewritten in Rust. By utilizing `PyO3` and the `Rayon` crate, the engine now completely bypasses the Python Global Interpreter Lock (GIL), stealing work across all available CPU cores dynamically and efficiently.
+* **Zero-Cost Abstractions:** Transitioned from Python array slicing (`np.where`) to native Rust `Vec` and in-place memory mutations. This eliminates the massive garbage collection overhead previously incurred during millions of simulated match loops.
+* It maintains perfect Parabolic Tie Convergence math, X-3 Drop Logic, OWP sorting, and 1-Deep Lookahead heuristic pairings, seeded securely for perfect reproducibility.
+
+#### **🛠️ Infrastructure & Stability**
+* Updated the deployment architecture to utilize `maturin`, seamlessly compiling `.whl` binaries directly inside the Linux Docker container during build time.
+
+---
+
 ## Commit `39d482d` (Mar 31, 2026)
 ### 🚀 feat(pipeline): implement autonomous Limitless TCG live scraper, Pydantic matrix validation, and Huey cron scheduling
 

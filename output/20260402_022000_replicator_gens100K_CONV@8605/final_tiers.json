@@ -1,0 +1,269 @@
+{
+  "T0": [],
+  "T0.5": [
+    {
+      "deck": "N's Zoroark",
+      "score": 83.7054635354025,
+      "power_score": 67.410927070805,
+      "frequency_score": 100.0,
+      "win_rate": 0.5003213397327063,
+      "presence": 0.16767725503187852
+    },
+    {
+      "deck": "Kangaskhan Bouffalant",
+      "score": 71.38868083276964,
+      "power_score": 57.23366991672448,
+      "frequency_score": 85.54369174881481,
+      "win_rate": 0.5001335061337098,
+      "presence": 0.14343731417734423
+    },
+    {
+      "deck": "Slowking",
+      "score": 64.44768693907872,
+      "power_score": 56.16675776400456,
+      "frequency_score": 72.72861611415287,
+      "win_rate": 0.5001138149785759,
+      "presence": 0.12194934712288402
+    },
+    {
+      "deck": "Dragapult Dusknoir",
+      "score": 62.211446083302135,
+      "power_score": 100.0,
+      "frequency_score": 24.42289216660427,
+      "win_rate": 0.5009228105183587,
+      "presence": 0.040951635184357724
+    },
+    {
+      "deck": "Greninja",
+      "score": 58.391226860016836,
+      "power_score": 81.25750747069146,
+      "frequency_score": 35.52494624934221,
+      "win_rate": 0.5005768951334326,
+      "presence": 0.059567254722447296
+    },
+    {
+      "deck": "Gardevoir",
+      "score": 57.79598113460138,
+      "power_score": 52.960629896675215,
+      "frequency_score": 62.63133237252754,
+      "win_rate": 0.5000546420081924,
+      "presence": 0.10501849891214649
+    },
+    {
+      "deck": "Gholdengo Lunatone",
+      "score": 40.43255114886857,
+      "power_score": 55.30248088908538,
+      "frequency_score": 25.562621408651765,
+      "win_rate": 0.5000978637027569,
+      "presence": 0.042862701892218594
+    }
+  ],
+  "T1": [
+    {
+      "deck": "Charizard Noctowl",
+      "score": 70.98294113805623,
+      "power_score": 46.79565641968886,
+      "frequency_score": 95.17022585642361,
+      "win_rate": 0.49994085996079307,
+      "presence": 0.15957882232369022
+    },
+    {
+      "deck": "Joltik Box",
+      "score": 31.629683876784767,
+      "power_score": 37.95201564526138,
+      "frequency_score": 25.307352108308155,
+      "win_rate": 0.4997776398662485,
+      "presence": 0.042434673336463356
+    },
+    {
+      "deck": "Cynthia's Garchomp",
+      "score": 28.602337952515455,
+      "power_score": 44.955096525682656,
+      "frequency_score": 12.249579379348257,
+      "win_rate": 0.4999068902001959,
+      "presence": 0.020539758456242178
+    },
+    {
+      "deck": "Grimmsnarl Froslass",
+      "score": 14.637510334794511,
+      "power_score": 6.011029744300324,
+      "frequency_score": 23.2639909252887,
+      "win_rate": 0.4991881303111254,
+      "presence": 0.03900842139438941
+    },
+    {
+      "deck": "Crustle",
+      "score": 10.907075659420393,
+      "power_score": 12.818955456770704,
+      "frequency_score": 8.995195862070084,
+      "win_rate": 0.49931377882023886,
+      "presence": 0.015082897506260238
+    },
+    {
+      "deck": "Mega Venusaur",
+      "score": 7.022105043847199,
+      "power_score": 0.0,
+      "frequency_score": 14.044210087694397,
+      "win_rate": 0.4989502706097382,
+      "presence": 0.023548945965956147
+    },
+    {
+      "deck": "Gholdengo",
+      "score": 4.023158881294967,
+      "power_score": 0.0,
+      "frequency_score": 8.046317762589934,
+      "win_rate": 0.4981818389637947,
+      "presence": 0.013491844755453267
+    },
+    {
+      "deck": "Ogerpon Meganium",
+      "score": 0.3794544543404593,
+      "power_score": 0.0,
+      "frequency_score": 0.7589089086809186,
+      "win_rate": 0.4970184689510385,
+      "presence": 0.00127251762626855
+    },
+    {
+      "deck": "Froslass Munkidori",
+      "score": 0.24788096669631274,
+      "power_score": 0.0,
+      "frequency_score": 0.4957619333926255,
+      "win_rate": 0.4961433091297339,
+      "presence": 0.0008312800014057244
+    },
+    {
+      "deck": "Raging Bolt Ogerpon",
+      "score": 0.1794779159295161,
+      "power_score": 0.0,
+      "frequency_score": 0.3589558318590322,
+      "win_rate": 0.49502141919780474,
+      "presence": 0.0006018872856380704
+    },
+    {
+      "deck": "Gardevoir Jellicent",
+      "score": 0.14060363447074328,
+      "power_score": 0.0,
+      "frequency_score": 0.28120726894148657,
+      "win_rate": 0.4946656652120396,
+      "presence": 0.000471520629511197
+    },
+    {
+      "deck": "Mega Lucario",
+      "score": 0.11212778457302586,
+      "power_score": 0.0,
+      "frequency_score": 0.22425556914605171,
+      "win_rate": 0.492612660016097,
+      "presence": 0.0003760255826002158
+    },
+    {
+      "deck": "Festival Lead",
+      "score": 0.06948320108425979,
+      "power_score": 0.0,
+      "frequency_score": 0.13896640216851958,
+      "win_rate": 0.4858185200069269,
+      "presence": 0.00023301504857273456
+    },
+    {
+      "deck": "Rocket's Honchkrow",
+      "score": 0.05457479908187392,
+      "power_score": 0.0,
+      "frequency_score": 0.10914959816374784,
+      "win_rate": 0.48241552298793555,
+      "presence": 0.00018301905007929808
+    },
+    {
+      "deck": "Mega Absol Box",
+      "score": 0.04266161806483977,
+      "power_score": 0.0,
+      "frequency_score": 0.08532323612967954,
+      "win_rate": 0.47810269430209873,
+      "presence": 0.00014306766024661468
+    },
+    {
+      "deck": "Dragapult Charizard",
+      "score": 0.041969123117615824,
+      "power_score": 0.0,
+      "frequency_score": 0.08393824623523165,
+      "win_rate": 0.47768063325462007,
+      "presence": 0.00014074534720913553
+    },
+    {
+      "deck": "Lucario Hariyama",
+      "score": 0.04043078456880001,
+      "power_score": 0.0,
+      "frequency_score": 0.08086156913760002,
+      "win_rate": 0.4771326071360736,
+      "presence": 0.00013558645950563237
+    }
+  ],
+  "T2": [
+    {
+      "deck": "Pidgeot Control",
+      "score": 0.02620795837941372,
+      "power_score": 0.0,
+      "frequency_score": 0.05241591675882744,
+      "win_rate": 0.46397006425496945,
+      "presence": 8.788957042099623e-05
+    },
+    {
+      "deck": "Dragapult",
+      "score": 0.021446469263245595,
+      "power_score": 0.0,
+      "frequency_score": 0.04289293852649119,
+      "win_rate": 0.45595499014439433,
+      "presence": 7.192170192373152e-05
+    },
+    {
+      "deck": "Charizard Pidgeot",
+      "score": 0.019435536378867652,
+      "power_score": 0.0,
+      "frequency_score": 0.038871072757735305,
+      "win_rate": 0.45087528870820276,
+      "presence": 6.517794780161488e-05
+    }
+  ],
+  "T3": [
+    {
+      "deck": "Flareon Noctowl",
+      "score": 0.01863517028591805,
+      "power_score": 0.0,
+      "frequency_score": 0.0372703405718361,
+      "win_rate": 0.4488050848932512,
+      "presence": 6.24938840118873e-05
+    },
+    {
+      "deck": "Tera Box",
+      "score": 0.016118755554826857,
+      "power_score": 0.0,
+      "frequency_score": 0.03223751110965371,
+      "win_rate": 0.44075006197480915,
+      "presence": 5.4054973719264224e-05
+    },
+    {
+      "deck": "Ceruledge",
+      "score": 0.014795707224824425,
+      "power_score": 0.0,
+      "frequency_score": 0.02959141444964885,
+      "win_rate": 0.43487649867616035,
+      "presence": 4.961807147427785e-05
+    },
+    {
+      "deck": "Rocket's Mewtwo",
+      "score": 0.014547437631320822,
+      "power_score": 0.0,
+      "frequency_score": 0.029094875262641644,
+      "win_rate": 0.4340143422263648,
+      "presence": 4.878548819534657e-05
+    }
+  ],
+  "T4": [
+    {
+      "deck": "Dragonite Eelektrik",
+      "score": 0.0065670474149415025,
+      "power_score": 0.0,
+      "frequency_score": 0.013134094829883005,
+      "win_rate": 0.34713431594870386,
+      "presence": 2.2022889684031698e-05
+    }
+  ]
+}
