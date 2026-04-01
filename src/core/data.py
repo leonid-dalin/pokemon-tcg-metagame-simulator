@@ -50,7 +50,8 @@ def load_matchup_data(
                 match_count = int(raw_val.get("match_count", 0))
             else:
                 try:
-                    wr = float(raw_val)
+                    val_any: Any = raw_val
+                    wr = float(val_any)
                 except (ValueError, TypeError):
                     wr = 0.5
             
@@ -167,16 +168,22 @@ def cluster_decks_by_matchup_profile(
     else:
         raise ValueError(f"Unsupported clustering method: {method}")
 
+    if labels is None:
+        labels = np.zeros(n_samples, dtype=int)
+
+    labels_arr: np.ndarray = np.asarray(labels)
+    centroids_arr: np.ndarray | None = np.asarray(centroids) if centroids is not None else None
+    distances_arr: np.ndarray = np.asarray(distances)
+
     cluster_map = {
-        "labels": labels.tolist(),
-        "centroids": centroids.tolist() if centroids is not None else None,
-        "distances": distances.tolist(),
+        "labels": labels_arr.tolist(),
+        "centroids": centroids_arr.tolist() if centroids_arr is not None else None,
+        "distances": distances_arr.tolist(),
         "method": method,
         "n_clusters": final_k,
     }
-    
     for i in range(final_k):
-        members = [deck_names[j] for j in range(len(labels)) if labels[j] == i]
+        members = [deck_names[j] for j in range(len(labels_arr)) if labels_arr.item(j) == i]
         logging.info(f"🧩 Cluster {i}: {len(members)} decks — {members}")
         
     return cluster_map
