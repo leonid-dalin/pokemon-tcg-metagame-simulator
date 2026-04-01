@@ -1,50 +1,61 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
+### --- BUILD ARTIFACTS --- ###
+# Python
+**/__pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
-
-# Distribution / packaging
-.Python
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
 sdist/
-var/
 wheels/
 *.egg-info/
-.installed.cfg
 *.egg
-
-# Rust & Maturin build artifacts
-src/tournament/tcg_engine/target/
-src/tournament/tcg_engine/Cargo.lock
-*.whl
-*.pyd
+.installed.cfg
 *.so
+*.pyd
+*.whl
 
-# Virtual Environment
-venv/
-ENV/
+# Rust & Maturin
+target/
+src/tournament/tcg_engine/Cargo.lock
+
+### --- VIRTUAL ENVIRONMENTS --- ###
+.Python
+[Vv]env/
+[Ee]nv/
+.venv/
 .env
-.venv
-env/
+bin/
+lib/
+lib64/
+include/
+man/
+develop-eggs/
+parts/
+/var/
 
-# IDEs and Editors
-.history
-.vscode/
+### --- TESTING & COVERAGE --- ###
+.pytest_cache/
+.tox/
+.cache
+.coverage
+htmlcov/
+htmlconv/
+nosetests.xml
+coverage.xml
+.ipynb_checkpoints/
+
+### --- IDEs & EDITORS --- ###
 .idea/
+.vscode/
+.project
+.pydevproject
+.ropeproject
+.history/
 *.swp
 *.swo
-.coverage
+.mr.developer.cfg
 
-# OS generated files
+### --- OS GENERATED FILES --- ###
 .DS_Store
 .DS_Store?
 ._*
@@ -53,18 +64,23 @@ env/
 ehthumbs.db
 Thumbs.db
 
-# Data and Output
+### --- LOGS & TRANSLATIONS --- ###
+*.log
+pip-log.txt
+pip-delete-this-directory.txt
+pip-selfcheck.json
+*.mo
+*.pot
+
+### --- PROJECT SPECIFIC / SCRATCH --- ###
 /matchups/_GlobalMeta/
 temp/
 .old/
-# Log files
-*.log
+.python-version
+docs/_build/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# Tests
+### --- MISC --- ###
+# NOT READY YET FOR DEPLOYMENT
 tests/
 diagnose.py
 test_scraper.py
-htmlconv/
