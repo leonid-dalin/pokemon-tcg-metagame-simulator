@@ -5,7 +5,7 @@ import time
 import logging
 import numpy as np
 import csv
-from typing import List, Dict, Any, Optional, Iterable
+from typing import List, Any, Optional, Iterable
 
 # Optional modules
 try:
@@ -216,7 +216,7 @@ def run_tournament_generation(
         matchup_details: Dict[Tuple[str, str], Dict[str, Any]],
         config: Dict[str, Any],
         rng: np.random.Generator,
-        pool: Optional[mp.Pool] = None,
+        pool: Optional[Any] = None,
 ) -> np.ndarray:
     n_decks = len(deck_names)
     tasks = []
@@ -242,7 +242,9 @@ def run_tournament_generation(
     worker_func = _championship_series_worker if tournament_style == "championship_series" else _pure_swiss_worker
 
     if pool is not None and len(tasks) > 1:
-        for wins, matches in pool.imap_unordered(worker_func, tasks):
+        import typing
+        active_pool = typing.cast(Any, pool)
+        for wins, matches in active_pool.imap_unordered(worker_func, tasks):
             deck_wins += wins
             deck_matches += matches
     else:
@@ -307,8 +309,7 @@ def update_replicator_dynamics(
         raw_next_freq = np.ones(n) / n
 
     # 7. Ambient Uniform Mutation (Entropy Regularization)
-    new_freq = (1.0 - mutation_rate) * raw_next_freq + (mutation_rate / n)
-
+    new_freq: np.ndarray = np.asarray((1.0 - mutation_rate) * raw_next_freq + (mutation_rate / n), dtype=float)
     return safe_normalize(new_freq), payoffs
 
 # ----------------------------
@@ -373,7 +374,8 @@ def find_evolutionary_stable_state(
     start_time = time.time()
     pool = None
     if mode == "tournament" and use_multiproc and MULTIPROC_AVAILABLE and mp is not None:
-        pool = mp.Pool()
+        import typing
+        pool = typing.cast(Any, mp).Pool()
     tourney_config = {
         "use_bayesian_winrates": use_bayesian_winrates,
         "tournament_size": tournament_size,
@@ -414,7 +416,7 @@ def find_evolutionary_stable_state(
             for i in np.where(extinct_mask)[0]:
                 extinction_gens[i] = gen
 
-            max_change = float(np.max(np.abs(next_freq - current_freq)))
+            max_change = float(np.max(np.abs(next_freq - current_freq)).item())
             recent_max_changes[gen % convergence_window] = max_change
 
             history.append(next_freq.copy())
@@ -434,7 +436,7 @@ def find_evolutionary_stable_state(
             # A true Nash Equilibrium / ESS requires that no strategy has an EV significantly higher than the meta average.
             current_payoffs = win_matrix @ current_freq
             avg_payoff = current_freq @ current_payoffs
-            max_advantage = np.max(current_payoffs - avg_payoff)
+            max_advantage = float(np.max(current_payoffs - avg_payoff).item())
 
             is_nash_equilibrium = max_advantage < NASH_EQUILIBRIUM
 
@@ -446,8 +448,10 @@ def find_evolutionary_stable_state(
         logging.info("🛑 Simulation interrupted.")
     finally:
         if pool is not None:
-            pool.close()
-            pool.join()
+            import typing
+            active_pool = typing.cast(Any, pool)
+            active_pool.close()
+            active_pool.join()
         if history_file_handle:
             history_file_handle.close()
 

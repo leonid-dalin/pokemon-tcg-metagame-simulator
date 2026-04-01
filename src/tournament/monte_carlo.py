@@ -196,7 +196,8 @@ def run_monte_carlo_analytics(
     total_champ = np.zeros(n_decks, dtype=int)
     
     completed_cores = 0
-    with mp.Pool(n_cores) as pool:
+    ctx = mp.get_context('spawn')
+    with ctx.Pool(n_cores) as pool:
         for res_init, res_day2, res_top, res_champ, _, _ in pool.imap_unordered(_mc_worker, tasks):
             total_initial += res_init
             total_day2 += res_day2

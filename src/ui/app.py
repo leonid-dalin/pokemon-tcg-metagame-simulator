@@ -1,5 +1,6 @@
 # app.py | Streamlit dashboard
 import streamlit as st
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 import os
 import sys
 import uuid
@@ -9,7 +10,7 @@ import json
 import re
 import numpy as np
 import pandas as pd
-from typing import List, Tuple, Dict
+from typing import Any, cast, List, Tuple, Dict
 from pathlib import Path
 
 # Resolve the project root
@@ -21,7 +22,7 @@ if project_root not in sys.path:
 
 from src.core.data import load_matchup_data
 from src.core.config import INPUT_DIR, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, TIER_1_THRESHOLD
-from src.tournament.solver import UserMetaSpec, swiss_rounds_from_players, get_variant_5_structure
+from src.tournament.solver import UserMetaSpec, RangeSpec, swiss_rounds_from_players, get_variant_5_structure
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
 
 @st.cache_data(show_spinner=False)
@@ -111,8 +112,10 @@ def main():
         st.header("🏟️ Tournament Settings")
         with st.container(border=True):
             tourney_structure = st.radio("Tournament Structure", ["Championship Series", "Pure Swiss"], index=0)
-            players = st.number_input("Number of Players", min_value=2, max_value=8192, value=st.session_state.imported_players, step=1)
-            
+            players_raw = st.number_input("Number of Players", min_value=2, max_value=8192,
+                                          value=st.session_state.imported_players, step=1)
+
+            players: int = int(players_raw) if players_raw is not None else 256
             if tourney_structure == "Championship Series":
                 d1_rounds, cut_points, d2_rounds, top_cut = get_variant_5_structure(players)
                 st.caption("**Championship Series Details**")
@@ -155,10 +158,11 @@ def main():
 
     with st.expander("📁 Import Limitless Labs HTML", expanded=True):
         uploaded_file = st.file_uploader("Upload a saved HTML file from Limitless Labs...", type=["html", "htm"])
-        if uploaded_file is not None:
+        if isinstance(uploaded_file, UploadedFile):
             if st.button("Extract Data & Populate Constraints", type="secondary"):
                 try:
-                    parsed_meta, total_import_players, wildcard_players = parse_limitless_html(uploaded_file.getvalue().decode("utf-8"), get_valid_deck_names())
+                    parsed_meta, total_import_players, wildcard_players = parse_limitless_html(
+                        uploaded_file.getvalue().decode("utf-8"), get_valid_deck_names())
                     st.session_state.imported_players = total_import_players
                     clear_all_rows()
                     for deck_name, count in parsed_meta.items():
@@ -205,11 +209,18 @@ def main():
                     with cols[2]:
                         if spec_type == "Exact":
                             if is_raw:
-                                default_val = int(row.get("val", 10.0)) if not row.get("is_locked") else int((float(row.get("val", 10))/100)*players)
-                                val_ui = st.number_input("Players", min_value=0, max_value=int(players), value=min(default_val, int(players)), step=1, key=f"val_{row_id}")
+                                default_val = int(row.get("val", 10.0)) if not row.get("is_locked") else int(
+                                    (float(row.get("val", 10)) / 100) * players)
+                                val_ui_raw = st.number_input("Players", min_value=0, max_value=int(players),
+                                                             value=min(default_val, int(players)), step=1,
+                                                             key=f"val_{row_id}")
+                                val_ui = int(val_ui_raw) if val_ui_raw is not None else 0
                                 prop = float(val_ui) / players if players > 0 else 0.0
                             else:
-                                val_ui = st.number_input("Percent (%)", min_value=0.0, max_value=100.0, value=float(row.get("val", 10.0)), step=0.1, format="%.2f", key=f"val_{row_id}")
+                                val_ui_raw = st.number_input("Percent (%)", min_value=0.0, max_value=100.0,
+                                                             value=float(row.get("val", 10.0)), step=0.1, format="%.2f",
+                                                             key=f"val_{row_id}")
+                                val_ui = float(val_ui_raw) if val_ui_raw is not None else 0.0
                                 prop = float(val_ui) / 100.0
                             if prop > 0: user_meta[str(deck)] = prop; total_min += prop
                         else:
@@ -221,7 +232,7 @@ def main():
                                                        key=f"slider_{row_id}")
                                 min_prop, max_prop = float(val_slider[0]) / 100.0, float(val_slider[1]) / 100.0
 
-                            user_meta[str(deck)] = {"min": min_prop, "max": max_prop}; total_min += min_prop
+                            user_meta[str(deck)] = cast(RangeSpec, cast(object, {"min": min_prop, "max": max_prop}))
                     with cols[3]:
                         st.button("🗑️", key=f"del_{row_id}", on_click=delete_meta_row, args=(row_id,))
 
@@ -522,9 +533,9 @@ def main():
             
             comp_df = pd.DataFrame(comp_data)
 
-            def highlight_winrates(v):
+            def highlight_winrates(v: Any) -> str:
                 if not isinstance(v, (int, float)): return ''
-                norm_val = v / 100.0
+                norm_val = float(v) / 100.0
                 target_rgb = aggressive_colorscale[0][1]
                 for threshold, co in aggressive_colorscale:
                     if norm_val >= threshold:

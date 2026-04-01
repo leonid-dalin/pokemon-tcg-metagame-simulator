@@ -68,7 +68,7 @@ def plot_metagame_evolution_interactive(
             )
         )
 
-        if extinction_gen is not None and extinction_gen < len(freq_series):
+        if isinstance(extinction_gen, int) and extinction_gen < len(freq_series):
             annotations_list.append(
                 go.layout.Annotation(
                     x=extinction_gen,
@@ -264,10 +264,11 @@ def plot_matchup_network(
         mode="markers+text",
         hoverinfo="text",
         marker=dict(size=node_size, color="lightblue", line=dict(width=2, color="darkblue")),
-        text=list(graph.nodes()),
+        text=[str(node) for node in graph.nodes()],
         textposition="top center",
         textfont=dict(size=10, color="black"),
-        hovertext=[f"{node} (Degree: {graph.degree(node)}, Presence: {deck_presence[node]:.2%})" for node in graph.nodes()],
+        hovertext=[f"{node} (Degree: {graph.degree(node)}, Presence: {deck_presence[str(node)]:.2%})" for node in
+                   graph.nodes()],
         uid="node_trace",
     )
 
@@ -369,8 +370,8 @@ def plot_metagame_scatter(df: pd.DataFrame, allow_negative_power: bool = False) 
     )
     
     fig.update_traces(textposition='bottom center')
-    
-    x_min = min(-5.0, scatter_df["Power Score"].min() - 5.0) if allow_negative_power else -2.0
+    min_power = float(scatter_df["Power Score"].min())
+    x_min = min(-5.0, min_power - 5.0) if allow_negative_power else -2.0
     fig.update_layout(
         xaxis=dict(range=[x_min, 105], title=dict(text="Power Score (Expected Win Rate)")),
         yaxis=dict(range=[-5, 105], title=dict(text="Frequency Score (Popularity)")),

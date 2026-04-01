@@ -99,21 +99,23 @@ def generate_final_state_tier_list(
         raise ValueError(f"final_freqs length {len(final_freqs)} does not match deck_names length {n}")
         
     expected_wr = win_matrix.dot(final_freqs)
-    
-    max_wr = np.max(expected_wr)
-    min_wr_floor = 1.0 - max_wr
+
+    max_wr = float(np.max(expected_wr).item())
+    min_wr_floor = float(1.0 - max_wr)
 
     if max_wr > min_wr_floor:
-        power_scores = np.clip((expected_wr - min_wr_floor) / (max_wr - min_wr_floor) * 100.0, 0.0, 100.0)
+        power_scores: np.ndarray = np.asarray(
+            np.clip((expected_wr - min_wr_floor) / (max_wr - min_wr_floor) * 100.0, 0.0, 100.0)
+        )
     else:
-        power_scores = np.full(n, 50.0) 
-        
-    max_freq = np.max(final_freqs)
-    freq_scores = np.zeros(n)
-    if max_freq > 0:
-        freq_scores = (final_freqs / max_freq) * 100.0
-        
-    meta_scores = (power_scores + freq_scores) / 2.0
+        power_scores: np.ndarray = np.asarray(np.full(n, 50.0))
+
+    max_freq = float(np.max(final_freqs).item())
+    freq_scores: np.ndarray = np.zeros(n, dtype=float)
+    if max_freq > 0.0:
+        freq_scores = np.asarray((final_freqs / max_freq) * 100.0)
+
+    meta_scores: np.ndarray = np.asarray((power_scores + freq_scores) / 2.0)
     
     tiers = {tier: [] for tier in TIER_ORDER}
 
