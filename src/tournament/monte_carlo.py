@@ -19,7 +19,7 @@ def _mc_worker(args: Tuple) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
     active = np.arange(players)
     
     for _ in range(iterations):
-        field_indices = rng.choice(n_decks, size=players, p=meta_distribution)
+        field_indices: np.ndarray = np.asarray(rng.choice(n_decks, size=players, p=meta_distribution))
         total_initial += np.bincount(field_indices, minlength=n_decks)
 
         match_points.fill(0)
@@ -209,13 +209,13 @@ def run_monte_carlo_analytics(
             
     results = {}
     with np.errstate(divide='ignore', invalid='ignore'):
-        day2_conv = np.where(total_initial > 0, total_day2 / total_initial, 0)
-        topcut_conv = np.where(total_initial > 0, total_topcut / total_initial, 0)
-        win_conv = np.where(total_initial > 0, total_champ / total_initial, 0)
-        
-        day2_share = np.where(np.sum(total_day2) > 0, total_day2 / np.sum(total_day2), 0)
-        topcut_share = np.where(np.sum(total_topcut) > 0, total_topcut / np.sum(total_topcut), 0)
+        day2_conv: np.ndarray = np.asarray(np.where(total_initial > 0, total_day2 / total_initial, 0))
+        topcut_conv: np.ndarray = np.asarray(np.where(total_initial > 0, total_topcut / total_initial, 0))
+        win_conv: np.ndarray = np.asarray(np.where(total_initial > 0, total_champ / total_initial, 0))
 
+        day2_share: np.ndarray = np.asarray(np.where(np.sum(total_day2) > 0, total_day2 / np.sum(total_day2), 0))
+        topcut_share: np.ndarray = np.asarray(
+            np.where(np.sum(total_topcut) > 0, total_topcut / np.sum(total_topcut), 0))
     for i, deck in enumerate(deck_names):
         if total_initial[i] > 0:
             results[deck] = {

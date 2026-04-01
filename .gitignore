@@ -59,3 +59,4 @@ temp/
 tests/
 diagnose.py
 test_scraper.py
+htmlconv/
