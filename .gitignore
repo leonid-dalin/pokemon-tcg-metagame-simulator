@@ -84,3 +84,4 @@ docs/_build/
 tests/
 diagnose.py
 test_scraper.py
+data/extras

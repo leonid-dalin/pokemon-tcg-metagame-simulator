@@ -20,4 +20,3 @@ RUN cd src/tournament/tcg_engine && maturin build --release
 RUN pip install src/tournament/tcg_engine/target/wheels/*.whl
 
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
-

@@ -244,10 +244,14 @@ def main():
     # EXECUTION
     # ==========================================
     if st.button("🚀 Generate Metagame & Predict", type="primary", width="stretch", disabled=(total_min > 1.0)):
+        job_id = str(uuid.uuid4())
         with st.status("⚙️ Initializing Engine...", expanded=True) as status:
+            st_progress_bar = st.progress(0, text="Booting Data Solver...")
+            start_time = time.time()
             try:
                 # 1. Prepare the payload
                 payload = {
+                    "job_id": job_id,
                     "user_meta_spec": user_meta,
                     "total_players": players,
                     "min_sample_threshold": min_sample_threshold,
@@ -260,27 +264,68 @@ def main():
                 }
 
                 # 2. POST to FastAPI
-                status.update(label="Dispatching to API...", state="running")
                 api_url = os.environ.get("API_URL", "http://localhost:8000/api/v1")
                 response = requests.post(f"{api_url}/predict", json=payload)
                 response.raise_for_status()
-
                 task_id = response.json()["task_id"]
 
-                # 3. Poll for results
-                status.update(label="Processing Monte Carlo Brackets in background...", state="running")
-                while True:
-                    task_res = requests.get(f"{api_url}/tasks/{task_id}").json()
+                # 3. Connect to the SSE Stream
+                status.update(label="Establishing SSE Connection...", state="running")
 
-                    if task_res["status"] == "complete":
-                        st.session_state.prediction_result = task_res["data"]["solver_results"]
-                        st.session_state.mc_result = task_res["data"]["mc_results"]
-                        status.update(label="✅ Simulation Complete!", state="complete", expanded=False)
-                        break
-                    elif task_res["status"] == "failed":
-                        raise Exception(task_res["error"])
+                is_complete = False
+                retries = 0
+                max_retries = 10
 
-                    time.sleep(1.5)  # Poll every 1.5 seconds
+                while not is_complete and retries < max_retries:
+                    try:
+                        with requests.get(f"{api_url}/tasks/{task_id}/stream?job_id={job_id}", stream=True,
+                                          timeout=45) as stream_response:
+                            stream_response.raise_for_status()
+
+                            for line in stream_response.iter_lines():
+                                if not line: continue
+                                decoded_line = line.decode('utf-8')
+
+                                if decoded_line.startswith("data:"):
+                                    data_str = decoded_line[5:].strip()
+                                    task_res = json.loads(data_str)
+
+                                    if task_res["status"] == "processing":
+                                        pct = task_res.get("progress", 0)
+                                        elapsed = time.time() - start_time
+
+                                        # ETA Math
+                                        if pct > 0:
+                                            total_est = elapsed / (pct / 100.0)
+                                            eta = total_est - elapsed
+                                            status.update(label=f"Simulating... {pct}%", state="running")
+                                            st_progress_bar.progress(pct / 100.0,
+                                                                     text=f"Processing Monte Carlo Brackets: {pct}% | ETA: {eta:.1f}s")
+                                        else:
+                                            status.update(label="Solving Water-Filling Constraints...", state="running")
+
+                                    elif task_res["status"] == "complete":
+                                        st_progress_bar.progress(1.0, text="Simulation Complete! Rendering Data...")
+                                        st.session_state.prediction_result = task_res["data"]["solver_results"]
+                                        st.session_state.mc_result = task_res["data"]["mc_results"]
+                                        status.update(label="✅ Run Complete!", state="complete", expanded=False)
+                                        is_complete = True
+                                        break
+
+                                    elif task_res["status"] == "failed":
+                                        raise Exception(task_res.get("error", "Unknown background task failure."))
+
+
+                    except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError,
+                        requests.exceptions.ReadTimeout) as e:
+                        retries += 1
+                        status.update(
+                            label=f"Network blip detected due to high CPU load. Reconnecting (Attempt {retries}/{max_retries})...",
+                            state="running")
+                        time.sleep(2)
+
+                if not is_complete:
+                    raise Exception("Lost connection to the backend server and exhausted all retry attempts.")
 
             except Exception as e:
                 status.update(label="❌ Simulation Failed", state="error", expanded=True)

@@ -1,32 +1,40 @@
 # docker-compose.yml
 services:
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   api:
     build: .
-    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
-    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379/?db=0
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
   worker:
     build: .
-    command: huey_consumer src.worker.queue.huey -w 4 -k thread
-    volumes:
-      - .:/app
+    environment:
+      - REDIS_URL=redis://redis:6379/?db=0
+      - PYTHONPATH=/app
     depends_on:
-      - api
-    restart: unless-stopped
+      redis:
+        condition: service_healthy
+    command: ["huey_consumer", "src.worker.queue.huey", "--worker-type=process", "--workers=4"]
 
   ui:
     build: .
-    command: streamlit run src/ui/app.py --server.address=0.0.0.0 --server.port=8501
     ports:
       - "8501:8501"
-    volumes:
-      - .:/app
     environment:
       - API_URL=http://api:8000/api/v1
-    depends_on:
-      - api
-    restart: unless-stopped
+    command: ["streamlit", "run", "src/ui/app.py"]

@@ -1,7 +1,49 @@
-## Commit `[idk yet]` (Apr 02, 2026)
+## ## Commit `[idk]` (Apr 04, 2026)
+### 🚀 Infrastructure & UX: Redis Migration and SSE Streaming
+
+This update finalizes the architectural decoupling of the simulator, transitioning from synchronous polling to a reactive, event-driven communication model.
+
+[Small Rant]
+
+As I’m journalling these changes, I want to mention the absolute struggle **I** had with the "Network Blip" error, as I just couldn't move around it. The system was on a chokehold with the error:
+
+> Network blip detected due to high CPU load. Reconnecting (Attempt X/10)...
+
+... and it simply refused to communicate the status of the data solver. At first, I blamed the SQLite file locks, as I assumed the `Huey` worker hogs it and causes the FastAPI server to stall. Then, when I introduced the Rust engine, I suffered from literal over-efficiency 💀 as it didn't hesitate in the slightest to 100% all of my CPU cores. I thought Python’s FastAPI runs on a single-threaded async event loop, maybe the engine was starving the API of the 'tiny' CPU slices it needs to keep the connection alive or something.
+
+To solve this, I went out of my way and performed two major architectural changes:
+- Migrated SQLite → Redis so that the task broker and progress data from RAM bypass disk I/O bottlenecks
+- Forcing Rust to yield control via `py.allow_threads` so the API could 'breathe' during all the heavy math
+
+**And the problem still persisted.** So how come I'm under high CPU load with several caps on? I `docker-compose up` and look at the calls made, and then I noticed.
+
+The real culprit was a single unhandled sentinel class. `EmptyData`.
+Or rather my assumption that `EmptyData` === `None` (Let me explain.)
+
+When Streamlit connected to the API to ask for progress, the background worker would sometimes be just a millisecond away from starting. In that tiny window, `huey.storage.peek_data()` doesn't return **None,** it returns its `EmptyData` object. Because I assumed it would be either bytes or None, my code was trying to run `.decode('utf-8')` on a Python class object (`EmptyData`). And yeah, it caused an unhandled exception that instantly severed the HTTP connection. So bothersome and frustrating. Anyway. I'll leave you with the Patch Notes as per usual.
+
+
+#### **📡 Server-Sent Events (SSE) Implementation**
+* **Persistent Connections:** Replaced the former polling loop in the UI with a single, persistent HTTP stream (`/api/v1/tasks/{task_id}/stream`).
+* **Real-Time Progress:** The UI now receives granular updates directly from the Huey worker, allowing for accurate ETA calculations and a smooth progress bar.
+* **Keep-Alive Heartbeats:** Implemented an unconditional heartbeat mechanism in the FastAPI event loop to prevent network timeouts during intensive 1M+ iteration Monte Carlo runs.
+* **Numpy-Safe Serialization:** Integrated a custom JSON encoder to handle `numpy.float` types, preventing silent stream crashes during data transmission.
+
+#### **🧠 Redis Broker Integration**
+* **Memory-First State:** Migrated the Huey task queue from SQLite to Redis. This eliminates the database file-locking bottlenecks that previously caused "Silent Stalls" during high-concurrency writes.
+* **Pydantic Data Integrity:** Updated the `PredictionRequest` schema to prevent the silent erasure of `job_id` and `tournament_style` fields during API ingestion.
+
+#### **⚖️ Resource Orchestration**
+* **GIL Bypass & Threading:** The Rust `tcg_engine` now explicitly releases the Python Global Interpreter Lock (GIL), allowing the FastAPI server to breathe while the CPU is under 100% load.
+* **Deferred Engine Initialization:** Moved the Rayon thread-pool initialization inside the worker task to prevent deadlocks caused by Linux `fork()` mechanics.
+* **Granular Chunking:** Inverted the chunking logic to ensure regular progress updates (every 10k iterations) regardless of the total simulation size.
+
+---
+
+## Commit `7aff00f` (Apr 02, 2026)
 ### 🚀 major: Rust integration for high-speed Monte Carlo simulations
 
-This update replaces the Python/NumPy tournament bracket engine with a fully compiled, multi-threaded Rust extension (`tcg_engine`). Faster execution times! 🥳
+This update replaces the Python/NumPy tournament bracket engine with a fully compiled, multithreaded Rust extension (`tcg_engine`). Faster execution times! 🥳
 
 #### **🦀 Rust & PyO3 Integration**
 * **GIL Bypass & Rayon Parallelization:** The `_mc_worker` has been completely rewritten in Rust. By utilizing `PyO3` and the `Rayon` crate, the engine now completely bypasses the Python Global Interpreter Lock (GIL), stealing work across all available CPU cores dynamically and efficiently.
@@ -16,7 +58,7 @@ This update replaces the Python/NumPy tournament bracket engine with a fully com
 ## Commit `39d482d` (Mar 31, 2026)
 ### 🚀 feat(pipeline): implement autonomous Limitless TCG live scraper, Pydantic matrix validation, and Huey cron scheduling
 
-This update completely eliminates the need for manual HTML file downloads from Limitless. The simulator is now able to fetch, normalise, validate, and ingest live Limitless TCG data automatically, as long as it knows the URLs.
+This update completely eliminates the need for manual HTML file downloads from Limitless. The simulator is now able to fetch, normalize, validate, and ingest live Limitless TCG data automatically, as long as it knows the URLs.
 
 #### **🕸️ Live Web Scraping (`scraper.py`)**
 * **Direct HTML Fetching:** Replaced the local file-reading logic with Python's `requests` library. The scraper now dynamically fetches live matchup pages using a predefined list of active format URLs (`urls.py`). The offline/manual version will become **legacy** for now.
@@ -79,7 +121,7 @@ This update drastically enhances the visual storytelling of the dashboard using 
 
 #### **📊 Advanced Visualizations (`plotting.py`)**
 * **Metagame Scatter Plot:** Introduced a 2D interactive scatter plot underneath the main data table. It visually maps a deck's Power Score against its Frequency Score, with the bubble's radius representing its overall Meta Score. Hover tooltips and static labels allow for rapid format comprehension.
-* **Negative Power Score Toggle:** Added a sidebar toggle (`allow_negative_power`) that strictly filters out unviable decks (Power Score < 0) from the Scatter Plot by default. This keeps the visual plane clean, while allowing users to opt-in to seeing the "graveyard" of negative EV decks.
+* **Negative Power Score Toggle:** Added a sidebar toggle (`allow_negative_power`) that strictly filters out unviable decks (Power Score < 0) from the Scatter Plot by default. This keeps the visual plane clean, while allowing users to opt in to seeing the "graveyard" of negative EV decks.
 * **Head-to-Head Radar Chart:** Complimenting the static text comparisons with a dynamic Plotly Spider/Radar chart. The chart automatically scales its axes to match the selected tournament structure (e.g., adding Day 2/Top 8 spokes only if applicable) and normalizes coordinates while preserving true metric values in the hover text.
 
 #### **🛡️ Stability & Error Handling**
@@ -87,7 +129,7 @@ This update drastically enhances the visual storytelling of the dashboard using 
 * **Persistent Success States:** Fixed a bug where successful HTML import alerts (`st.success`) would vanish in milliseconds due to the forced Streamlit rerun. Messages are now temporarily cached in `st.session_state` to survive the lifecycle refresh.
 
 #### **💅 UI/UX Polish**
-* **Matchup Table Visibility:** Fixed an issue where the background-color styler on the Head-to-Head matchup table died in Dark Mode. Boosted rgba opacity to `0.55` and forced `font-weight: bold; color: #ffffff;`.
+* **Matchup Table Visibility:** Fixed an issue where the background-colour styler on the Head-to-Head matchup table died in Dark Mode. Boosted rgba opacity to `0.55` and forced `font-weight: bold; color: #ffffff;`.
 * **Deprecation Maintenance:** Replaced all instances of the deprecated `use_container_width=True` argument in `st.dataframe` and `st.plotly_chart` with the desired `width="stretch"` standard.
 * **Radar Coordinate Bounding:** Enforced a visual `0.0` rendering floor on the Radar chart to prevent negative Power Scores from inverting the geometry of the polygon, while keeping the true negative text mapped to the user tooltips.
 
@@ -137,7 +179,7 @@ This update fundamentally shifts how the static baseline is evaluated, moving aw
 
 #### **UI/UX Intelligence Dashboard**
 * **Tabbed Actionable Intelligence:** Replaced the flat recommendation list with a 3-tab layout: **🔥 Top Recommendations** (Sorted by Power Score), **🚨 Top Threats** (Sorted by Meta Score), and **🚫 Decks to Avoid** (Negative EV).
-* **Threat Cross-Referencing:** Recommended decks now explicitly display a color-coded matrix showing exactly how they fare against the Top 3 "Meta Dictator" threats.
+* **Threat Cross-Referencing:** Recommended decks now explicitly display a colour-coded matrix showing exactly how they fare against the Top 3 "Meta Dictator" threats.
 * **Day 2 Expected Win Rate:** The UI now calculates a completely isolated Expected Win Rate against the *condensed* Day 2 meta-share, identifying "Day 2 Predators" that farm the top tables.
 
 ---
@@ -159,7 +201,7 @@ Another major update that introduces a new strict domain-driven directory struct
 #### **Mathematical Purity & Bug Fixes**
 * **Parabolic Tie Convergence:** The `_championship_series_worker` now accurately executes the advertised BO3 match-point bleed via the formula $P_{tie} = T_{global} \times 4P(1-P)$, properly awarding 1 point for ties and accurately suppressing global OMW% by ~1–1.5 points.
 * **Purged Phantom Confidence:** Fixed `data.py` assigning a default `match_count` of 100 to missing matchups. Missing data now defaults to 0, preventing the Bayesian beta distribution from inventing false statistical confidence. This was initially done for EGT where not enough matchups were recorded.
-* **Restored Replicator Purity:** Removed the global `mutation_floor` broadcast in `reintroduce_extinct_decks`. Decks now naturally decay to a true `0.0` frequency unless explicitly selected for reintroduction, allowing the engine to find mathematically perfect Nash Equilibriums.
+* **Restored Replicator Purity:** Removed the global `mutation_floor` broadcast in `reintroduce_extinct_decks`. Decks now naturally decay to a true `0.0` frequency unless explicitly selected for reintroduction, allowing the engine to find mathematically perfect Nash Equilibrium.
 * **Removed Win-Equivalent Distortions:** Stripped arbitrary float modifiers from tournament placements in the evolutionary engine. Fitness is now derived purely from mathematically normalized match points.
 * **Removed Data Falsification:** Deleted the `gaussian_filter1d` block at the end of the simulation loop, ensuring all post-analysis tools evaluate the raw, genuine stochastic output of the engine.
 * **Synchronized Tier Thresholds:** `generate_final_state_tier_list` now dynamically imports the global `TIER_*_THRESHOLD` variables, preventing conflicting tier assignments between the final state and all-time lists. Forgot about this hardcode.
@@ -186,7 +228,7 @@ Another major update that introduces a new strict domain-driven directory struct
 #### **UI/UX Updates & Bug Fixes**
 * **`app.py`:**
     * **Dynamic Perspective Toggle:** The "Odds Perspective" radio button now sits directly above the dataframe, allowing users to instantly swap the data sorting and Top Recommendations between Individual EV and Macro Impact without re-triggering the Monte Carlo engine.
-    * **Head-to-Head Color Coding:** Integrated a Pandas `Styler` into the matchup comparator to natively highlight favorable ($\ge 55\%$) matchups in green and unfavorable ($\le 45\%$) in red.
+    * **Head-to-Head Colour Coding:** Integrated a Pandas `Styler` into the matchup comparator to natively highlight favorable ($\ge 55\%$) matchups in green and unfavorable ($\le 45\%$) in red.
     * **Tooltips Added:** The Streamlit interactive dataframe now utilizes `st.column_config` `help` parameters, injecting native hover-tooltips for all table headers (e.g., explaining SoS, OMW, and composite scores).
     * **Layout & State Fixes:** Widened the custom constraint columns to prevent the delete button from clipping. Added defensive dictionary key initialization (`score_player`, `score_archetype`) to prevent Streamlit caching `KeyError`s during hot-reloads.
 
@@ -238,14 +280,14 @@ Another overhaul to the `scraper.py` utility to ensure the data fed into the sim
 - **Enhanced Mathematical Precision:** Win rates exported to `ea_input.json` and CSVs are now locked to a 4-decimal precision (`.4f`) from (`.2f`). 
 
 ### 🐛 Bug Fixes & Data Hygiene
-- **HTML Fallback Fix:** If a file is misnamed, the scraper now successfully falls back to extracting both the deck name and the exact format directly from Limitless's HTML infobox tags.
+- **HTML Fallback Fix:** If a file is misnamed, the scraper now successfully falls back to extracting both the deck name and the exact format directly from Limitless's HTML info-box tags.
 - **Rogue Data Exclusion:** Hard-banned the generic **"Other"** archetype from being processed. This prevents aggregated, non-cohesive rogue decks from artificially skewing the K-Means clustering and Rock-Paper-Scissors cycle detection.
 - **Architectural Alignment:** Removed premature data filtering from the scraper. The responsibility of filtering out decks with low match counts is now correctly delegated to the central `data.py` pipeline.
 
 -----
 
 ## Commit `48fa2c3` (Nov 12, 2025)
-### feat(analysis, config, docs): Vectorize tier list, centralize constants, and perform repository cleanup
+### feat(analysis, config, docs): Vectorize tier list, centralize constants, and perform repository clean-up
 
 Improves the metagame analysis pipeline by optimizing performance, ensuring full configuration transparency, and performing necessary repository maintenance.
 
@@ -262,7 +304,7 @@ Improves the metagame analysis pipeline by optimizing performance, ensuring full
 - **Code Hygiene:** Removed the unused local variable `num_gens` from `analysis.py`.
 
 ### 🧹 Chore & Maintenance
-- **I/O Cleanup:** Updated `.gitignore` or build scripts to manage and exclude excessive `/output/` directories and artifacts created during new simulation runs.
+- **I/O Clean-up:** Updated `.gitignore` or build scripts to manage and exclude excessive `/output/` directories and artefacts created during new simulation runs.
 - **Documentation Hygiene:** Sanitized and refined `CHANGELOG.md` to ensure clarity and remove redundant or conversational language.
 
 -----
@@ -344,7 +386,7 @@ The primary goals of this refactor were:
 3.  **Bug Fixes & Maintainability**
     - Resolved numerous linting errors, unused variables, and potential
       "referenced before assignment" bugs.
-    - Refactored complex, unreadable code (atleast IMHO) (such as the Bayesian win-rate
+    - Refactored complex, unreadable code (at least IMHO) (such as the Bayesian win-rate
       list comprehension) into a cleaner, more maintainable blocks. I hope.
 4.  **Enhanced Predictor Accuracy & Metrics**
     - Implemented advanced Swiss tournament metrics (SoS, OMW) and an 'undefeated probability' proxy

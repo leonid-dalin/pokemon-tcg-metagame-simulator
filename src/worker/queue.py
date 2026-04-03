@@ -1,5 +1,6 @@
 import json
-from huey import SqliteHuey, crontab
+import os
+from huey import RedisHuey, crontab
 from src.api.models import ScrapedMatrix
 from src.core.scraper import fetch_live_matchup_data, build_complete_matchup_matrix
 from src.core.config import INPUT_DATA, MIN_GAMES
@@ -7,13 +8,15 @@ from src.core.data import load_matchup_data
 from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
 from src.tournament.monte_carlo import run_monte_carlo_analytics
 
-huey = SqliteHuey(filename='tcg_tasks.db')
+redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/?db=0")
+huey = RedisHuey('tcg_tasks', url=redis_url)
 
 @huey.task()
 def execute_simulation_job(payload: dict):
     """
     This runs in a background worker process, completely freeing up the API
     """
+    job_id = payload.get("job_id", "unknown_job")
     deck_names, win_matrix, _ = load_matchup_data(INPUT_DATA, MIN_GAMES)
 
     # 1. Run Solver (Water-filling & Baseline Constraints)
@@ -32,6 +35,10 @@ def execute_simulation_job(payload: dict):
         d1_rounds = swiss_rounds_from_players(players)
         cut_points, d2_rounds, top_cut = 99, 0, (8 if players >= 8 else 0)
 
+    def _progress_handler(current_chunk: int, total_chunks: int):
+        pct = int((current_chunk / total_chunks) * 100)
+        huey.storage.put_data(f"prog_{job_id}", str(pct).encode('utf-8'))
+
     # 3. Run Monte Carlo Brackets
     mc_res = run_monte_carlo_analytics(
         deck_names=deck_names,
@@ -46,7 +53,8 @@ def execute_simulation_job(payload: dict):
         match_format=payload["match_format"],
         use_tie_convergence=payload["use_tie_convergence"],
         global_tie_rate=payload["global_tie_rate"],
-        use_drop_feature=payload["use_drop_feature"]
+        use_drop_feature=payload["use_drop_feature"],
+        progress_callback=_progress_handler
     )
 
     return {
@@ -58,8 +66,8 @@ def execute_simulation_job(payload: dict):
 def automated_daily_pipeline():
     print("Starting automated daily Limitless TCG data scrape...")
 
-    from src.core.urls import ASC_URLS
-    TARGET_URLS = ASC_URLS
+    from src.core.urls import ASC_URLS, POR_URLS
+    TARGET_URLS = POR_URLS
 
     try:
         canonical_map = {}
