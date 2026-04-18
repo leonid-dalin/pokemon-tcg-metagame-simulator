@@ -71,6 +71,11 @@ def parse_limitless_html(html_str: str, valid_decks: List[str]) -> Tuple[Dict[st
     return parsed_meta, total_players, wildcard_players
 
 # --- State Management ---
+if 'expander_import_open' not in st.session_state:
+    st.session_state.expander_import_open = True
+if 'expander_constraints_open' not in st.session_state:
+    st.session_state.expander_constraints_open = False
+
 def init_session_state():
     defaults = {
         "meta_rows": [], "prediction_result": None, "mc_result": None,
@@ -80,8 +85,18 @@ def init_session_state():
         if key not in st.session_state:
             st.session_state[key] = val
 
-def add_meta_row(deck="", spec_type="Exact", val=10.0, is_locked=False): 
-    st.session_state.meta_rows.append({"id": str(uuid.uuid4()), "deck": deck, "spec_type": spec_type, "val": val, "is_locked": is_locked})
+def add_meta_row(deck="", spec_type="Exact", val=10.0, is_locked=True, mode=None):
+    if mode is None:
+        mode = st.session_state.get("internal_input_mode", "Percentage")
+
+    st.session_state.meta_rows.append({
+        "id": str(uuid.uuid4()),
+        "deck": deck,
+        "spec_type": spec_type,
+        "val": val,
+        "is_locked": is_locked,
+        "mode": mode
+    })
 def delete_meta_row(row_id: str): st.session_state.meta_rows = [r for r in st.session_state.meta_rows if r["id"] != row_id]
 def clear_all_rows(): st.session_state.meta_rows = []
 def load_more_recs(): st.session_state.rec_limit += 3
@@ -131,9 +146,20 @@ def main():
         with st.container(border=True):
             mc_iterations = st.selectbox("Monte Carlo Iterations", options=[1000, 10_000, 100_000, 1_000_000], format_func=lambda x: f"{x:,}", index=1)
             match_format = st.radio("Match Format", ["BO1", "BO3"], index=1)
-            
             min_sample_threshold = st.slider("Matchup Minimum Games", min_value=1, max_value=100, value=10, step=1)
-            input_mode = st.radio("Constraint Mode", ["Percentage", "Raw Players"])
+
+            if "internal_input_mode" not in st.session_state:
+                st.session_state.internal_input_mode = "Percentage"
+
+            mode_options = ["Percentage", "Raw Players"]
+            mode_idx = mode_options.index(st.session_state.internal_input_mode)
+
+            input_mode = st.radio(
+                "Constraint Mode",
+                mode_options,
+                index=mode_idx
+            )
+            st.session_state.internal_input_mode = input_mode
             is_raw = input_mode == "Raw Players"
 
             st.divider()
@@ -156,37 +182,105 @@ def main():
         st.warning(st.session_state.import_warn)
         del st.session_state.import_warn
 
-    with st.expander("📁 Import Limitless Labs HTML", expanded=True):
-        uploaded_file = st.file_uploader("Upload a saved HTML file from Limitless Labs...", type=["html", "htm"])
+    with st.expander("📁 Import Metagame Data / Config", expanded=st.session_state.expander_import_open):
+        uploaded_file = st.file_uploader(
+            "Upload Limitless Matchup Export (.html) or saved JSON config",
+            type=['html', 'htm', 'json'],
+            accept_multiple_files=False,
+            help="HTML imports number of players + custom states as per Limitless Labs format; JSON restores custom states."
+        )
+
         if isinstance(uploaded_file, UploadedFile):
-            if st.button("Extract Data & Populate Constraints", type="secondary"):
-                try:
-                    parsed_meta, total_import_players, wildcard_players = parse_limitless_html(
-                        uploaded_file.getvalue().decode("utf-8"), get_valid_deck_names())
-                    st.session_state.imported_players = total_import_players
-                    clear_all_rows()
-                    for deck_name, count in parsed_meta.items():
-                        add_meta_row(deck=deck_name, spec_type="Exact", val=(count / total_import_players) * 100.0 if total_import_players > 0 else 0.0, is_locked=True)
-                    st.session_state.import_msg = f"✅ Successfully imported {len(parsed_meta)} recognized decks ({total_import_players} total players)."
-                    if wildcard_players > 0: st.warning(f"⚠️ {wildcard_players} players were using unrecognized/rogue decks. Handled via rescaling.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Error parsing HTML file: {str(e)}")
-                    st.exception(e)
-                    st.stop()
+            is_json = uploaded_file.name.lower().endswith('.json')
+
+            if is_json:
+                if st.button("Apply Saved Configuration", type="primary", use_container_width=True):
+                    try:
+                        saved_rows = json.loads(uploaded_file.getvalue().decode("utf-8"))
+                        clear_all_rows()
+
+                        if isinstance(saved_rows, dict) and "constraints" in saved_rows:
+                            st.session_state.internal_input_mode = saved_rows.get("input_mode", "Percentage")
+                            rows_to_load = saved_rows["constraints"]
+                        else:
+                            rows_to_load = saved_rows
+
+                        for row in rows_to_load:
+                            add_meta_row(
+                                deck=row.get("deck", ""),
+                                spec_type=row.get("spec_type", "Exact"),
+                                val=row.get("val", 1.0),
+                                is_locked=True,
+                                mode=row.get("mode", "Percentage")
+                            )
+                        st.success(f"✅ Loaded {len(saved_rows)} constraints.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Invalid JSON format: {e}")
+            else:
+                if st.button("Extract Data & Populate Constraints", type="secondary", use_container_width=True):
+                    try:
+                        parsed_meta, total_import_players, wildcard_players = parse_limitless_html(
+                            uploaded_file.getvalue().decode("utf-8"), get_valid_deck_names()
+                        )
+                        st.session_state.imported_players = total_import_players
+                        clear_all_rows()
+                        for deck_name, count in parsed_meta.items():
+                            add_meta_row(
+                                deck=deck_name,
+                                spec_type="Exact",
+                                val=(count / total_import_players) * 100.0 if total_import_players > 0 else 0.0,
+                                is_locked=True
+                            )
+                        st.session_state.import_msg = f"✅ Successfully imported {len(parsed_meta)} recognized decks ({total_import_players} total players)."
+                        if wildcard_players > 0:
+                            st.warning(
+                                f"⚠️ {wildcard_players} players were using unrecognized/rogue decks. Handled via rescaling.")
+                        st.session_state.expander_import_open = False
+                        st.session_state.expander_constraints_open = True
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error parsing HTML file: {str(e)}")
+                        st.exception(e)
+                        st.stop()
 
     user_meta: UserMetaSpec = {}
     total_min = 0.0
     deck_names = get_valid_deck_names()
     seen_decks = set()
 
-    with st.expander("🛠️ Active Custom Constraints", expanded=False):
-        c1, c2 = st.columns([1, 4])
-        with c1:
-            if st.button("➕ Add Constraint"): add_meta_row()
-        with c2:
-            if st.button("🗑️ Clear All"): clear_all_rows(); st.rerun()
-                
+    with st.expander("🛠️ Custom Metagame Constraints", expanded=st.session_state.expander_constraints_open):
+        col1, col2, col3 = st.columns([1, 1, 1.2])
+        with col1:
+            if st.button("➕ Add Constraint", use_container_width=True):
+                add_meta_row()
+        with col2:
+            if st.button("🗑️ Clear All", use_container_width=True):
+                clear_all_rows()
+                st.rerun()
+        with col3:
+            export_data = {
+                "input_mode": st.session_state.internal_input_mode,
+                "constraints": [
+                    {
+                        "deck": r["deck"],
+                        "spec_type": r["spec_type"],
+                        "val": r["val"],
+                        "is_locked": True,
+                        "mode": st.session_state.internal_input_mode,
+                    }
+                    for r in st.session_state.meta_rows
+                ]
+            }
+            st.download_button(
+                label="📥 Export JSON",
+                data=json.dumps(export_data, indent=2),
+                file_name="tcg_meta_config.json",
+                mime="application/json",
+                use_container_width=True,
+                help="Save current constraints for future sessions."
+            )
+
         st.markdown("<br>", unsafe_allow_html=True)
         constraint_cols = st.columns(2)
         
@@ -207,30 +301,99 @@ def main():
                         spec_type = st.radio("Type", ["Exact", "Range"], index=0 if row.get("spec_type")=="Exact" else 1, key=f"type_{row_id}", horizontal=True, label_visibility="collapsed")
                         st.session_state.meta_rows[idx]["spec_type"] = str(spec_type)
                     with cols[2]:
+                        row_mode = row.get("mode", "Percentage")
+                        current_ui_mode = "Raw Players" if is_raw else "Percentage"
+                        raw_val_any = row.get("val", 1.0)
+
+                        if isinstance(raw_val_any, (list, tuple)) and len(raw_val_any) >= 2:
+                            r_min, r_max = float(raw_val_any[0]), float(raw_val_any[1])
+                            e_val = float(raw_val_any[0])
+                            is_list = True
+                        elif isinstance(raw_val_any, (int, float)):
+                            r_min, r_max = 0.0, float(raw_val_any)
+                            e_val = float(raw_val_any)
+                            is_list = False
+                        else:
+                            r_min, r_max, e_val, is_list = 0.0, 10.0, 10.0, False
+
+                        if row_mode != current_ui_mode:
+                            if current_ui_mode == "Raw Players":  # % -> Players
+                                if is_list:
+                                    new_val = (int((r_min / 100.0) * players), int((r_max / 100.0) * players))
+                                else:
+                                    new_val = int((e_val / 100.0) * players)
+                            else:  # Players -> %
+                                if is_list:
+                                    new_val = ((r_min / players) * 100.0 if players > 0 else 0.0,
+                                               (r_max / players) * 100.0 if players > 0 else 0.0)
+                                else:
+                                    new_val = (e_val / players) * 100.0 if players > 0 else 0.0
+
+                            st.session_state.meta_rows[idx]["val"] = new_val
+                            st.session_state.meta_rows[idx]["mode"] = current_ui_mode
+
+                            if isinstance(new_val, tuple):
+                                r_min, r_max = float(new_val[0]), float(new_val[1])
+                                e_val = float(new_val[0])
+                            else:
+                                r_min, r_max = 0.0, float(new_val)
+                                e_val = float(new_val)
+
                         if spec_type == "Exact":
                             if is_raw:
-                                default_val = int(row.get("val", 10.0)) if not row.get("is_locked") else int(
-                                    (float(row.get("val", 10)) / 100) * players)
-                                val_ui_raw = st.number_input("Players", min_value=0, max_value=int(players),
-                                                             value=min(default_val, int(players)), step=1,
-                                                             key=f"val_{row_id}")
-                                val_ui = int(val_ui_raw) if val_ui_raw is not None else 0
-                                prop = float(val_ui) / players if players > 0 else 0.0
+                                safe_int_val = max(0, min(int(e_val), int(players)))
+                                val_ui_raw = st.number_input(
+                                    "Players", min_value=0, max_value=int(players),
+                                    value=safe_int_val, step=1, key=f"val_{row_id}"
+                                )
+                                val_ui_int = int(val_ui_raw) if val_ui_raw is not None else safe_int_val
+                                prop = float(val_ui_int) / players if players > 0 else 0.0
+                                st.session_state.meta_rows[idx]["val"] = val_ui_int
                             else:
-                                val_ui_raw = st.number_input("Percent (%)", min_value=0.0, max_value=100.0,
-                                                             value=float(row.get("val", 10.0)), step=0.1, format="%.2f",
-                                                             key=f"val_{row_id}")
-                                val_ui = float(val_ui_raw) if val_ui_raw is not None else 0.0
-                                prop = float(val_ui) / 100.0
-                            if prop > 0: user_meta[str(deck)] = prop; total_min += prop
-                        else:
+                                safe_float_val = max(0.0, min(e_val, 100.0))
+                                val_ui_raw = st.number_input(
+                                    "Percent (%)", min_value=0.0, max_value=100.0,
+                                    value=safe_float_val, step=0.1, format="%.2f", key=f"val_{row_id}"
+                                )
+                                val_ui_float = float(val_ui_raw) if val_ui_raw is not None else safe_float_val
+                                prop = val_ui_float / 100.0
+                                st.session_state.meta_rows[idx]["val"] = val_ui_float
+
+                            if prop > 0:
+                                user_meta[str(deck)] = prop
+                                total_min += prop
+
+                        else:  # Range Mode
                             if is_raw:
-                                val_slider = st.slider("Range (Players)", 0, int(players), (0, min(15, int(players))), key=f"slider_{row_id}")
-                                min_prop, max_prop = float(val_slider[0]) / players if players > 0 else 0.0, float(val_slider[1]) / players if players > 0 else 0.0
+                                v_min = max(0, min(int(r_min), int(players)))
+                                v_max = max(0, min(int(r_max), int(players)))
+                                if v_min > v_max: v_min = v_max
+
+                                val_slider_raw = st.slider(
+                                    "Range (Players)", 0, int(players),
+                                    value=(v_min, v_max), key=f"slider_{row_id}"
+                                )
+                                if val_slider_raw is not None and isinstance(val_slider_raw, tuple):
+                                    min_prop = float(val_slider_raw[0]) / players if players > 0 else 0.0
+                                    max_prop = float(val_slider_raw[1]) / players if players > 0 else 0.0
+                                    st.session_state.meta_rows[idx]["val"] = val_slider_raw
+                                else:
+                                    min_prop, max_prop = 0.0, 0.0
                             else:
-                                val_slider = st.slider("Range (%)", 0.0, 100.0, (0.0, 15.0), step=0.1, format="%.1f%%",
-                                                       key=f"slider_{row_id}")
-                                min_prop, max_prop = float(val_slider[0]) / 100.0, float(val_slider[1]) / 100.0
+                                v_min_f = max(0.0, min(r_min, 100.0))
+                                v_max_f = max(0.0, min(r_max, 100.0))
+                                if v_min_f > v_max_f: v_min_f = v_max_f
+
+                                val_slider_f = st.slider(
+                                    "Range (%)", 0.0, 100.0,
+                                    value=(v_min_f, v_max_f), step=0.1, format="%.1f%%", key=f"slider_{row_id}"
+                                )
+                                if val_slider_f is not None and isinstance(val_slider_f, tuple):
+                                    min_prop = float(val_slider_f[0]) / 100.0
+                                    max_prop = float(val_slider_f[1]) / 100.0
+                                    st.session_state.meta_rows[idx]["val"] = val_slider_f
+                                else:
+                                    min_prop, max_prop = 0.0, 0.0
 
                             user_meta[str(deck)] = cast(RangeSpec, cast(object, {"min": min_prop, "max": max_prop}))
                     with cols[3]:
@@ -317,7 +480,7 @@ def main():
 
 
                     except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError,
-                        requests.exceptions.ReadTimeout) as e:
+                        requests.exceptions.ReadTimeout) as _:
                         retries += 1
                         status.update(
                             label=f"Network blip detected due to high CPU load. Reconnecting (Attempt {retries}/{max_retries})...",

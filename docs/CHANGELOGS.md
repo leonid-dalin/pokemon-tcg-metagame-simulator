@@ -340,27 +340,27 @@ Fixes:
 
 ### 1\. `src/main.py`
 
-| Category | Line | Change Description |
-| :--- | :--- | :--- |
-| **Bug Fix (Serialization)** | (Lines 230-240) | **Fixed `TypeError: Object of type ndarray is not JSON serializable`** by calling `.tolist()` on the `similarity` variable before passing it to `json.dump`. |
-| **Code Hygiene** | (Lines 230-240) | **Resolved unused variable warning** by adding explicit code to save the calculated `cycles` and `similarity` variables to `matchup_cycles.json` and `deck_similarity.json` respectively. |
+| Category                    | Line            | Change Description                                                                                                                                                                        |
+|:----------------------------|:----------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Bug Fix (Serialization)** | (Lines 230-240) | **Fixed `TypeError: Object of type ndarray is not JSON serializable`** by calling `.tolist()` on the `similarity` variable before passing it to `json.dump`.                              |
+| **Code Hygiene**            | (Lines 230-240) | **Resolved unused variable warning** by adding explicit code to save the calculated `cycles` and `similarity` variables to `matchup_cycles.json` and `deck_similarity.json` respectively. |
 
 
 
 ### 2\. `src/plotting.py`
 
-| Category | Line | Change Description |
-| :--- | :--- | :--- |
-| **Code Hygiene (Naming)** | (Line 215, various) | **Renamed capitalized variable `G` to `graph`** throughout the `plot_matchup_network` function to adhere to Python's lowercase variable convention. |
-| **Code Hygiene (Unused)** | (Line 217) | **Removed the unused local variable `deck_to_idx`** from `plot_matchup_network`. |
-| **Code Hygiene (Shadowing)** | (Line 54, various) | **Renamed local variable `annotations` to `annotations_list`** within `plot_metagame_evolution_interactive` to avoid shadowing the imported name `go.layout.Annotation`. |
+| Category                     | Line                | Change Description                                                                                                                                                       |
+|:-----------------------------|:--------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Code Hygiene (Naming)**    | (Line 215, various) | **Renamed capitalized variable `G` to `graph`** throughout the `plot_matchup_network` function to adhere to Python's lowercase variable convention.                      |
+| **Code Hygiene (Unused)**    | (Line 217)          | **Removed the unused local variable `deck_to_idx`** from `plot_matchup_network`.                                                                                         |
+| **Code Hygiene (Shadowing)** | (Line 54, various)  | **Renamed local variable `annotations` to `annotations_list`** within `plot_metagame_evolution_interactive` to avoid shadowing the imported name `go.layout.Annotation`. |
 
 
 
 ### 3\. `src/analysis.py`
 
-| Category | Line | Change Description |
-| :--- | :--- | :--- |
+| Category              | Line              | Change Description                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|:----------------------|:------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Logic Improvement** | (Around Line 290) | **Corrected `compute_deck_similarity` logic.** Changed the comparison profiles from the **reduced submatrix** of active decks (`win_matrix[np.ix_(active_indices, active_indices)]`) to the **full win-rate profiles** against the entire metagame (`win_matrix[active_indices, :]`). This ensures strategic similarity is measured based on a deck's complete profile (all $N$ matchups), not just the matchups against other currently active decks. |
 
 -----

@@ -1,13 +1,32 @@
-import json
 import asyncio
+import logging
+import json
 import numpy as np
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 from src.api.models import PredictionRequest
 from src.worker.queue import execute_simulation_job, huey
 
-app = FastAPI(title="TCG Simulator API")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    logging.info("Booting up: Triggering automated daily pipeline synchronously...")
+    try:
+        from src.worker.queue import automated_daily_pipeline
+        automated_daily_pipeline.call_local()
+        logging.info("Successfully hydrated Limitless TCG data matrix.")
+    except Exception as e:
+        logging.error(f"Failed to execute startup data pipeline: {e}")
+    yield
+    logging.info("Shutting down Startup API...")
+
+app = FastAPI(
+    title="Pokémon TCG Metagame Simulator API",
+    description="RESTful gateway for stochastic tournament modeling and metagame evolution",
+    lifespan=lifespan,
+    docs_url="/api/docs",
+    redoc_url=None)
 
 # Allow Streamlit to talk to this API
 app.add_middleware(
@@ -15,6 +34,7 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 def numpy_safe_encoder(obj):
@@ -34,7 +54,6 @@ async def start_prediction(request: PredictionRequest):
         "task_id": task.id
     }
 
-
 @app.get("/api/v1/tasks/{task_id}/stream")
 async def stream_task_status(task_id: str, job_id: str, request: Request):
     """
@@ -47,7 +66,7 @@ async def stream_task_status(task_id: str, job_id: str, request: Request):
             if await request.is_disconnected():
                 break
 
-            # 1. Offload synchronous Redis checks to a threadpool to prevent blocking Uvicorn
+            # 1. Offload synchronous Redis checks to a threadpool to prevent blocking uvicorn
             result = await asyncio.to_thread(huey.result, task_id, blocking=False)
 
             if isinstance(result, Exception):

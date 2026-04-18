@@ -45,7 +45,7 @@ NUM_TOURNAMENTS_PER_GEN = 16
 NUM_ROUNDS = 5
 
 # TPCi Variant #5 Official Structure Logic 
-_STRUCTURE_THRESHOLDS: Tuple[int, ...] = (8, 16, 32, 64, 128, 256, 512, 1024, 2048)
+_STRUCTURE_THRESHOLDS: Tuple[int, ...] = (8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192)
 # (Day 1 Rounds, Cut, Day 2 Rounds, Top Cut)
 _STRUCTURE_RESULTS: Tuple[Tuple[int, int, int, int], ...] = (
     (3, 99, 0, 0),   # <= 8
@@ -57,7 +57,8 @@ _STRUCTURE_RESULTS: Tuple[Tuple[int, int, int, int], ...] = (
     (8, 16, 3, 8),   # <= 512
     (8, 16, 4, 8),   # <= 1024
     (8, 16, 5, 8),   # <= 2048
-    (8, 16, 6, 8),   # > 2048 (Default)
+    (8, 16, 6, 8),   # <= 4096
+    (9, 19, 6, 8)    # <= 8192
 )
 
 # ----------------------------

@@ -157,7 +157,7 @@ fn run_parallel_monte_carlo(
     use_drop_feature: bool,
 ) -> PyResult<(Vec<usize>, Vec<usize>, Vec<usize>, Vec<usize>)> {
 
-    py.allow_threads(|| {
+    py.detach(|| {
         let n_decks = win_matrix.len();
 
         // Rayon parallel iterator across iterations
