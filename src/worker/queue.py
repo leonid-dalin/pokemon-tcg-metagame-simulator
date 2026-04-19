@@ -1,7 +1,8 @@
 import json
 import os
 from huey import RedisHuey, crontab
-from src.api.models import ScrapedMatrix
+
+from src.api.models import ScrapedMatrix, PrecisionTier, TIER_MAPPING, PredictionRequest
 from src.core.scraper import fetch_live_matchup_data, build_complete_matchup_matrix
 from src.core.config import INPUT_DATA, MIN_GAMES
 from src.core.data import load_matchup_data
@@ -18,14 +19,12 @@ def execute_simulation_job(payload: dict):
     """
     job_id = payload.get("job_id", "unknown_job")
     deck_names, win_matrix, _ = load_matchup_data(INPUT_DATA, MIN_GAMES)
+    tier_str = payload.get("precision_tier", PrecisionTier.STANDARD.value)
+    iterations = TIER_MAPPING.get(PrecisionTier(tier_str), 25_000)
 
     # 1. Run Solver (Water-filling & Baseline Constraints)
-    solver_res = predict_best_decks(
-        user_meta_spec=payload["user_meta_spec"],
-        total_players=payload["total_players"],
-        min_sample_threshold=payload["min_sample_threshold"],
-        match_format=payload["match_format"]
-    )
+    request = PredictionRequest(**payload)
+    solver_res = predict_best_decks(request)
 
     # 2. Determine Tournament Structure
     players = payload["total_players"]
@@ -49,7 +48,7 @@ def execute_simulation_job(payload: dict):
         d2_rounds=d2_rounds,
         top_cut=top_cut,
         players=players,
-        iterations=payload["mc_iterations"],
+        iterations=iterations,
         match_format=payload["match_format"],
         use_tie_convergence=payload["use_tie_convergence"],
         global_tie_rate=payload["global_tie_rate"],
@@ -67,11 +66,11 @@ def automated_daily_pipeline():
     print("Starting automated daily Limitless TCG data scrape...")
 
     from src.core.urls import ASC_URLS, POR_URLS
-    TARGET_URLS = POR_URLS
+    target_urls = POR_URLS
 
     try:
         canonical_map = {}
-        raw_matchups = fetch_live_matchup_data(TARGET_URLS, canonical_map)
+        raw_matchups = fetch_live_matchup_data(target_urls, canonical_map)
 
         if not raw_matchups:
             raise ValueError("Scraper returned zero matchups. Limitless HTML structure may have changed.")

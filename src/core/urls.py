@@ -36,6 +36,7 @@ ASC_URLS = [
 
 POR_URLS = [
     "https://play.limitlesstcg.com/decks/alakazam-dudunsparce/matchups?format=standard&rotation=2026&set=POR",
+    "https://play.limitlesstcg.com/decks/archaludon-ex/matchups?format=standard&rotation=2026&set=POR",
     "https://play.limitlesstcg.com/decks/ceruledge-ex/matchups?format=standard&rotation=2026&set=POR",
     "https://play.limitlesstcg.com/decks/clefairy-ogerpon/matchups?format=standard&rotation=2026&set=POR",
     "https://play.limitlesstcg.com/decks/crustle-dri/matchups?format=standard&rotation=2026&set=POR",
@@ -49,11 +50,11 @@ POR_URLS = [
     "https://play.limitlesstcg.com/decks/froslass-munkidori/matchups?format=standard&rotation=2026&set=POR",
     "https://play.limitlesstcg.com/decks/greninja-ex/matchups?format=standard&rotation=2026&set=POR",
     "https://play.limitlesstcg.com/decks/grimmsnarl-froslass/matchups?format=standard&rotation=2026&set=POR",
-    "https://play.limitlesstcg.com/decks/hops-trevenant?format=standard&rotation=2026&set=POR",
+    "https://play.limitlesstcg.com/decks/hops-trevenant/matchups?format=standard&rotation=2026&set=POR",
     "https://play.limitlesstcg.com/decks/lucario-hariyama/matchups?format=standard&rotation=2026&set=POR",
     "https://play.limitlesstcg.com/decks/mega-absol-box/matchups?format=standard&rotation=2026&set=POR",
     "https://play.limitlesstcg.com/decks/mega-lucario-ex/matchups?format=standard&rotation=2026&set=POR",
-    "https://play.limitlesstcg.com/decks/mega-starmie-ex?format=standard&rotation=2026&set=POR",
+    "https://play.limitlesstcg.com/decks/mega-starmie-ex?matchups?format=standard&rotation=2026&set=POR",
     "https://play.limitlesstcg.com/decks/mega-venusaur-ex/matchups?format=standard&rotation=2026&set=POR",
     "https://play.limitlesstcg.com/decks/n-zoroark/matchups?format=standard&rotation=2026&set=POR",
     "https://play.limitlesstcg.com/decks/ogerpon-meganium/matchups?format=standard&rotation=2026&set=POR",

@@ -1,17 +1,18 @@
 # app.py | Streamlit dashboard
-import streamlit as st
-from streamlit.runtime.uploaded_file_manager import UploadedFile
-import os
-import sys
-import uuid
-import requests
-import time
 import json
+import os
 import re
+import sys
+import time
+import uuid
+from pathlib import Path
+from typing import Any, cast, List, Tuple, Dict, Union
+
 import numpy as np
 import pandas as pd
-from typing import Any, cast, List, Tuple, Dict
-from pathlib import Path
+import requests
+import streamlit as st
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 # Resolve the project root
 project_root = str(Path(__file__).resolve().parents[2])
@@ -20,24 +21,27 @@ project_root = str(Path(__file__).resolve().parents[2])
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from src.api.models import PrecisionTier, RangeSpec, ExactSpec, PredictionRequest
 from src.core.data import load_matchup_data
-from src.core.config import INPUT_DIR, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, TIER_1_THRESHOLD
-from src.tournament.solver import UserMetaSpec, RangeSpec, swiss_rounds_from_players, get_variant_5_structure
+from src.core.config import INPUT_DATA, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, TIER_1_THRESHOLD
+from src.tournament.solver import  swiss_rounds_from_players, get_variant_5_structure
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
 
+# ==========================================
+# Helper Funcs
+# ==========================================
 @st.cache_data(show_spinner=False)
 def get_valid_deck_names() -> List[str]:
-    input_path = os.path.join(INPUT_DIR, "ea_input.json")
+    input_path = os.path.join(str(INPUT_DATA))
     deck_names, _, _ = load_matchup_data(input_path, MIN_GAMES)
     return sorted(deck_names)
 
 @st.cache_data(show_spinner=False)
 def load_full_win_matrix():
-    input_path = os.path.join(INPUT_DIR, "ea_input.json")
+    input_path = os.path.join(str(INPUT_DATA))
     deck_names, win_matrix, _ = load_matchup_data(input_path, MIN_GAMES)
     return deck_names, win_matrix
 
-# --- HTML Parser for Limitless Labs ---
 def parse_limitless_html(html_str: str, valid_decks: List[str]) -> Tuple[Dict[str, int], int, int]:
     deck_script_match = re.search(r'<script type="application/json" data-sveltekit-fetched data-url="[^"]*/tcg/decks[^"]*">(.*?)</script>', html_str, re.DOTALL)
     
@@ -69,12 +73,6 @@ def parse_limitless_html(html_str: str, valid_decks: List[str]) -> Tuple[Dict[st
             wildcard_players += players
 
     return parsed_meta, total_players, wildcard_players
-
-# --- State Management ---
-if 'expander_import_open' not in st.session_state:
-    st.session_state.expander_import_open = True
-if 'expander_constraints_open' not in st.session_state:
-    st.session_state.expander_constraints_open = False
 
 def init_session_state():
     defaults = {
@@ -112,7 +110,15 @@ def get_tier(expected_wr: float) -> str:
             return tier
     return "T4" 
 
-# --- Main Application ---
+# --- State Management ---
+if 'expander_import_open' not in st.session_state:
+    st.session_state.expander_import_open = True
+if 'expander_constraints_open' not in st.session_state:
+    st.session_state.expander_constraints_open = False
+
+# ==========================================
+# Main App
+# ==========================================
 def main():
     st.set_page_config(page_title="TCG Metagame Solver", page_icon="🏆", layout="wide")
     init_session_state()
@@ -125,12 +131,22 @@ def main():
     # ==========================================    
     with st.sidebar:
         st.header("🏟️ Tournament Settings")
+
+        player_field = PredictionRequest.model_fields['total_players']
+        tie_field = PredictionRequest.model_fields['global_tie_rate']
+        sample_field = PredictionRequest.model_fields['min_sample_threshold']
+
         with st.container(border=True):
             tourney_structure = st.radio("Tournament Structure", ["Championship Series", "Pure Swiss"], index=0)
-            players_raw = st.number_input("Number of Players", min_value=2, max_value=8192,
-                                          value=st.session_state.imported_players, step=1)
+            players_raw = st.number_input(
+                "Number of Players",
+                min_value=next(int(m.ge) for m in player_field.metadata if hasattr(m, 'ge')),
+                max_value=next(int(m.le) for m in player_field.metadata if hasattr(m, 'le')),
+                value=int(st.session_state.get('imported_players', player_field.default)),
+                step=1
+            )
+            players: int = int(players_raw) if players_raw is not None else player_field.default
 
-            players: int = int(players_raw) if players_raw is not None else 256
             if tourney_structure == "Championship Series":
                 d1_rounds, cut_points, d2_rounds, top_cut = get_variant_5_structure(players)
                 st.caption("**Championship Series Details**")
@@ -144,9 +160,20 @@ def main():
 
         st.header("⚙️ Engine Parameters")
         with st.container(border=True):
-            mc_iterations = st.selectbox("Monte Carlo Iterations", options=[1000, 10_000, 100_000, 1_000_000], format_func=lambda x: f"{x:,}", index=1)
+            selected_tier_value = st.selectbox(
+            "Monte Carlo Precision (Speed Tier)",
+            options=[tier.value for tier in PrecisionTier],
+            index=2,  # Defaults to "3 - STANDARD"
+            help="Higher tiers run more iterations for greater fidelity, but take longer to process."
+            )
             match_format = st.radio("Match Format", ["BO1", "BO3"], index=1)
-            min_sample_threshold = st.slider("Matchup Minimum Games", min_value=1, max_value=100, value=10, step=1)
+            min_sample_threshold = st.slider(
+                "Matchup Minimum Games",
+                min_value=next(int(m.ge) for m in sample_field.metadata if hasattr(m, 'ge')),
+                max_value=next(int(m.le) for m in sample_field.metadata if hasattr(m, 'le')),
+                value=int(sample_field.default),
+                step=1
+            )
 
             if "internal_input_mode" not in st.session_state:
                 st.session_state.internal_input_mode = "Percentage"
@@ -164,9 +191,18 @@ def main():
 
             st.divider()
             st.markdown("**🧪 BETA Features**")
-            use_tie_convergence = st.toggle("Enable Win-Rate Tie Convergence", value=True, help="Mathematically simulates real-world match timeouts using a parabolic curve based on matchup closeness.")
-            global_tie_rate = st.slider("Global Tie Rate (%)", min_value=0.0, max_value=30.0, value=15.0, step=0.5, disabled=not use_tie_convergence) / 100.0
-            
+            use_tie_convergence = st.toggle(
+                "Enable Win-Rate Tie Convergence",
+                value=True,
+                help="Mathematically simulates real-world match timeouts using a parabolic curve based on matchup closeness.")
+            global_tie_rate = st.slider(
+                "Global Tie Rate (%)",
+                min_value=next(float(m.ge) for m in tie_field.metadata if hasattr(m, 'ge')) * 100.0,
+                max_value=next(float(m.le) for m in tie_field.metadata if hasattr(m, 'le')) * 100.0,
+                value=float(tie_field.default * 100.0),
+                step=0.5,
+                disabled=not use_tie_convergence
+            ) / 100.0
             use_drop_feature = st.toggle("Enable X-3 Drop Logic", value=False, help="Simulates players dropping from the tournament after accumulating 3 losses.")
             allow_negative_power = st.toggle("Show Negative Power Scores", value=False, help="When disabled, deeply unviable decks (Power Score < 0) are completely hidden from the Metagame Scatter Plot to keep the view clean. Toggle this ON to view them at their true negative depths.")
 
@@ -244,7 +280,7 @@ def main():
                         st.exception(e)
                         st.stop()
 
-    user_meta: UserMetaSpec = {}
+    user_meta: Dict[str, Union[float, ExactSpec, RangeSpec]] = {}
     total_min = 0.0
     deck_names = get_valid_deck_names()
     seen_decks = set()
@@ -412,18 +448,21 @@ def main():
             st_progress_bar = st.progress(0, text="Booting Data Solver...")
             start_time = time.time()
             try:
+                _, win_matrix = load_full_win_matrix()
                 # 1. Prepare the payload
                 payload = {
                     "job_id": job_id,
-                    "user_meta_spec": user_meta,
-                    "total_players": players,
-                    "min_sample_threshold": min_sample_threshold,
+                    "deck_names": deck_names,
+                    "matchup_matrix": win_matrix.tolist() if hasattr(win_matrix, "tolist") else win_matrix,
+                    "tournament_style": str(tourney_structure).lower().replace(" ", "_"),
                     "match_format": match_format,
-                    "mc_iterations": mc_iterations,
-                    "use_tie_convergence": use_tie_convergence,
+                    "total_players": players,
+                    "user_meta_spec": user_meta,
+                    "precision_tier": selected_tier_value,
                     "global_tie_rate": global_tie_rate,
+                    "use_tie_convergence": use_tie_convergence,
                     "use_drop_feature": use_drop_feature,
-                    "tournament_style": str(tourney_structure).lower().replace(" ", "_")
+                    "min_sample_threshold": min_sample_threshold,
                 }
 
                 # 2. POST to FastAPI

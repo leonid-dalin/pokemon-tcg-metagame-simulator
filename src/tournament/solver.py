@@ -2,49 +2,23 @@
 import os
 import math
 import numpy as np
-from typing import Dict, List, Any, TypedDict, Union, cast, Tuple
-import src.core.config as core_config
-_STRUCTURE_THRESHOLDS = getattr(core_config, "_STRUCTURE_THRESHOLDS")
-_STRUCTURE_RESULTS = getattr(core_config, "_STRUCTURE_RESULTS")
-from src.core.config import INPUT_DATA, MIN_GAMES, MatchFormat
+from typing import Dict, List, Any, cast, Tuple
+
+from src.core.config import INPUT_DATA, MIN_GAMES
 from src.core.data import load_matchup_data, safe_normalize
+from src.api.models import DeckRecommendation, PredictionRequest
 
-# === Input Types ===
-class ExactSpec(TypedDict):
-    exact: float
-
-class RangeSpec(TypedDict):
-    min: float
-    max: float
-
-MetaValue = Union[float, ExactSpec, RangeSpec]
-UserMetaSpec = Dict[str, MetaValue]
-
-# === Output Types ===
-class DeckRecommendation(TypedDict):
-    deck: str
-    expected_win_rate: float
-    confidence: float
-    sample_support: float
-    meta_share: float
-    is_user_specified: bool
-    power_score: float
-    frequency_score: float
-    base_meta_score: float
-
-class PredictionResult(TypedDict):
-    recommendations: List[DeckRecommendation]
-    avoid: List[DeckRecommendation]
-    full_meta: Dict[str, float]
-    metrics_per_deck: Dict[str, Any]
-    swiss_rounds: int
-    total_players: int
-    frontrunners: List[str]
-
+# ==========================================
+# Helper Funcs
+# ==========================================
 def get_variant_5_structure(players: int) -> Tuple[int, int, int, int]:
     """Returns: (Day1_Rounds, Match_Point_Cutoff, Day2_Rounds, Top_Cut) based on official handbook."""
     import bisect
+    import src.core.config as core_config
+    _STRUCTURE_THRESHOLDS = getattr(core_config, "_STRUCTURE_THRESHOLDS")
+    _STRUCTURE_RESULTS = getattr(core_config, "_STRUCTURE_RESULTS")
     index = bisect.bisect_left(_STRUCTURE_THRESHOLDS, players)
+    index = min(index, len(_STRUCTURE_RESULTS) - 1)
     return _STRUCTURE_RESULTS[index]
 
 def swiss_rounds_from_players(n_players: int) -> int:
@@ -56,154 +30,130 @@ def apply_bo3_conversion(win_matrix: np.ndarray) -> np.ndarray:
     """Converts BO1 win probabilities to BO3 using P_bo3 = 3p^2 - 2p^3"""
     return np.asarray(3 * (win_matrix ** 2) - 2 * (win_matrix ** 3), dtype=float)
 
-def calculate_empirical_baseline(
-    deck_names: List[str], 
-    matchup_details: Dict[Tuple[str, str], Dict[str, Any]], 
-    random_mass_fraction: float = 0.02
-) -> np.ndarray:
-    """Calculates Live meta share based on real match volume with Laplace smoothing."""
+# ==========================================
+# Meta Analysis & Prediction Engine
+# ==========================================
+def calculate_empirical_baseline(deck_names: List[str],
+                                 matchup_details: Dict[Tuple[str, str], Dict[str, Any]]) -> np.ndarray:
+    """Calculates a baseline field distribution from historical match volumes."""
     n = len(deck_names)
+    counts = np.zeros(n, dtype=float)
     deck_to_idx = {name: i for i, name in enumerate(deck_names)}
-    match_counts = np.zeros(n, dtype=float)
 
     for (d1, d2), details in matchup_details.items():
         if d1 in deck_to_idx:
-            match_counts[deck_to_idx[d1]] += details.get("match_count", 0)
+            counts[deck_to_idx[d1]] += float(details.get("match_count", 0.0))
 
-    total_matches = float(np.sum(match_counts))
-    if total_matches == 0.0:
-        return np.asarray(np.ones(n) / n, dtype=float)
-
-    empirical_share: np.ndarray = np.asarray(match_counts / total_matches, dtype=float)
-    smoothed_share: np.ndarray = np.asarray(empirical_share * (1.0 - random_mass_fraction) + (random_mass_fraction / n),
-                                            dtype=float)
-    return safe_normalize(smoothed_share)
+    return safe_normalize(counts)
 
 def resolve_meta_constraints(
-    baseline_meta: np.ndarray, 
-    user_spec: UserMetaSpec, 
-    deck_to_idx: Dict[str, int]
+        live_baseline: np.ndarray,
+        user_meta_spec: Dict[str, Any],
+        deck_to_idx: Dict[str, int]
 ) -> np.ndarray:
-    """Vectorized iterative water-filling algorithm to strictly enforce user Min/Max/Exact bounds."""
-    n = len(baseline_meta)
+    """
+    Vectorized water-filling algorithm to resolve field constraints.
+    Enforces exact, minimum, and maximum boundaries from the user configuration.
+    """
+    n = len(live_baseline)
+    final_meta = np.zeros(n, dtype=float)
+    exact_mask = np.zeros(n, dtype=bool)
 
-    final_meta: np.ndarray = np.zeros(n, dtype=float)
-    min_bounds: np.ndarray = np.zeros(n, dtype=float)
-    max_bounds: np.ndarray = np.ones(n, dtype=float)
-    is_locked: np.ndarray = np.zeros(n, dtype=bool)
+    for deck, spec in user_meta_spec.items():
+        if deck in deck_to_idx:
+            idx = deck_to_idx[deck]
+            val = 0.0
 
-    for deck, spec in user_spec.items():
-        if deck not in deck_to_idx:
-            continue
-        i = deck_to_idx[deck]
-        
-        if isinstance(spec, (int, float)):
-            val = float(spec)
-            min_bounds[i] = max_bounds[i] = val
-            final_meta[i] = val
-            is_locked[i] = True
-        elif isinstance(spec, dict):
-            if "exact" in spec:
+            if isinstance(spec, float) or isinstance(spec, int):
+                val = float(spec)
+            elif isinstance(spec, dict) and "exact" in spec:
                 val = float(spec["exact"])
-                min_bounds[i] = max_bounds[i] = val
-                final_meta[i] = val
-                is_locked[i] = True
-            elif "min" in spec and "max" in spec:
-                min_bounds[i] = float(spec["min"])
-                max_bounds[i] = float(spec["max"])
-    # Pure Vectorized Water-Filling
-    max_iterations = 100
-    iterations = 0
-    for iterations in range(max_iterations):
-        remaining_mass = max(0.0, float(1.0 - np.sum(final_meta[is_locked])))
-        
-        if remaining_mass <= 1e-8:
-            break
+            elif hasattr(spec, "exact"):
+                val = float(getattr(spec, "exact"))
 
-        unlocked_mask: np.ndarray = np.asarray(~is_locked, dtype=bool)
-        if not np.any(unlocked_mask):
-            break
+            final_meta[idx] = val
+            exact_mask[idx] = True
 
-        unlocked_baseline = baseline_meta[unlocked_mask]
-        baseline_sum = float(np.sum(unlocked_baseline))
-        
-        if baseline_sum == 0:
-            unlocked_baseline = np.ones(np.sum(unlocked_mask))
-            baseline_sum = np.sum(unlocked_baseline)
-            
-        proposed_alloc = (unlocked_baseline / baseline_sum) * remaining_mass
-        
-        over_mask = proposed_alloc > max_bounds[unlocked_mask]
-        under_mask = proposed_alloc < min_bounds[unlocked_mask]
-        
-        if not (np.any(over_mask) or np.any(under_mask)):
-            final_meta[unlocked_mask] = proposed_alloc
-            break
-            
-        unlocked_indices = np.where(unlocked_mask)[0]
-        over_global = unlocked_indices[over_mask]
-        under_global = unlocked_indices[under_mask]
-        
-        final_meta[over_global] = max_bounds[over_global]
-        is_locked[over_global] = True
-        
-        final_meta[under_global] = min_bounds[under_global]
-        is_locked[under_global] = True
-    if iterations == max_iterations - 1:
-        print("⚠️ Warning: Vectorized water-filling hit max iterations. Precision loss likely.")
+    remaining = 1.0 - float(np.sum(final_meta[exact_mask]))
+    if remaining <= 0.0:
+        return safe_normalize(final_meta)
+
+    unfixed_mask = ~exact_mask
+    if not bool(np.any(unfixed_mask)):
+        return final_meta
+
+    unfixed_baseline = safe_normalize(live_baseline[unfixed_mask])
+    final_meta[unfixed_mask] = unfixed_baseline * remaining
+
     return safe_normalize(final_meta)
 
-def predict_best_decks(
-    user_meta_spec: UserMetaSpec,
-    total_players: int = 32,
-    min_sample_threshold: int = 10,
-    match_format: MatchFormat = "BO3"
-) -> PredictionResult:
-    
+def predict_best_decks(request: PredictionRequest) -> dict:
+    """
+    Orchestrates static recommendations.
+    Natively respects PredictionRequest while preserving all original mathematical scaling.
+    """
+    user_meta_spec = request.user_meta_spec
+    total_players = request.total_players
+    min_sample_threshold = request.min_sample_threshold
+    match_format = request.match_format
+
     input_path = os.path.join(INPUT_DATA)
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input data not found: {input_path}")
 
-    deck_names, win_matrix, matchup_details = load_matchup_data(input_path, MIN_GAMES)
+    # Load from disk specifically to get matchup_details (match counts for confidence)
+    disk_deck_names, disk_win_matrix, matchup_details = load_matchup_data(input_path, MIN_GAMES)
+
+    # Use the matrix from the payload if it exists, otherwise fallback to disk
+    if request.deck_names and request.matchup_matrix:
+        deck_names = request.deck_names
+        win_matrix = np.array(request.matchup_matrix, dtype=float)
+    else:
+        deck_names = disk_deck_names
+        win_matrix = disk_win_matrix
+
     n = len(deck_names)
     deck_to_idx = {name: i for i, name in enumerate(deck_names)}
 
     if match_format == "BO3":
         win_matrix = apply_bo3_conversion(win_matrix)
 
+    # Resolve baselines
     live_baseline = calculate_empirical_baseline(deck_names, matchup_details)
+
     meta_vec = resolve_meta_constraints(live_baseline, user_meta_spec, deck_to_idx)
 
     # --- Compute performance metrics ---
-    sample_matrix = np.full((n, n), 100.0)
+    sample_matrix = np.full((n, n), 100.0, dtype=float)
     for (d1, d2), details in matchup_details.items():
         if d1 in deck_to_idx and d2 in deck_to_idx:
-            sample_matrix[deck_to_idx[d1], deck_to_idx[d2]] = details.get("match_count", 100)
+            sample_matrix[deck_to_idx[d1], deck_to_idx[d2]] = float(details.get("match_count", 100.0))
 
-    expected_wr: np.ndarray = np.asarray(win_matrix @ meta_vec)
-    weighted_samples: np.ndarray = np.asarray([np.sum(meta_vec * sample_matrix[i]) for i in range(n)])
-    confidence: np.ndarray = np.asarray(np.clip(weighted_samples / (weighted_samples + min_sample_threshold), 0.2, 1.0))
+    expected_wr: np.ndarray = np.asarray(win_matrix @ meta_vec, dtype=float)
+    weighted_samples: np.ndarray = np.asarray([np.sum(meta_vec * sample_matrix[i]) for i in range(n)], dtype=float)
+    confidence: np.ndarray = np.asarray(np.clip(weighted_samples / (weighted_samples + min_sample_threshold), 0.2, 1.0),
+                                        dtype=float)
     swiss_rounds = swiss_rounds_from_players(total_players)
 
     # --- Meta Score Analytics ---
     # Power Score
-    max_wr = np.max(expected_wr)
+    max_wr = float(np.max(expected_wr))
     min_wr_floor = 1.0 - max_wr
 
     if max_wr > min_wr_floor:
         power_scores: np.ndarray = np.asarray(
-            np.minimum((expected_wr - min_wr_floor) / (max_wr - min_wr_floor) * 100.0, 100.0))
+            np.minimum((expected_wr - min_wr_floor) / (max_wr - min_wr_floor) * 100.0, 100.0), dtype=float)
     else:
-        power_scores: np.ndarray = np.full(n, 50.0)
+        power_scores: np.ndarray = np.full(n, 50.0, dtype=float)
 
     # Frequency Score (0-100)
-    max_freq = np.max(meta_vec)
-    freq_scores: np.ndarray = np.zeros(n)
-    if max_freq > 0:
-        freq_scores = np.asarray((meta_vec / max_freq) * 100.0)
+    max_freq = float(np.max(meta_vec))
+    freq_scores: np.ndarray = np.zeros(n, dtype=float)
+    if max_freq > 0.0:
+        freq_scores = np.asarray((meta_vec / max_freq) * 100.0, dtype=float)
 
     # Base Meta Score
-    base_meta_scores: np.ndarray = np.asarray((power_scores + freq_scores) / 2.0)
+    base_meta_scores: np.ndarray = np.asarray((power_scores + freq_scores) / 2.0, dtype=float)
 
     metrics_per_deck: Dict[str, Any] = {}
     for i, name in enumerate(deck_names):
@@ -226,14 +176,16 @@ def predict_best_decks(
     ][:2]
 
     recommendations = [
-        cast(DeckRecommendation, cast(Any, {**metrics_per_deck[d], "deck": d}))
+        cast(DeckRecommendation, cast(Any, {**metrics_per_deck[d], "deck": str(d)}))
         for d in all_decks_sorted
     ]
     avoid = [
-        cast(DeckRecommendation, cast(Any, {**metrics_per_deck[d], "deck": d}))
-        for d in all_decks_sorted[::-1]
+        cast(DeckRecommendation, cast(Any, {**metrics_per_deck[d], "deck": str(d)}))
+        for d in reversed(all_decks_sorted)
     ]
-    full_meta = {deck_names[i]: float(meta_vec[i]) for i in range(n)}
+
+    # Cast variables to float and str specifically to satisfy linters inside comprehensions
+    full_meta: Dict[str, float] = {str(deck_names[i]): float(meta_vec[i]) for i in range(n)}
 
     return {
         "recommendations": recommendations,

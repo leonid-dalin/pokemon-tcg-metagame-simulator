@@ -12,7 +12,8 @@ SimulationMode = Literal["replicator", "tournament"]
 # ----------------------------
 INPUT_DIR = "data/input/"
 MATCHUP_DIR = "data/matchups/"
-INPUT_DATA = "data/input/ea_input.json"
+INPUT_FILE = "ea_input.json"
+INPUT_DATA = INPUT_DIR + INPUT_FILE
 OUTPUT_DIR = "output/"
 
 # ----------------------------

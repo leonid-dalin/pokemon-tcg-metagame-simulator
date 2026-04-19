@@ -1,4 +1,26 @@
-## ## Commit `[idk]` (Apr 04, 2026)
+## Commit `6553df9` (Apr 19, 2026)
+### 🛡️ Security & Reliability: Defensive Gateway Overhaul
+
+This update transforms the FastAPI entry point from a transparent router into a defensive gateway, implementing strict resource protection and resolving ID-mapping issues between the API and background workers.
+
+#### 🔐 `main.py` (API Gateway)
+* **(Feat) Distributed Rate Limiting:** Integrated `slowapi` with the Redis backend. Implemented a 10 req/min throttle on heavy compute (`/predict`) and 60 req/min on SSE streams to prevent CPU exhaustion and DoS attacks.
+* **(Feat) Security Middleware:** Added `SecurityHeadersMiddleware` to enforce OWASP standards, including `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and strict `Content-Security-Policy`.
+* **(Bug) ID Bridging Logic:** Resolved a critical disconnect where the API tracked `task.id` while the worker reported progress via `job_id`. The API now creates an atomic link in Redis (`link_{task_id} -> job_id`) to ensure the Streamlit UI correctly receives live loading bar updates.
+* **(Refactor) Lifespan Management:** Migrated to the modern `asynccontextmanager` lifespan pattern, ensuring the `automated_daily_pipeline` triggers on container boot to maintain data freshness.
+* **(Fix) Linter Compliance:** Overhauled type hints and exception handlers to satisfy strict PEP-8 and ASGI signature requirements (satisfying `NoneType` member access and parameter contravariance checks).
+
+#### 🏗️ `models.py` (Data Contracts)
+* **(Security) Strict Validation:** Enabled `extra="forbid"` in `PredictionRequest` to prevent mass-assignment injection.
+* **(Fix) Payload Parity:** Restored `total_players` field naming to maintain the contract with the existing Streamlit frontend (`app.py`), resolving `422 Unprocessable Entity` errors.
+* **(Constraints) Bound checking:** Implemented hard mathematical ceilings for `mc_iterations` and `total_players` to ensure request payloads stay within viable hardware limits.
+
+#### 📊 `queue.py` (Background Worker)
+* **(Stability) Execution Context:** Verified that `huey.storage` correctly utilizes the shared Redis instance for persistent progress peeking, allowing the SSE stream to survive API restarts.
+
+---
+
+## Commit `3eb4bc7` (Apr 04, 2026)
 ### 🚀 Infrastructure & UX: Redis Migration and SSE Streaming
 
 This update finalizes the architectural decoupling of the simulator, transitioning from synchronous polling to a reactive, event-driven communication model.

@@ -1,21 +1,23 @@
-numpy<2
+numpy>=1.24.1,<2
 pandas>=2.0,<3.0
-scipy<1.17
+pydantic>2,<=2.13.2
+scipy>=1.10.0,<1.17
 
-huey==2.6.0
+huey==3.0.0
+limits==5.8.0
 networkx==3.6.1
-pydantic==2.12.5
-scikit_learn==1.7.2
-streamlit==1.56.0
-uvicorn==0.41.0
-sse-starlette==3.3.4
 redis==7.4.0
+scikit_learn==1.7.2
+sse-starlette==3.3.4
+streamlit==1.56.0
+uvicorn==0.44.0
 
-maturin>=1.5.0
-pytest-cov>=7.0.0
-pytest>=9.0.0
 beautifulsoup4>=4.14.3
-fastapi>=0.135.1
+fastapi>=0.136.0
+maturin>=1.13.0
+slowapi>=0.1.9
+plotly>=6.7.0
+pytest>=9.0.0
+pytest-cov>=7.0.0
 requests>=2.33.1
 tqdm>=4.67.3
-plotly>=6.6.0

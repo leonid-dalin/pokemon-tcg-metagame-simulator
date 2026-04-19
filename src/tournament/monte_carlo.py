@@ -10,6 +10,7 @@ os.environ["RAYON_NUM_THREADS"] = str(safe_cores)
 import numpy as np
 import tcg_engine
 from typing import Dict, List, Optional, Callable
+from src.api.models import GLOBAL_TIE_RATE
 
 def run_monte_carlo_analytics(
         deck_names: List[str],
@@ -20,12 +21,12 @@ def run_monte_carlo_analytics(
         d2_rounds: int,
         top_cut: int,
         players: int = 256,
-        iterations: int = 10_000,
+        iterations: int = 25_000,
         match_format: str = "BO3",
         progress_callback: Optional[Callable[[int, int], None]] = None,
         use_tie_convergence: bool = True,
-        global_tie_rate: float = 0.15,
-        use_drop_feature: bool = False
+        global_tie_rate: float = GLOBAL_TIE_RATE,
+        use_drop_feature: bool = False,
 ) -> Dict[str, Dict[str, float]]:
     
     if not hasattr(run_monte_carlo_analytics, "_rayon_initialized"):

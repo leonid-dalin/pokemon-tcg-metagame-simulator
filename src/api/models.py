@@ -1,44 +1,107 @@
 # src/api/models.py
-from pydantic import BaseModel, Field, model_validator
-from typing import Dict, Union, List
+from pydantic import BaseModel, Field, model_validator, ConfigDict
+from typing import Dict, Union, List, TypedDict, Any
+from enum import Enum
 
+class PrecisionTier(str, Enum):
+    BULLET = "1 - BULLET"
+    BLITZ = "2 - BLITZ"
+    STANDARD = "3 - STANDARD"
+    EXHAUSTIVE = "4 - EXHAUSTIVE"
+    MAXIMUM = "5 - MAXIMUM"
+
+TIER_MAPPING = {
+    PrecisionTier.BULLET: 1_000,
+    PrecisionTier.BLITZ: 10_000,
+    PrecisionTier.STANDARD: 25_000,
+    PrecisionTier.EXHAUSTIVE: 100_000,
+    PrecisionTier.MAXIMUM: 250_000,
+}
+
+GLOBAL_TIE_RATE : float = 0.15
 
 class ExactSpec(BaseModel):
-    exact: float = Field(..., ge=0.0, le=1.0)
-
+    exact: float = Field(ge=0.0, le=1.0, description="Exact field presence between 0 and 1")
 
 class RangeSpec(BaseModel):
-    min: float = Field(..., ge=0.0, le=1.0)
-    max: float = Field(..., ge=0.0, le=1.0)
+    min: float = Field(ge=0.0, le=1.0)
+    max: float = Field(ge=0.0, le=1.0)
 
+class DeckRecommendation(TypedDict):
+    deck: str
+    expected_win_rate: float
+    confidence: float
+    sample_support: float
+    meta_share: float
+    is_user_specified: bool
+    power_score: float
+    frequency_score: float
+    base_meta_score: float
 
 class PredictionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid") # Prevents mass-assignment injection attacks
+
+    # 1. Identity & Metadata
     job_id: str = Field(default="unknown")
-    tournament_style: str = Field(default="championship_series")
 
-    # Maps to your UserMetaSpec
-    user_meta_spec: Dict[str, Union[float, ExactSpec, RangeSpec]] = Field(default_factory=dict)
-    total_players: int = Field(default=256, ge=2, le=8192)
-    min_sample_threshold: int = Field(default=10, ge=1)
+    # 2. Required Core Data
+    deck_names: List[str]
+    matchup_matrix: List[List[float]]
+
+    # 3. Primary Tournament Parameters
+    tournament_style: str = Field(default="pure_swiss")
     match_format: str = Field(default="BO3", pattern="^(BO1|BO3)$")
+    total_players: int = Field(
+        default=256,
+        ge=8,
+        le=8192,
+        description="Total players in the field."
+    )
 
-    # Monte Carlo specifics
-    mc_iterations: int = Field(default=10_000)
+    # 4. Meta & Field Constraints
+    user_meta_spec: Dict[str, Union[float, ExactSpec, RangeSpec]] = Field(
+        default_factory=dict,
+        max_length=100,
+    )
+    meta_constraints: Dict[str, Union[ExactSpec, RangeSpec]] = Field(
+        default_factory=dict
+    )
+
+    # 5. Simulation & Numerical Settings
+    precision_tier: PrecisionTier = Field(
+        default=PrecisionTier.STANDARD,
+        ge=PrecisionTier.BULLET,
+        le=PrecisionTier.MAXIMUM,
+        description="Number of Monte Carlo brackets to simulate."
+    )
+    global_tie_rate: float = Field(
+        default=GLOBAL_TIE_RATE,
+        ge=0.0,
+        le=0.5,
+    )
+    min_sample_threshold: int = Field(default=10, ge=1, le=100)
+
+    # 6. Feature Flags (Booleans)
     use_tie_convergence: bool = Field(default=True)
-    global_tie_rate: float = Field(default=0.15)
     use_drop_feature: bool = Field(default=False)
 
+class PredictionResult(TypedDict):
+    recommendations: List[DeckRecommendation]
+    avoid: List[DeckRecommendation]
+    full_meta: Dict[str, float]
+    metrics_per_deck: Dict[str, Any]
+    swiss_rounds: int
+    total_players: int
+    frontrunners: List[str]
 
 class MatchupStats(BaseModel):
     win_rate: float = Field(..., ge=0.0, le=1.0)
     match_count: int = Field(..., ge=0)
 
-
 class ArchetypeMatchups(BaseModel):
     archetype_name: str = Field(..., min_length=1)
     # Dictionary mapping opponent archetype names to their matchup stats
     matchups: Dict[str, MatchupStats]
-
 
 class ScrapedMatrix(BaseModel):
     format_name: str
