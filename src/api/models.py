@@ -1,7 +1,8 @@
 # src/api/models.py
 from pydantic import BaseModel, Field, model_validator, ConfigDict
-from typing import Dict, Union, List, TypedDict, Any
+from typing import Dict, Union, List, Any
 from enum import Enum
+
 
 class PrecisionTier(str, Enum):
     BULLET = "1 - BULLET"
@@ -9,6 +10,7 @@ class PrecisionTier(str, Enum):
     STANDARD = "3 - STANDARD"
     EXHAUSTIVE = "4 - EXHAUSTIVE"
     MAXIMUM = "5 - MAXIMUM"
+
 
 TIER_MAPPING = {
     PrecisionTier.BULLET: 1_000,
@@ -18,16 +20,19 @@ TIER_MAPPING = {
     PrecisionTier.MAXIMUM: 250_000,
 }
 
-GLOBAL_TIE_RATE : float = 0.15
+GLOBAL_TIE_RATE: float = 0.15
+
 
 class ExactSpec(BaseModel):
     exact: float = Field(ge=0.0, le=1.0, description="Exact field presence between 0 and 1")
+
 
 class RangeSpec(BaseModel):
     min: float = Field(ge=0.0, le=1.0)
     max: float = Field(ge=0.0, le=1.0)
 
-class DeckRecommendation(TypedDict):
+
+class DeckRecommendation(BaseModel):
     deck: str
     expected_win_rate: float
     confidence: float
@@ -38,15 +43,26 @@ class DeckRecommendation(TypedDict):
     frequency_score: float
     base_meta_score: float
 
+
+class PredictionResult(BaseModel):
+    recommendations: List[DeckRecommendation]
+    avoid: List[DeckRecommendation]
+    full_meta: Dict[str, float]
+    metrics_per_deck: Dict[str, Any]
+    swiss_rounds: int
+    total_players: int
+    frontrunners: List[str]
+
+
 class PredictionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid") # Prevents mass-assignment injection attacks
+    model_config = ConfigDict(extra="forbid")  # Prevents mass-assignment injection attacks
 
     # 1. Identity & Metadata
     job_id: str = Field(default="unknown")
 
     # 2. Required Core Data
-    deck_names: List[str]
-    matchup_matrix: List[List[float]]
+    deck_names: List[str] = Field(..., min_length=2, description="List of active archetypes in the simulation.")
+    matchup_matrix: List[List[float]] = Field(..., description="2D matrix of win rates corresponding to deck_names.")
 
     # 3. Primary Tournament Parameters
     tournament_style: str = Field(default="pure_swiss")
@@ -85,23 +101,44 @@ class PredictionRequest(BaseModel):
     use_tie_convergence: bool = Field(default=True)
     use_drop_feature: bool = Field(default=False)
 
-class PredictionResult(TypedDict):
-    recommendations: List[DeckRecommendation]
-    avoid: List[DeckRecommendation]
-    full_meta: Dict[str, float]
-    metrics_per_deck: Dict[str, Any]
-    swiss_rounds: int
-    total_players: int
-    frontrunners: List[str]
+    @model_validator(mode='after')
+    def validate_matrix_integrity(self):
+        """
+        Validates dimensional parity and thermodynamic purity (Zero-Sum) for the request payload.
+        Prevents indexing errors in the Rust/NumPy engines and blocks poisoned data.
+        """
+        n_decks = len(self.deck_names)
+        matrix = self.matchup_matrix
+
+        # Dimension Check
+        if len(matrix) != n_decks:
+            raise ValueError(f"Matrix row count ({len(matrix)}) must match deck_names length ({n_decks}).")
+
+        for i, row in enumerate(matrix):
+            if len(row) != n_decks:
+                raise ValueError(f"Matrix row {i} length ({len(row)}) must match deck_names length ({n_decks}).")
+
+            # Thermodynamic Purity Check
+            for j, win_rate in enumerate(row):
+                if not (0.0 <= win_rate <= 1.0):
+                    raise ValueError(f"Invalid win rate {win_rate} at [{i}][{j}]. Must be between 0.0 and 1.0.")
+                if i == j and win_rate != 0.5:
+                    raise ValueError(
+                        f"Mirror match violation at [{i}][{j}]. Diagonal must be exactly 0.5, got {win_rate}.")
+
+        return self
+
 
 class MatchupStats(BaseModel):
     win_rate: float = Field(..., ge=0.0, le=1.0)
     match_count: int = Field(..., ge=0)
 
+
 class ArchetypeMatchups(BaseModel):
     archetype_name: str = Field(..., min_length=1)
     # Dictionary mapping opponent archetype names to their matchup stats
     matchups: Dict[str, MatchupStats]
+
 
 class ScrapedMatrix(BaseModel):
     format_name: str

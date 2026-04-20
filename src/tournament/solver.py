@@ -1,12 +1,14 @@
 # solver.py | Water-filling constraints & Base Meta Scoring
-import os
 import math
-import numpy as np
-from typing import Dict, List, Any, cast, Tuple
+import os
+from typing import Dict, List, Any, Tuple
 
+import numpy as np
+
+from src.api.models import DeckRecommendation, PredictionRequest, PredictionResult
 from src.core.config import INPUT_DATA, MIN_GAMES
 from src.core.data import load_matchup_data, safe_normalize
-from src.api.models import DeckRecommendation, PredictionRequest
+
 
 # ==========================================
 # Helper Funcs
@@ -102,7 +104,7 @@ def predict_best_decks(request: PredictionRequest) -> dict:
         raise FileNotFoundError(f"Input data not found: {input_path}")
 
     # Load from disk specifically to get matchup_details (match counts for confidence)
-    disk_deck_names, disk_win_matrix, matchup_details = load_matchup_data(input_path, MIN_GAMES)
+    disk_deck_names, disk_win_matrix, matchup_details = load_matchup_data(str(input_path), MIN_GAMES)
 
     # Use the matrix from the payload if it exists, otherwise fallback to disk
     if request.deck_names and request.matchup_matrix:
@@ -176,23 +178,24 @@ def predict_best_decks(request: PredictionRequest) -> dict:
     ][:2]
 
     recommendations = [
-        cast(DeckRecommendation, cast(Any, {**metrics_per_deck[d], "deck": str(d)}))
+        DeckRecommendation(deck=str(d), **metrics_per_deck[d])
         for d in all_decks_sorted
     ]
+
     avoid = [
-        cast(DeckRecommendation, cast(Any, {**metrics_per_deck[d], "deck": str(d)}))
+        DeckRecommendation(deck=str(d), **metrics_per_deck[d])
         for d in reversed(all_decks_sorted)
     ]
 
-    # Cast variables to float and str specifically to satisfy linters inside comprehensions
     full_meta: Dict[str, float] = {str(deck_names[i]): float(meta_vec[i]) for i in range(n)}
+    result = PredictionResult(
+        recommendations=recommendations,
+        avoid=avoid,
+        full_meta=full_meta,
+        metrics_per_deck=metrics_per_deck,
+        swiss_rounds=swiss_rounds,
+        total_players=total_players,
+        frontrunners=frontrunners,
+    )
 
-    return {
-        "recommendations": recommendations,
-        "avoid": avoid,
-        "full_meta": full_meta,
-        "metrics_per_deck": metrics_per_deck,
-        "swiss_rounds": swiss_rounds,
-        "total_players": total_players,
-        "frontrunners": frontrunners,
-    }
+    return result.model_dump()

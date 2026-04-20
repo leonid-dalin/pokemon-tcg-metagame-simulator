@@ -1,4 +1,4 @@
-## Commit `6553df9` (Apr 19, 2026)
+## Commit `f2b7421` (Apr 19, 2026)
 ### 🛡️ Security & Reliability: Defensive Gateway Overhaul
 
 This update transforms the FastAPI entry point from a transparent router into a defensive gateway, implementing strict resource protection and resolving ID-mapping issues between the API and background workers.
