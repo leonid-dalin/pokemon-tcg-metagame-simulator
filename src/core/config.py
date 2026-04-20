@@ -70,20 +70,20 @@ CONSISTENCY_MEAN_EPSILON = 1e-6
 CONSISTENCY_STD_EPSILON = 1e-9
 
 # Meta Score / Win Rate Tier Thresholds
-TIER_0_THRESHOLD = 0.525     # Dominant
-TIER_0_5_THRESHOLD = 0.50    # Top Contender
-TIER_1_THRESHOLD = 0.475     # Competitive
-TIER_2_THRESHOLD = 0.45      # Niche
-TIER_3_THRESHOLD = 0.425     # Struggling
-TIER_4_THRESHOLD = 0.0       # Unviable
+TIER_0_THRESHOLD = 0.55     # Dominant
+TIER_1_THRESHOLD = 0.525    # Top Contender
+TIER_2_THRESHOLD = 0.5     # Competitive
+TIER_3_THRESHOLD = 0.475      # Niche
+TIER_4_THRESHOLD = 0.45     # Struggling
+TIER_5_THRESHOLD = 0.0       # Unviable
 
 TIER_THRESHOLDS: Dict[str, float] = {
     "T0": TIER_0_THRESHOLD,
-    "T0.5": TIER_0_5_THRESHOLD,
     "T1": TIER_1_THRESHOLD,
     "T2": TIER_2_THRESHOLD,
     "T3": TIER_3_THRESHOLD,
-    "T4": TIER_4_THRESHOLD
+    "T4": TIER_4_THRESHOLD,
+    "T5": TIER_5_THRESHOLD
 }
 
 # Dynamically derive the order from the dictionary keys

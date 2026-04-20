@@ -23,7 +23,7 @@ if project_root not in sys.path:
 
 from src.api.models import PrecisionTier, RangeSpec, ExactSpec, PredictionRequest
 from src.core.data import load_matchup_data
-from src.core.config import INPUT_DATA, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, TIER_1_THRESHOLD
+from src.core.config import INPUT_DATA, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, TIER_2_THRESHOLD
 from src.tournament.solver import  swiss_rounds_from_players, get_variant_5_structure
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
 
@@ -865,7 +865,7 @@ def main():
                 if deck == best_wr: tags.append("📈 Highest Raw Win Rate")
                 if deck == best_day2_predator: tags.append("🧱 Day 2 Predator")
                 if float(metrics["meta_share"]) >= 0.10 and float(
-                    metrics["expected_win_rate"]) < TIER_1_THRESHOLD: tags.append("🪤 Overplayed Trap")
+                    metrics["expected_win_rate"]) < TIER_2_THRESHOLD: tags.append("🪤 Overplayed Trap")
                 if top_threats and deck not in top_threats and float(
                         full_win_matrix[deck_to_idx[deck], deck_to_idx[str(top_threats[0])]]) > WIN_THRESHOLD:
                     tags.append(f"💡 Rogue Meta Breaker (Beats {top_threats[0]})")

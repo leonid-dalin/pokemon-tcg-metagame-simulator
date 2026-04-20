@@ -1,24 +1,34 @@
-# scraper.py
-import os
-import json
+# src/core/scraper.py
+import concurrent.futures
 import csv
+import json
+import os
 import re
 import requests
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from typing import List, Dict, Tuple, Set, Any, cast
-from src.core.config import MATCHUP_DIR, INPUT_DIR
 
-def normalize_archetype(name):
+from src.core.config import MATCHUP_DIR, INPUT_DIR, INPUT_FILE
+
+# ---------------------------------------------------------
+# Pre-compiled Regex Patterns
+# ---------------------------------------------------------
+_WS_RE = re.compile(r"\s+")
+_CHARS_RE = re.compile(r"[^\w\s]")
+
+
+def normalize_archetype(name: str) -> str:
     if not name:
         return ""
     name = name.lower()
     name = name.replace("&", " and ")
-    name = re.sub(r"\s+", " ", name)
-    name = re.sub(r"[^\w\s]", "", name)
+    name = _WS_RE.sub(" ", name)
+    name = _CHARS_RE.sub("", name)
     return name.strip()
 
-def extract_deck_info_from_filename(filename):
+
+def extract_deck_info_from_filename(filename: str) -> Tuple[str, str]:
     """
     Extracts archetype and format from the naming convention:
     Archetype - Format - Website
@@ -28,8 +38,9 @@ def extract_deck_info_from_filename(filename):
 
     if len(parts) >= 2:
         return parts[0], parts[1]
-        
+
     raise ValueError(f"Could not parse filename under new convention: {filename}")
+
 
 def get_deck_archetype(file_path: str, filename: str) -> Tuple[str, str]:
     try:
@@ -39,64 +50,73 @@ def get_deck_archetype(file_path: str, filename: str) -> Tuple[str, str]:
         with open(file_path, "r", encoding="utf-8") as f:
             soup = BeautifulSoup(f, "html.parser")
             infobox_elem = soup.find("div", class_="infobox")
-            
+
             if isinstance(infobox_elem, Tag):
                 name_elem = infobox_elem.find("div", class_="name")
                 format_elem = infobox_elem.find("div", class_="format")
-                
+
                 deck_name = name_elem.get_text(strip=True) if isinstance(name_elem, Tag) else "Unknown Archetype"
                 deck_format = format_elem.get_text(strip=True) if isinstance(format_elem, Tag) else "Unknown Standard"
-                
+
                 if deck_name != "Unknown Archetype":
                     return deck_name, deck_format
-                    
+
         raise ValueError(f"Archetype extraction failed for {filename}")
+
+
+def _fetch_url(session: requests.Session, url: str) -> Tuple[str, BeautifulSoup | None]:
+    """Helper method to encapsulate the HTTP request and initial BS4 parse for the thread pool."""
+    try:
+        response = session.get(url, timeout=10)
+        response.raise_for_status()
+        return url, BeautifulSoup(response.text, "html.parser")
+    except Exception as e:
+        print(f"  ! Error fetching {url}: {str(e)}")
+        return url, None
 
 
 def fetch_live_matchup_data(target_urls: List[str], canonical_map: Dict[str, str]) -> List[Dict[str, Any]]:
     """
-    Automates the HTTP requests to Limitless TCG to grab live HTML,
+    Automates the HTTP requests to Limitless TCG to grab live HTML concurrently,
     bypassing the need for manual file downloads.
     """
     all_matchups = []
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-
     fetched_pages = []
 
-    # --- Fetch pages and build the canonical whitelist ---
-    for url in target_urls:
-        print(f"Fetching live data from: {url}")
-        try:
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
+    with requests.Session() as session:
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        })
 
-            soup = BeautifulSoup(response.text, "html.parser")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(_fetch_url, session, url) for url in target_urls]
 
-            infobox_elem = soup.find("div", class_="infobox")
-            if not isinstance(infobox_elem, Tag):
-                print(f"  ! Skipping {url}: Could not find infobox.")
-                continue
+            for future in concurrent.futures.as_completed(futures):
+                url, soup = future.result()
+                if soup is None:
+                    continue
 
-            name_elem = infobox_elem.find("div", class_="name")
-            if not isinstance(name_elem, Tag):
-                print(f"  ! Skipping {url}: Could not find deck name in infobox.")
-                continue
+                infobox_elem = soup.find("div", class_="infobox")
+                if not isinstance(infobox_elem, Tag):
+                    print(f"  ! Skipping {url}: Could not find infobox.")
+                    continue
 
-            deck_archetype = name_elem.get_text(strip=True)
-            format_name = "Standard"
+                name_elem = infobox_elem.find("div", class_="name")
+                if not isinstance(name_elem, Tag):
+                    print(f"  ! Skipping {url}: Could not find deck name in infobox.")
+                    continue
 
-            norm_name = normalize_archetype(deck_archetype)
-            if norm_name not in canonical_map:
-                canonical_map[norm_name] = deck_archetype
+                deck_archetype = name_elem.get_text(strip=True)
+                format_name = "Standard"
 
-            fetched_pages.append((soup, deck_archetype, format_name))
+                # Sequentially populate the canonical map to avoid odd thread-safety anomalies
+                norm_name = normalize_archetype(deck_archetype)
+                if norm_name not in canonical_map:
+                    canonical_map[norm_name] = deck_archetype
 
-        except Exception as e:
-            print(f"  ! Error fetching {url}: {str(e)}")
+                fetched_pages.append((soup, deck_archetype, format_name))
 
-    # --- Parse the matchup tables now that the whitelist is fully populated ---
+    # Parse the matchup tables when the whitelist is fully populated
     for soup, deck_archetype, format_name in fetched_pages:
         try:
             matchups = scrape_matchup_soup(soup, deck_archetype, format_name, canonical_map)
@@ -105,6 +125,7 @@ def fetch_live_matchup_data(target_urls: List[str], canonical_map: Dict[str, str
             print(f"  ! Error parsing matchups for {deck_archetype}: {str(e)}")
 
     return all_matchups
+
 
 def scrape_matchup_soup(soup: BeautifulSoup, deck_archetype: str, format_name: str, canonical_map: Dict[str, str]) -> \
 List[Dict[str, Any]]:
@@ -134,7 +155,11 @@ List[Dict[str, Any]]:
 
         opponent_archetype = canonical_map[norm_opponent]
 
-        matches_attr = row.get("data-matches")
+        raw_attr = row.get("data-matches")
+        if isinstance(raw_attr, list):
+            matches_attr = raw_attr[0] if raw_attr else "0"
+        else:
+            matches_attr = raw_attr
         matches = int(matches_attr) if matches_attr is not None else 0
 
         wins = losses = ties = 0
@@ -171,68 +196,17 @@ List[Dict[str, Any]]:
 
     return matchups
 
-def scrape_matchup_data(file_path: str, deck_archetype: str, format_name: str, canonical_map: Dict[str, str]) -> List[Dict[str, Any]]:
-    excluded_opponents = {"bye", "unknown", "", "other"}
-    
+
+def scrape_matchup_data(file_path: str, deck_archetype: str, format_name: str, canonical_map: Dict[str, str]) -> List[
+    Dict[str, Any]]:
+    """
+    Reads a local HTML file and delegates DOM parsing to scrape_matchup_soup.
+    """
     with open(file_path, "r", encoding="utf-8") as file:
         soup = BeautifulSoup(file, "html.parser")
 
-    table_elem = soup.find("table", class_="striped")
-    if not isinstance(table_elem, Tag):
-        raise ValueError(f"Matchups table missing or not a Tag in {file_path}")
+    return scrape_matchup_soup(soup, deck_archetype, format_name, canonical_map)
 
-    matchups = []
-    
-    for row in table_elem.find_all("tr")[1:]:
-        if not isinstance(row, Tag):
-            continue
-
-        opponent_str = str(row.get("data-name", "")).strip()
-        if not opponent_str or opponent_str.lower() in excluded_opponents:
-            continue
-
-        norm_opponent = normalize_archetype(opponent_str)
-        if norm_opponent not in canonical_map:
-            continue
-
-        opponent_archetype = canonical_map[norm_opponent]
-
-        matches_attr = row.get("data-matches")
-        matches = int(matches_attr) if matches_attr is not None else 0
-
-        wins = losses = ties = 0
-        score_tds = row.find_all("td")
-        if len(score_tds) > 3:
-            score_text = score_tds[3].get_text(strip=True)
-            # Parse the "W - L - T" string (e.g., "6 - 12 - 5")
-            parts = [p.strip() for p in score_text.split("-") if p.strip()]
-
-            try:
-                if len(parts) >= 3:
-                    wins, losses, ties = map(int, parts[:3])
-                elif len(parts) == 2:
-                    wins, losses = map(int, parts)
-            except (ValueError, TypeError):
-                pass
-
-        if matches > 0:
-             # Formula: (Wins + 0.5 * Ties) / Total Matches
-            winrate = (wins + (0.5 * ties)) / matches
-        else:
-            winrate = 0.5
-
-        matchups.append({
-            "deck_archetype": deck_archetype,
-            "format": format_name,
-            "opponent_archetype": opponent_archetype,
-            "total_matches": matches,
-            "wins": wins,
-            "losses": losses,
-            "ties": ties,
-            "win_rate": winrate,
-        })
-
-    return matchups
 
 def build_complete_matchup_matrix(all_matchup_data: List[Dict[str, Any]]) -> Dict[str, Any]:
     # Collect all unique archetypes represented in the data
@@ -240,10 +214,10 @@ def build_complete_matchup_matrix(all_matchup_data: List[Dict[str, Any]]) -> Dic
     for m in all_matchup_data:
         unique_archetypes.add(m["deck_archetype"])
         unique_archetypes.add(m["opponent_archetype"])
-        
+
     valid_archetypes = sorted(list(unique_archetypes))
 
-    # Initialize empty matrix
+    # Initialise empty matrix
     matrix = {a: {b: {"win_rate": 0.5, "match_count": 0} for b in valid_archetypes} for a in valid_archetypes}
 
     for m in all_matchup_data:
@@ -267,6 +241,7 @@ def build_complete_matchup_matrix(all_matchup_data: List[Dict[str, Any]]) -> Dic
 
     return {"archetypes": valid_archetypes, "matchup_matrix": matrix}
 
+
 def save_to_csv(data: List[Dict[str, Any]], input_path: str):
     if not data:
         return
@@ -274,6 +249,7 @@ def save_to_csv(data: List[Dict[str, Any]], input_path: str):
         writer = csv.DictWriter(cast(Any, f), fieldnames=data[0].keys())
         writer.writeheader()
         writer.writerows(data)
+
 
 def save_matrix_to_csv(matrix_data: Dict[str, Any], input_path: str):
     archetypes = matrix_data["archetypes"]
@@ -288,15 +264,14 @@ def save_matrix_to_csv(matrix_data: Dict[str, Any], input_path: str):
                 row.append(f"{wr:.4f}%")
             writer.writerow(row)
 
-def main():
-    matchups_dir = MATCHUP_DIR
-    input_dir = INPUT_DIR
-    os.makedirs(input_dir, exist_ok=True)
 
-    html_files = [f for f in os.listdir(matchups_dir) if f.lower().endswith((".htm", ".html"))]
+def main():
+    os.makedirs(INPUT_DIR, exist_ok=True)
+
+    html_files = [f for f in os.listdir(MATCHUP_DIR) if f.lower().endswith((".htm", ".html"))]
 
     if not html_files:
-        print(f"No HTML files found in {matchups_dir}")
+        print(f"No HTML files found in {MATCHUP_DIR}")
         return
 
     print(f"Found {len(html_files)} matchup files")
@@ -305,7 +280,7 @@ def main():
     canonical_map = {}
 
     for f in html_files:
-        file_path = os.path.join(matchups_dir, f)
+        file_path = os.path.join(MATCHUP_DIR, f)
         try:
             archetype, format_name = get_deck_archetype(file_path, f)
             file_archetypes[f] = (archetype, format_name)
@@ -324,7 +299,7 @@ def main():
         if f not in file_archetypes:
             continue
         deck_archetype, format_name = file_archetypes[f]
-        file_path = os.path.join(matchups_dir, f)
+        file_path = os.path.join(MATCHUP_DIR, f)
         try:
             matchups = scrape_matchup_data(file_path, deck_archetype, format_name, canonical_map)
             all_matchups.extend(matchups)
@@ -336,11 +311,11 @@ def main():
     print(f"Total matchups: {len(all_matchups)}")
 
     if all_matchups:
-        save_to_csv(all_matchups, os.path.join(input_dir, "all_matchups.csv"))
+        save_to_csv(all_matchups, os.path.join(INPUT_DIR, "all_matchups.csv"))
         matrix_data = build_complete_matchup_matrix(all_matchups)
-        save_matrix_to_csv(matrix_data, os.path.join(input_dir, "matchup_matrix.csv"))
+        save_matrix_to_csv(matrix_data, os.path.join(INPUT_DIR, "matchup_matrix.csv"))
 
-        with open(os.path.join(input_dir, "ea_input.json"), "w", encoding="utf-8") as f:
+        with open(os.path.join(INPUT_DIR, INPUT_FILE), "w", encoding="utf-8") as f:
             json.dump(
                 {
                     "archetypes": matrix_data["archetypes"],
@@ -356,6 +331,7 @@ def main():
         print(f"\nTotal extracted archetypes: {len(matrix_data['archetypes'])}")
         sample = matrix_data["archetypes"][:3] if len(matrix_data["archetypes"]) >= 3 else matrix_data["archetypes"]
         print("Sample:", sample)
+
 
 if __name__ == "__main__":
     main()
