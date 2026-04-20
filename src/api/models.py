@@ -69,7 +69,7 @@ class PredictionRequest(BaseModel):
     match_format: str = Field(default="BO3", pattern="^(BO1|BO3)$")
     total_players: int = Field(
         default=256,
-        ge=8,
+        ge=4,
         le=8192,
         description="Total players in the field."
     )
@@ -77,7 +77,7 @@ class PredictionRequest(BaseModel):
     # 4. Meta & Field Constraints
     user_meta_spec: Dict[str, Union[float, ExactSpec, RangeSpec]] = Field(
         default_factory=dict,
-        max_length=100,
+        max_length=256,
     )
     meta_constraints: Dict[str, Union[ExactSpec, RangeSpec]] = Field(
         default_factory=dict

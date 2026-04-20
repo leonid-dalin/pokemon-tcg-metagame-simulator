@@ -1,13 +1,14 @@
 import json
 import os
+
 from huey import RedisHuey, crontab
 
-from src.api.models import ScrapedMatrix, PrecisionTier, TIER_MAPPING, PredictionRequest
-from src.core.scraper import fetch_live_matchup_data, build_complete_matchup_matrix
+from src.api.models import ScrapedMatrix, TIER_MAPPING, PredictionRequest
 from src.core.config import INPUT_DATA, MIN_GAMES
 from src.core.data import load_matchup_data
-from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
+from src.core.scraper import fetch_live_matchup_data, build_complete_matchup_matrix
 from src.tournament.monte_carlo import run_monte_carlo_analytics
+from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
 
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/?db=0")
 huey = RedisHuey('tcg_tasks', url=redis_url)
@@ -17,18 +18,21 @@ def execute_simulation_job(payload: dict):
     """
     This runs in a background worker process, completely freeing up the API
     """
-    job_id = payload.get("job_id", "unknown_job")
-    deck_names, win_matrix, _ = load_matchup_data(INPUT_DATA, MIN_GAMES)
-    tier_str = payload.get("precision_tier", PrecisionTier.STANDARD.value)
-    iterations = TIER_MAPPING.get(PrecisionTier(tier_str), 25_000)
-
-    # 1. Run Solver (Water-filling & Baseline Constraints)
+    # 1. Instantiate and Validate Request First
     request = PredictionRequest(**payload)
+    job_id = request.job_id
+
+    deck_names, win_matrix, _ = load_matchup_data(INPUT_DATA, MIN_GAMES)
+
+    # Extract clean, validated parameters
+    iterations = TIER_MAPPING.get(request.precision_tier, 25_000)
+    players = request.total_players
+
+    # 2. Run Solver (Water-filling & Baseline Constraints)
     solver_res = predict_best_decks(request)
 
-    # 2. Determine Tournament Structure
-    players = payload["total_players"]
-    if payload.get("tournament_style", "championship_series") == "championship_series":
+    # 3. Determine Tournament Structure
+    if request.tournament_style == "championship_series":
         d1_rounds, cut_points, d2_rounds, top_cut = get_variant_5_structure(players)
     else:
         d1_rounds = swiss_rounds_from_players(players)
@@ -38,7 +42,7 @@ def execute_simulation_job(payload: dict):
         pct = int((current_chunk / total_chunks) * 100)
         huey.storage.put_data(f"prog_{job_id}", str(pct).encode('utf-8'))
 
-    # 3. Run Monte Carlo Brackets
+    # 4. Run Monte Carlo Brackets
     mc_res = run_monte_carlo_analytics(
         deck_names=deck_names,
         win_matrix=win_matrix,
@@ -49,10 +53,10 @@ def execute_simulation_job(payload: dict):
         top_cut=top_cut,
         players=players,
         iterations=iterations,
-        match_format=payload["match_format"],
-        use_tie_convergence=payload["use_tie_convergence"],
-        global_tie_rate=payload["global_tie_rate"],
-        use_drop_feature=payload["use_drop_feature"],
+        match_format=request.match_format,
+        use_tie_convergence=request.use_tie_convergence,
+        global_tie_rate=request.global_tie_rate,
+        use_drop_feature=request.use_drop_feature,
         progress_callback=_progress_handler
     )
 
@@ -65,7 +69,7 @@ def execute_simulation_job(payload: dict):
 def automated_daily_pipeline():
     print("Starting automated daily Limitless TCG data scrape...")
 
-    from src.core.urls import ASC_URLS, POR_URLS
+    from src.core.urls import POR_URLS
     target_urls = POR_URLS
 
     try:
@@ -89,9 +93,6 @@ def automated_daily_pipeline():
         }
 
         validated_data = ScrapedMatrix(**payload_for_validation)
-
-        output_path = INPUT_DATA
-
         dumped_data = validated_data.model_dump()
 
         final_json_structure = {
@@ -102,7 +103,7 @@ def automated_daily_pipeline():
             }
         }
 
-        with open(output_path, "w", encoding="utf-8") as f:
+        with open(INPUT_DATA, "w", encoding="utf-8") as f:
             json.dump(final_json_structure, f, indent=2)
 
         print(f"Pipeline successful! Matrix updated and thermodynamic purity verified.")

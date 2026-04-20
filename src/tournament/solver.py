@@ -1,22 +1,20 @@
 # solver.py | Water-filling constraints & Base Meta Scoring
+import bisect
 import math
+import numpy as np
 import os
 from typing import Dict, List, Any, Tuple
 
-import numpy as np
-
 from src.api.models import DeckRecommendation, PredictionRequest, PredictionResult
 from src.core.config import INPUT_DATA, MIN_GAMES
+import src.core.config as core_config
 from src.core.data import load_matchup_data, safe_normalize
-
 
 # ==========================================
 # Helper Funcs
 # ==========================================
 def get_variant_5_structure(players: int) -> Tuple[int, int, int, int]:
     """Returns: (Day1_Rounds, Match_Point_Cutoff, Day2_Rounds, Top_Cut) based on official handbook."""
-    import bisect
-    import src.core.config as core_config
     _STRUCTURE_THRESHOLDS = getattr(core_config, "_STRUCTURE_THRESHOLDS")
     _STRUCTURE_RESULTS = getattr(core_config, "_STRUCTURE_RESULTS")
     index = bisect.bisect_left(_STRUCTURE_THRESHOLDS, players)
@@ -24,9 +22,14 @@ def get_variant_5_structure(players: int) -> Tuple[int, int, int, int]:
     return _STRUCTURE_RESULTS[index]
 
 def swiss_rounds_from_players(n_players: int) -> int:
-    if n_players <= 1:
-        return 1
-    return min(9, math.ceil(math.log2(n_players)))
+    if n_players < 4:
+        return 0
+    natural_swiss = math.ceil(math.log2(n_players))
+    if 16 < n_players <= 64:
+        return natural_swiss + 1
+    elif n_players > 64:
+        return natural_swiss + 2
+    return natural_swiss
 
 def apply_bo3_conversion(win_matrix: np.ndarray) -> np.ndarray:
     """Converts BO1 win probabilities to BO3 using P_bo3 = 3p^2 - 2p^3"""
