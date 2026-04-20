@@ -1,3 +1,26 @@
+## Commit `latest` (Apr 21, 2026)
+### 🧪 UI/UX & Data Fidelity Improvement
+
+This update focuses on stabilising the Streamlit frontend state, improving the Limitless TCG scraper, and introducing a new high-level utility for metagame distribution modelling.
+
+#### 🧠 `app.py` (Session State & Logic)
+* **(Fix) State Synchronization:** Resolved a potential `AttributeError` for `temp_input_mode` by pre-initialising widget keys within the `init_session_state pipeline`. This ensures all callbacks have access to the UI mode during the initial user interaction.
+* **(Bug) Scaling Precision:** Fixed a critical miscalculation where percentage values (e.g., 9%) were interpreted as raw player counts (9 players). The logic now explicitly forces updates to both the internal state dictionary and the Streamlit widget cache.
+
+#### 🕸️ `scraper.py` (Robust Data Ingestion)
+* **(Security) Type Enforcement:** Implemented explicit `isinstance(content, str)` checks for all BeautifulSoup results. This prevents runtime crashes (e.g., `str | None` errors) when encountering empty script blocks in Limitless TCG HTML.
+* **(Feat) Targeted DOM Parsing:** Upgraded the HTML scraper to specifically identify the SvelteKit data block containing `/tcg/decks`. This isolates decklist arrays and prevents the engine from accidentally ingesting tournament metadata.
+
+#### ⚖️ Metagame Constraints (Auto-Fill)
+* **(Feat) "Omission Split" Utility:** Introduced the "💧 Auto-Fill Remaining" feature, which calculates the remaining field percentage and distributes it across unconstrained archetypes proportionally to historical match volume.
+* **(Logic) Thermodynamic Consistency:** The solver now mandates that even after manual user overrides, the final field distribution is mathematically normalised to exactly 1.0 (100%) before entering the simulation.
+
+#### ⚡ Performance & Reliability
+* **(Perf) TTL Caching:** Added a `300s` Time-To-Live (TTL) to the matchup matrix and deck name loaders. This ensures the UI automatically invalidates stale data when the background worker updates the core JSON data.
+* **(Soft Warning) Redis Integration:** The Auto-Fill feature relies on the latest state in `ea_input.json`; users must ensure their local Redis instance is active to prevent skewed distributions from stale local files.
+
+---
+
 ## Commit `f2b7421` (Apr 19, 2026)
 ### 🛡️ Security & Reliability: Defensive Gateway Overhaul
 
@@ -16,14 +39,14 @@ This update transforms the FastAPI entry point from a transparent router into a 
 * **(Constraints) Bound checking:** Implemented hard mathematical ceilings for `mc_iterations` and `total_players` to ensure request payloads stay within viable hardware limits.
 
 #### 📊 `queue.py` (Background Worker)
-* **(Stability) Execution Context:** Verified that `huey.storage` correctly utilizes the shared Redis instance for persistent progress peeking, allowing the SSE stream to survive API restarts.
+* **(Stability) Execution Context:** Verified that `huey.storage` correctly utilises the shared Redis instance for persistent progress peeking, allowing the SSE stream to survive API restarts.
 
 ---
 
 ## Commit `3eb4bc7` (Apr 04, 2026)
 ### 🚀 Infrastructure & UX: Redis Migration and SSE Streaming
 
-This update finalizes the architectural decoupling of the simulator, transitioning from synchronous polling to a reactive, event-driven communication model.
+This update finalises the architectural decoupling of the simulator, transitioning from synchronous polling to a reactive, event-driven communication model.
 
 [Small Rant]
 
@@ -57,7 +80,7 @@ When Streamlit connected to the API to ask for progress, the background worker w
 
 #### **⚖️ Resource Orchestration**
 * **GIL Bypass & Threading:** The Rust `tcg_engine` now explicitly releases the Python Global Interpreter Lock (GIL), allowing the FastAPI server to breathe while the CPU is under 100% load.
-* **Deferred Engine Initialization:** Moved the Rayon thread-pool initialization inside the worker task to prevent deadlocks caused by Linux `fork()` mechanics.
+* **Deferred Engine Initialisation:** Moved the Rayon thread-pool initialisation inside the worker task to prevent deadlocks caused by Linux `fork()` mechanics.
 * **Granular Chunking:** Inverted the chunking logic to ensure regular progress updates (every 10k iterations) regardless of the total simulation size.
 
 ---
@@ -80,7 +103,7 @@ This update replaces the Python/NumPy tournament bracket engine with a fully com
 ## Commit `39d482d` (Mar 31, 2026)
 ### 🚀 feat(pipeline): implement autonomous Limitless TCG live scraper, Pydantic matrix validation, and Huey cron scheduling
 
-This update completely eliminates the need for manual HTML file downloads from Limitless. The simulator is now able to fetch, normalize, validate, and ingest live Limitless TCG data automatically, as long as it knows the URLs.
+This update completely eliminates the need for manual HTML file downloads from Limitless. The simulator is now able to fetch, normalise, validate, and ingest live Limitless TCG data automatically, as long as it knows the URLs.
 
 #### **🕸️ Live Web Scraping (`scraper.py`)**
 * **Direct HTML Fetching:** Replaced the local file-reading logic with Python's `requests` library. The scraper now dynamically fetches live matchup pages using a predefined list of active format URLs (`urls.py`). The offline/manual version will become **legacy** for now.
@@ -123,7 +146,7 @@ This massive architectural update transitions the project from a heuristic simul
 * **Stochastic Volatility:** Re-integrated `noise_scale` into the MWU engine, injecting Gaussian noise into the fitness growth exponent to simulate imperfect player information and local metagame turbulence. Defaults at `0.0` for the unforeseeable future.
 
 #### **⚖️ Data Purity & Scraper**
-* **Zero-Sum Match Equity:** Overhauled `scraper.py` to calculate win rates using the standard Elo formula: $(Wins + 0.5 \times Ties) / Total\ Matches$. This eliminates "energy leaks" where ties were previously penalized as double-losses, ensuring a mathematically perfect 100% zero-sum matrix.
+* **Zero-Sum Match Equity:** Overhauled `scraper.py` to calculate win rates using the standard Elo formula: $(Wins + 0.5 \times Ties) / Total\ Matches$. This eliminates "energy leaks" where ties were previously penalised as double-losses, ensuring a mathematically perfect 100% zero-sum matrix.
 * **Asymmetrical Matrix Centering:** Updated Expected Value (EV) calculations to use $payoffs - avg\_payoff$, correctly centering the gradient plane for asymmetrical TCG matchup data.
 
 #### **⚡ Performance & Stability Sensors**
@@ -144,10 +167,10 @@ This update drastically enhances the visual storytelling of the dashboard using 
 #### **📊 Advanced Visualizations (`plotting.py`)**
 * **Metagame Scatter Plot:** Introduced a 2D interactive scatter plot underneath the main data table. It visually maps a deck's Power Score against its Frequency Score, with the bubble's radius representing its overall Meta Score. Hover tooltips and static labels allow for rapid format comprehension.
 * **Negative Power Score Toggle:** Added a sidebar toggle (`allow_negative_power`) that strictly filters out unviable decks (Power Score < 0) from the Scatter Plot by default. This keeps the visual plane clean, while allowing users to opt in to seeing the "graveyard" of negative EV decks.
-* **Head-to-Head Radar Chart:** Complimenting the static text comparisons with a dynamic Plotly Spider/Radar chart. The chart automatically scales its axes to match the selected tournament structure (e.g., adding Day 2/Top 8 spokes only if applicable) and normalizes coordinates while preserving true metric values in the hover text.
+* **Head-to-Head Radar Chart:** Complimenting the static text comparisons with a dynamic Plotly Spider/Radar chart. The chart automatically scales its axes to match the selected tournament structure (e.g., adding Day 2/Top 8 spokes only if applicable) and normalises coordinates while preserving true metric values in the hover text.
 
 #### **🛡️ Stability & Error Handling**
-* **Limitless HTML Error Catching:** Wrapped the `Import Limitless Labs HTML` logic in a hard `try...except` boundary. Instead of the UI silently refreshing and hiding the error when encountering malformed JSON or unrecognized deck strings, the app now explicitly halts and prints the Python stack trace directly to the UI for easy debugging.
+* **Limitless HTML Error Catching:** Wrapped the `Import Limitless Labs HTML` logic in a hard `try...except` boundary. Instead of the UI silently refreshing and hiding the error when encountering malformed JSON or unrecognised deck strings, the app now explicitly halts and prints the Python stack trace directly to the UI for easy debugging.
 * **Persistent Success States:** Fixed a bug where successful HTML import alerts (`st.success`) would vanish in milliseconds due to the forced Streamlit rerun. Messages are now temporarily cached in `st.session_state` to survive the lifecycle refresh.
 
 #### **💅 UI/UX Polish**
@@ -158,12 +181,12 @@ This update drastically enhances the visual storytelling of the dashboard using 
 ---
 
 ## Commit `5f7c7f1` (Mar 24, 2026)
-### refactor: formalize tournament EV logic, stabilize UI state, and fix mathematical clipping
+### refactor: formalise tournament EV logic, stabilise UI state, and fix mathematical clipping
 
 This update represents a fundamental shift in the recommendation engine, while resolving several critical stability bugs and mathematical floor errors. Updated the current `INPUT_DATA` to the Limitless TCG's stats of Mar 24, 2026 of ASC format.
 
 #### **📊 Tournament EV & Dynamic Logic Overhaul**
-* **Context-Aware EV:** The engine now dynamically switches primary metrics based on player count. Large-scale tournaments (e.g., 2,000+ players) prioritize **Day 2 Conversion** to mitigate Top 8 variance. Smaller events pivot to **Top 8/Top X Conversion**. This is very much still subject to change, and are a direct preference of mine's.
+* **Context-Aware EV:** The engine now dynamically switches primary metrics based on player count. Large-scale tournaments (e.g., 2,000+ players) prioritise **Day 2 Conversion** to mitigate Top 8 variance. Smaller events pivot to **Top 8/Top X Conversion**. This is very much still subject to change, and are a direct preference of mine's.
 * **EV Delta Metric:** Introduced a relative performance stat that shows the "Equity Drop-off" compared to the #1 ranked deck, providing better context for the other choices.
 * **Mathematical Floor Fix:** Updated `solver.py` to use `np.minimum(100.0)` instead of a hard `np.clip`. This allows for negative scores in the framework, accurately representing sub-baseline rogue decks.
 
@@ -189,12 +212,12 @@ This update represents a fundamental shift in the recommendation engine, while r
 This update fundamentally shifts how the static baseline is evaluated, moving away from fabricating Swiss tiebreakers (SoS/OMW) before the bracket runs, and instead adopting the rigorous data philosophies already pioneered by [Vicious Syndicate](https://www.vicioussyndicate.com/).
 
 * **Adopted vS Meta Score Logic:** `solver.py` now evaluates the Day 1 baseline using Vicious Syndicate's 2D coordinate system. 
-    * **Power Score (0-100):** A normalized measure of a deck's Expected Win Rate against the field.
+    * **Power Score (0-100):** A normalised measure of a deck's Expected Win Rate against the field.
     * **Meta Score (0-100):** The simple average of a deck's Power Score and its Frequency Score (Popularity).
-* **Strict Win-Rate Tiers:** Abandoned 0-100 normalized composite scores for tier assignments. Tiers are now ruthlessly assigned based on raw Expected Win Rate against the predicted field (S-Tier $\ge$ 52%, A-Tier $\ge$ 50%, B-Tier $\ge$ 47%).
+* **Strict Win-Rate Tiers:** Abandoned 0-100 normalised composite scores for tier assignments. Tiers are now ruthlessly assigned based on raw Expected Win Rate against the predicted field (S-Tier $\ge$ 52%, A-Tier $\ge$ 50%, B-Tier $\ge$ 47%).
 * *Credit:* I'd like to extend a massive thank you to the [Vicious Syndicate](https://www.vicioussyndicate.com/drr/faq-data-reaper-report/) team for providing the gold standard in TCG data analytics. Their methodology for mapping "format dominance" versus "pilot profitability" directly inspired this refactor. It was long due, but I wanted to experiment on my own before I'd adopt a proven logic.
 
-#### **Monte Carlo Engine Optimizations**
+#### **Monte Carlo Engine Optimisations**
 * **1-Deep Lookahead Heuristic:** Fixed a critical flaw in the Swiss pairing logic. Basically, there was a possibility for identical re-pairings (I observed it in ties). The engine now checks `opponents_history` and performs adjacent-table swaps to prevent players from immediately rematching the same opponent, without the crippling $O(N^3)$ performance cost of a full Blossom algorithm.
 * **BETA: X-3 Drop Simulation:** Added a UI toggle to simulate real-world player attrition. If enabled, the engine will purge players from the active bracket once they accumulate 3 losses, accurately altering the tiebreaker math for the bubble.
 * **Performance Boost:** Stripped redundant Opponent's Match Win (OMW) array aggregations out of the Day 1 Swiss loops. OWP is now only calculated exactly when needed (Top Cut sorting), significantly reducing NumPy overhead.
@@ -207,7 +230,7 @@ This update fundamentally shifts how the static baseline is evaluated, moving aw
 ---
 
 ## Commit `4820359` (Mar 20, 2026)
-### refactor: domain-driven restructure, massive performance optimization, and mathematical fidelity overhaul
+### refactor: domain-driven restructure, massive performance optimisation, and mathematical fidelity overhaul
 
 Another major update that introduces a new strict domain-driven directory structure to separate the evolutionary engine from the tournament solver engine, alongside critical bug fixes that drastically increase simulation speed and mathematical purity. At least on paper.
 
@@ -218,20 +241,20 @@ Another major update that introduces a new strict domain-driven directory struct
 #### **Performance & Optimization (1,000,000 gens in ~18s)**
 * **Vectorized Array Splicing:** Completely replaced the slow double `for` loops in `analysis.py`'s similarity matrix reconstruction with a single, highly-optimized NumPy index slice (`np.ix_`).
 * **Swiss Worker Array Slicing:** Replaced sequential `np.where` boolean checks in the `_pure_swiss_worker` with high-speed `[0::2]` vs `[1::2]` array slicing for pairing logic.
-* **Multiprocessing Pool Leak Fixed:** Fixed a critical memory leak in `evolution/engine.py` where a new `mp.Pool()` was instantiated and destroyed every generation. The pool is now initialized exactly once per simulation run and passed down safely.
+* **Multiprocessing Pool Leak Fixed:** Fixed a critical memory leak in `evolution/engine.py` where a new `mp.Pool()` was instantiated and destroyed every generation. The pool is now initialised exactly once per simulation run and passed down safely.
 
 #### **Mathematical Purity & Bug Fixes**
 * **Parabolic Tie Convergence:** The `_championship_series_worker` now accurately executes the advertised BO3 match-point bleed via the formula $P_{tie} = T_{global} \times 4P(1-P)$, properly awarding 1 point for ties and accurately suppressing global OMW% by ~1–1.5 points.
 * **Purged Phantom Confidence:** Fixed `data.py` assigning a default `match_count` of 100 to missing matchups. Missing data now defaults to 0, preventing the Bayesian beta distribution from inventing false statistical confidence. This was initially done for EGT where not enough matchups were recorded.
 * **Restored Replicator Purity:** Removed the global `mutation_floor` broadcast in `reintroduce_extinct_decks`. Decks now naturally decay to a true `0.0` frequency unless explicitly selected for reintroduction, allowing the engine to find mathematically perfect Nash Equilibrium.
-* **Removed Win-Equivalent Distortions:** Stripped arbitrary float modifiers from tournament placements in the evolutionary engine. Fitness is now derived purely from mathematically normalized match points.
+* **Removed Win-Equivalent Distortions:** Stripped arbitrary float modifiers from tournament placements in the evolutionary engine. Fitness is now derived purely from mathematically normalised match points.
 * **Removed Data Falsification:** Deleted the `gaussian_filter1d` block at the end of the simulation loop, ensuring all post-analysis tools evaluate the raw, genuine stochastic output of the engine.
 * **Synchronized Tier Thresholds:** `generate_final_state_tier_list` now dynamically imports the global `TIER_*_THRESHOLD` variables, preventing conflicting tier assignments between the final state and all-time lists. Forgot about this hardcode.
 
 ---
 
 ## Latest Commit `04a47ba` (Mar 19, 2026)
-### refactor(core): fix Ultimate Score math, vectorize engine, optimize clustering, and overhaul UI POV
+### refactor(core): fix Ultimate Score math, vectorise engine, optimise clustering, and overhaul UI POV
 
 #### **Mathematical & Logic Fixes**
 * **`app.py`:** 
@@ -252,7 +275,7 @@ Another major update that introduces a new strict domain-driven directory struct
     * **Dynamic Perspective Toggle:** The "Odds Perspective" radio button now sits directly above the dataframe, allowing users to instantly swap the data sorting and Top Recommendations between Individual EV and Macro Impact without re-triggering the Monte Carlo engine.
     * **Head-to-Head Colour Coding:** Integrated a Pandas `Styler` into the matchup comparator to natively highlight favorable ($\ge 55\%$) matchups in green and unfavorable ($\le 45\%$) in red.
     * **Tooltips Added:** The Streamlit interactive dataframe now utilizes `st.column_config` `help` parameters, injecting native hover-tooltips for all table headers (e.g., explaining SoS, OMW, and composite scores).
-    * **Layout & State Fixes:** Widened the custom constraint columns to prevent the delete button from clipping. Added defensive dictionary key initialization (`score_player`, `score_archetype`) to prevent Streamlit caching `KeyError`s during hot-reloads.
+    * **Layout & State Fixes:** Widened the custom constraint columns to prevent the delete button from clipping. Added defensive dictionary key initialisation (`score_player`, `score_archetype`) to prevent Streamlit caching `KeyError`s during hot-reloads.
 
 ---
 
@@ -260,7 +283,7 @@ Another major update that introduces a new strict domain-driven directory struct
 ### feat(sim): implement tournament equity engine with parabolic tie convergence
 
 #### **Core Logic & Engine Updates**
-* **`monte_carlo.py` (New File):** * Created a high-performance, parallelized bracket engine.
+* **`monte_carlo.py` (New File):** * Created a high-performance, parallelised bracket engine.
     * Implemented **Parabolic Tie Convergence (BETA)** which simulates match-point decay in Swiss rounds based on matchup closeness ($P_{tie} = T_{global} \times 4P(1-P)$).
     * Added **True Bracket Seeding**; Top Cut now pairs 1v8, 2v7, etc., rather than arbitrary pairings.
 * **`predictor.py`:** * Vectorized the calculation of **Strength of Schedule (SoS)** and **Opponent's Match Win % (OMW)**.
@@ -278,7 +301,7 @@ Another major update that introduces a new strict domain-driven directory struct
 * **Official TPCi Structures:** Replaced static round counts with `get_variant_5_structure`, which automatically sets rounds, match-point cuts, and top-cut sizes based on official Play! Pokémon standards.
 
 #### **Mathematical Refinements**
-* **Ultimate Scoring System:** Replaced the old heuristic "Score" with a Min-Max normalized value (0–100) based on four tournament pillars: Win Rate, Day 2 Conversion, Top 8 Conversion, and Win Probability.
+* **Ultimate Scoring System:** Replaced the old heuristic "Score" with a Min-Max normalised value (0–100) based on four tournament pillars: Win Rate, Day 2 Conversion, Top 8 Conversion, and Win Probability.
 * **Parabolic Tie Convergence (BETA):** Implemented a new model for BO3 time-outs, allowing match points to "bleed" via ties (1 point) rather than forcing binary win/loss (3/0 points) outcomes.
 * **Vectorized Swiss Metrics:** Shifted calculation of SoS (Strength of Schedule) and OMW (Opponent's Match Win %) to vectorized NumPy operations for speed.
 
@@ -309,13 +332,13 @@ Another overhaul to the `scraper.py` utility to ensure the data fed into the sim
 -----
 
 ## Commit `48fa2c3` (Nov 12, 2025)
-### feat(analysis, config, docs): Vectorize tier list, centralize constants, and perform repository clean-up
+### feat(analysis, config, docs): Vectorise tier list, centralise constants, and perform repository clean-up
 
-Improves the metagame analysis pipeline by optimizing performance, ensuring full configuration transparency, and performing necessary repository maintenance.
+Improves the metagame analysis pipeline by optimising performance, ensuring full configuration transparency, and performing necessary repository maintenance.
 
 ### 🚀 Feature & Performance Improvements
-- **Performance:** Implemented a full **vectorization** of the deck **consistency** calculation in `analysis.py`. This significantly speeds up tier list generation by moving from slow Python loops to efficient NumPy operations.
-- **Centralized Configuration:** All numerical tuning parameters for the tier list are now centralized in `config.py`:
+- **Performance:** Implemented a full **vectorisation** of the deck **consistency** calculation in `analysis.py`. This significantly speeds up tier list generation by moving from slow Python loops to efficient NumPy operations.
+- **Centralised Configuration:** All numerical tuning parameters for the tier list are now centralised in `config.py`:
     - **Composite Weights:** Added `COMPOSITE_SCORE_WR_WEIGHT`, `_PRESENCE_WEIGHT`, and `_CONSISTENCY_WEIGHT`.
     - **Tier Thresholds:** Added `TIER_S_THRESHOLD`, `_A_THRESHOLD`, `_B_THRESHOLD`, and `_C_THRESHOLD`.
 - **Tier List Tuning:** Updated default tier thresholds (e.g., S-Tier from 0.75 to 0.90) to enforce a stricter, more competitively realistic performance distribution.
@@ -332,9 +355,9 @@ Improves the metagame analysis pipeline by optimizing performance, ensuring full
 -----
 
 ## Commit `458ded8` (Nov 12, 2025)
-### refactor(config, analysis): Formalize consistency epsilons and resolve linter warnings
+### refactor(config, analysis): Formalise consistency epsilons and resolve linter warnings
 
-Refactors the tier list generation logic to improve code quality, resolve linter warnings, and formalize ""magic numbers"" into explicit constants.
+Refactors the tier list generation logic to improve code quality, resolve linter warnings, and formalise ""magic numbers"" into explicit constants.
 
 Key Changes in `analysis.py`:
 - **Fixed scoping warning:** Replaced a complex, warning-prone list comprehension for deck consistency with a clear, explicit `for` loop to ensure correct assignment of the local variable `std_val`.
@@ -342,7 +365,7 @@ Key Changes in `analysis.py`:
 - **Refactored hardcoded values:** Replaced the hardcoded numerical stability values (`1e-6` and `1e-9`) with imported, named constants.
 
 Key Changes in `config.py`:
-- **Added constants:** Introduced `CONSISTENCY_MEAN_EPSILON` (1e-6) and `CONSISTENCY_STD_EPSILON` (1e-9) to promote clarity and centralize configuration for the consistency metric calculation.
+- **Added constants:** Introduced `CONSISTENCY_MEAN_EPSILON` (1e-6) and `CONSISTENCY_STD_EPSILON` (1e-9) to promote clarity and centralise configuration for the consistency metric calculation.
 
 -----
 
@@ -388,7 +411,7 @@ Fixes:
 -----
 
 ## Commit `a727312` (Nov 11, 2025)
-### refactor(core): Full-stack optimization, caching, and architectural streamlining
+### refactor(core): Full-stack optimisation, caching, and architectural streamlining
 
 This is a major squashed commit that introduces significant performance
 enhancements, architectural simplifications, and bug fixes across the
@@ -455,7 +478,7 @@ The primary goals of this refactor were:
 
 * **(Fix)** Removed unused imports (`Literal`, `Iterator`).
 * **(Fix)** Fixed a critical "might be referenced before assignment" bug
-    with `history_writer` by initializing it to `None` and adding
+    with `history_writer` by initialising it to `None` and adding
     safer checks.
 * **(Fix)** Removed all unused local variables (`deck_to_idx`,
     `sample_interval`, `n`).
