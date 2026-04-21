@@ -21,12 +21,22 @@ services:
         condition: service_healthy
     command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
+  jaeger:
+      image: jaegertracing/all-in-one:latest
+      ports:
+        - "16686:16686" # UI
+        - "4317:4317"   # OTLP gRPC
+        - "4318:4318"   # OTLP HTTP
+
   worker:
     build: .
     environment:
       - REDIS_URL=redis://redis:6379/?db=0
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
       - PYTHONPATH=/app
     depends_on:
+      jaeger:
+        condition: service_started
       redis:
         condition: service_healthy
     command: ["huey_consumer", "src.worker.queue.huey", "--worker-type=process", "--workers=4"]
@@ -38,3 +48,4 @@ services:
     environment:
       - API_URL=http://api:8000/api/v1
     command: ["streamlit", "run", "src/ui/app.py"]
+

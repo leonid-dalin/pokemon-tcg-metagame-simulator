@@ -1,13 +1,13 @@
-# app.py | Streamlit dashboard
+# src/ui/app.py | Streamlit dashboard
 import json
+import structlog
 import os
-import logging
 import re
 import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, cast, List, Tuple, Dict, Union
+from typing import Any, Dict, List, Tuple, Union, cast
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,7 @@ import requests
 import streamlit as st
 from bs4 import BeautifulSoup
 from streamlit.runtime.uploaded_file_manager import UploadedFile
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
 
 # Resolve the project root
 project_root = str(Path(__file__).resolve().parents[2])
@@ -25,23 +26,42 @@ if project_root not in sys.path:
 
 from src.api.models import PrecisionTier, RangeSpec, ExactSpec, PredictionRequest
 from src.core.data import load_matchup_data
-from src.core.config import INPUT_DATA, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, \
+from src.core.config import NASH_EQUILIBRIUM, INPUT_DATA, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, \
     TIER_2_THRESHOLD
 from src.tournament.solver import swiss_rounds_from_players, get_variant_5_structure
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
+from src.core.logger import setup_structured_logging
+from src.core.telemetry import setup_telemetry, tracer
 
+
+# ==========================================
+# Observability Initialisation
+# ==========================================
+@st.cache_resource
+def initialise_observability():
+    """
+    Initialise tracing and logging once per Streamlit lifecycle to avoid provider conflicts.
+    """
+    setup_structured_logging()
+    setup_telemetry("tcg-ui")
+    RequestsInstrumentor().instrument()
+    return structlog.get_logger()
+
+app_logger = initialise_observability()
 
 # ==========================================
 # Helper Funcs
 # ==========================================
-@st.cache_data(show_spinner=False, ttl=300)
+TTL_TIMER = 600
+
+@st.cache_data(show_spinner=False, ttl=TTL_TIMER)
 def get_valid_deck_names() -> List[str]:
     input_path = os.path.join(str(INPUT_DATA))
     deck_names, _, _ = load_matchup_data(input_path, MIN_GAMES)
     return sorted(deck_names)
 
 
-@st.cache_data(show_spinner=False, ttl=300)
+@st.cache_data(show_spinner=False, ttl=TTL_TIMER)
 def load_full_win_matrix():
     input_path = os.path.join(str(INPUT_DATA))
     deck_names, win_matrix, matchup_details = load_matchup_data(input_path, MIN_GAMES)
@@ -335,7 +355,7 @@ def main():
                         st.success(f"✅ Loaded {len(saved_rows)} constraints.")
                         st.rerun()
                     except Exception as e:
-                        logging.error(f"Invalid JSON format: {e}", exc_info=True)
+                        app_logger.error("invalid_json_import", error=str(e), exc_info=True)
                         st.error("❌ Invalid JSON format.")
 
             else:
@@ -360,7 +380,7 @@ def main():
                         st.session_state.expander_constraints_open = True
                         st.rerun()
                     except Exception as e:
-                        logging.error(f"HTML Parsing Error: {e}", exc_info=True)
+                        app_logger.error("html_parsing_error", error=str(e), exc_info=True)
                         st.error("❌ Error parsing HTML file. Please verify the format.")
                         st.stop()
 
@@ -561,83 +581,89 @@ def main():
     # ==========================================
     if st.button("🚀 Generate Metagame & Predict", type="primary", width="stretch", disabled=(total_min > 1.0)):
         job_id = str(uuid.uuid4())
-        with (st.status("⚙️ Initializing Engine...", expanded=True) as status):
-            st_progress_bar = st.progress(0, text="Booting Data Solver...")
-            start_time = time.time()
-            try:
-                _, win_matrix, _ = load_full_win_matrix()
-                # 1. Prepare the payload
-                payload = {
-                    "job_id": job_id,
-                    "deck_names": deck_names,
-                    "matchup_matrix": win_matrix.tolist() if hasattr(win_matrix, "tolist") else win_matrix,
-                    "tournament_style": str(tourney_structure).lower().replace(" ", "_"),
-                    "match_format": match_format,
-                    "total_players": players,
-                    "user_meta_spec": user_meta,
-                    "precision_tier": selected_tier_value,
-                    "global_tie_rate": global_tie_rate,
-                    "use_tie_convergence": use_tie_convergence,
-                    "use_drop_feature": use_drop_feature,
-                    "min_sample_threshold": min_sample_threshold,
-                }
+        with (tracer.start_as_current_span("streamlit_prediction_workflow") as ui_span):
+            ui_span.set_attribute("job.id", job_id)
+            ui_span.set_attribute("total_players", players)
 
-                # 2. POST to FastAPI
-                api_url = os.environ.get("API_URL", "http://localhost:8000/api/v1")
-                response = requests.post(f"{api_url}/predict", json=payload)
-                response.raise_for_status()
-                task_id = response.json()["task_id"]
+            with (st.status("⚙️ Initializing Engine...", expanded=True) as status):
+                st_progress_bar = st.progress(0, text="Booting Data Solver...")
+                start_time = time.time()
+                try:
+                    _, win_matrix, _ = load_full_win_matrix()
+                    # 1. Prepare the payload
+                    payload = {
+                        "job_id": job_id,
+                        "deck_names": deck_names,
+                        "matchup_matrix": win_matrix.tolist() if hasattr(win_matrix, "tolist") else win_matrix,
+                        "tournament_style": str(tourney_structure).lower().replace(" ", "_"),
+                        "match_format": match_format,
+                        "total_players": players,
+                        "user_meta_spec": user_meta,
+                        "precision_tier": selected_tier_value,
+                        "global_tie_rate": global_tie_rate,
+                        "use_tie_convergence": use_tie_convergence,
+                        "use_drop_feature": use_drop_feature,
+                        "min_sample_threshold": min_sample_threshold,
+                    }
 
-                # 3. Connect to the SSE Stream
-                status.update(label="Establishing SSE Connection...", state="running")
+                    # 2. POST to FastAPI
+                    api_url = os.environ.get("API_URL", "http://localhost:8000/api/v1")
+                    app_logger.info("dispatching_prediction_request", job_id=job_id, api_url=api_url)
+                    response = requests.post(f"{api_url}/predict", json=payload)
+                    response.raise_for_status()
+                    task_id = response.json()["task_id"]
 
-                is_complete = False
+                    # 3. Connect to the SSE Stream
+                    status.update(label="Establishing SSE Connection...", state="running")
+                    is_complete = False
 
-                with requests.get(f"{api_url}/tasks/{task_id}/stream?job_id={job_id}", stream=True,
-                                  timeout=45) as stream_response:
-                    stream_response.raise_for_status()
+                    with tracer.start_as_current_span("sse_stream_polling"):
+                        with requests.get(f"{api_url}/tasks/{task_id}/stream?job_id={job_id}", stream=True,
+                                          timeout=45) as stream_response:
+                            stream_response.raise_for_status()
 
-                    for line in stream_response.iter_lines():
-                        if not line: continue
-                        decoded_line = line.decode('utf-8')
+                            for line in stream_response.iter_lines():
+                                if not line: continue
+                                decoded_line = line.decode('utf-8')
 
-                        if decoded_line.startswith("data:"):
-                            data_str = decoded_line[5:].strip()
-                            task_res = json.loads(data_str)
+                                if decoded_line.startswith("data:"):
+                                    data_str = decoded_line[5:].strip()
+                                    task_res = json.loads(data_str)
 
-                            if task_res["status"] == "processing":
-                                pct = task_res.get("progress", 0)
-                                elapsed = time.time() - start_time
+                                    if task_res["status"] == "processing":
+                                        pct = task_res.get("progress", 0)
+                                        elapsed = time.time() - start_time
 
-                                # ETA Math
-                                if pct > 0:
-                                    total_est = elapsed / (pct / 100.0)
-                                    eta = total_est - elapsed
-                                    status.update(label=f"Simulating... {pct}%", state="running")
-                                    st_progress_bar.progress(pct / 100.0,
-                                                             text=f"Processing Monte Carlo Brackets: {pct}% | ETA: {eta:.1f}s")
-                                else:
-                                    status.update(label="Solving Water-Filling Constraints...", state="running")
+                                        # ETA Math
+                                        if pct > 0:
+                                            total_est = elapsed / (pct / 100.0)
+                                            eta = total_est - elapsed
+                                            status.update(label=f"Simulating... {pct}%", state="running")
+                                            st_progress_bar.progress(pct / 100.0,
+                                                                     text=f"Processing Monte Carlo Brackets: {pct}% | ETA: {eta:.1f}s")
+                                        else:
+                                            status.update(label="Solving Water-Filling Constraints...", state="running")
 
-                            elif task_res["status"] == "complete":
-                                st_progress_bar.progress(1.0, text="Simulation Complete! Rendering Data...")
-                                st.session_state.prediction_result = task_res["data"]["solver_results"]
-                                st.session_state.mc_result = task_res["data"]["mc_results"]
-                                status.update(label="✅ Run Complete!", state="complete", expanded=False)
-                                is_complete = True
-                                break
+                                    elif task_res["status"] == "complete":
+                                        st_progress_bar.progress(1.0, text="Simulation Complete! Rendering Data...")
+                                        st.session_state.prediction_result = task_res["data"]["solver_results"]
+                                        st.session_state.mc_result = task_res["data"]["mc_results"]
+                                        status.update(label="✅ Run Complete!", state="complete", expanded=False)
+                                        is_complete = True
+                                        break
 
-                            elif task_res["status"] == "failed":
-                                raise Exception(task_res.get("error", "Unknown background task failure."))
+                                    elif task_res["status"] == "failed":
+                                        raise Exception(task_res.get("error", "Unknown background task failure."))
 
-                if not is_complete:
-                    raise Exception("Lost connection to the backend server and exhausted all retry attempts.")
+                        if not is_complete:
+                            raise Exception("Lost connection to the backend server and exhausted all retry attempts.")
 
-            except Exception as e:
-                logging.error(f"Simulation failed: {e}", exc_info=True)
-                status.update(label="❌ Simulation Failed", state="error", expanded=True)
-                st.error("An internal error occurred during the simulation. Please consult the system logs.")
-                st.stop()
+                except Exception as e:
+                    app_logger.error("simulation_workflow_failed", error=str(e), exc_info=True)
+                    ui_span.record_exception(e)
+                    status.update(label="❌ Simulation Failed", state="error", expanded=True)
+                    st.error("An internal error occurred during the simulation. Please consult the system logs.")
+                    st.stop()
 
     # ==========================================
     # DATAFRAME RESULTS

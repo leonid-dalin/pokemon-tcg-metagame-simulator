@@ -3,14 +3,18 @@
 import multiprocessing
 import os
 import time
-
-safe_cores = max(1, multiprocessing.cpu_count() // 2)
-os.environ["RAYON_NUM_THREADS"] = str(safe_cores)
-
+import structlog
 import numpy as np
 import tcg_engine
 from typing import Dict, List, Optional, Callable
+
 from src.api.models import GLOBAL_TIE_RATE
+from src.core.telemetry import tracer
+
+logger = structlog.get_logger()
+safe_cores = max(1, multiprocessing.cpu_count() // 2)
+os.environ["RAYON_NUM_THREADS"] = str(safe_cores)
+
 
 def run_monte_carlo_analytics(
         deck_names: List[str],
@@ -28,7 +32,6 @@ def run_monte_carlo_analytics(
         global_tie_rate: float = GLOBAL_TIE_RATE,
         use_drop_feature: bool = False,
 ) -> Dict[str, Dict[str, float]]:
-    
     if not hasattr(run_monte_carlo_analytics, "_rayon_initialized"):
         try:
             tcg_engine.initialize_rayon(safe_cores)
@@ -68,21 +71,25 @@ def run_monte_carlo_analytics(
         # Ensure a unique, deterministic seed per chunk
         base_seed = int(time.time() * 1000) % (1 << 32) + i
 
-        res_init, res_day2, res_top, res_champ = tcg_engine.run_parallel_monte_carlo(
-            current_chunk,
-            players,
-            meta_vec.tolist(),
-            working_matrix.tolist(),
-            d1_rounds,
-            cut_points,
-            d2_rounds,
-            top_cut,
-            base_seed,
-            use_tie_convergence,
-            global_tie_rate,
-            use_drop_feature
-        )
+        with tracer.start_as_current_span("rust_tcg_engine_batch") as rust_span:
+            rust_span.set_attribute("chunk.size", current_chunk)
+            rust_span.set_attribute("chunk.index", i)
 
+            res_init, res_day2, res_top, res_champ = tcg_engine.run_parallel_monte_carlo(
+                current_chunk,
+                players,
+                meta_vec.tolist(),
+                working_matrix.tolist(),
+                d1_rounds,
+                cut_points,
+                d2_rounds,
+                top_cut,
+                base_seed,
+                use_tie_convergence,
+                global_tie_rate,
+                use_drop_feature
+            )
+        logger.debug("chunk_processed", chunk_index=i, size=current_chunk)
         total_initial += np.array(res_init, dtype=int)
         total_day2 += np.array(res_day2, dtype=int)
         total_topcut += np.array(res_top, dtype=int)

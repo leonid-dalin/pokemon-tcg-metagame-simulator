@@ -1,4 +1,33 @@
-## Commit `latest` (Apr 21, 2026)
+## Commit `?` (Apr 21, 2026)
+### 🛰️ Observability Overhaul & Production Hardening
+
+This update implements a unified telemetry pipeline and resolves critical runtime exceptions in the visualisation and simulation layers.
+
+#### 🔌 `telemetry.py` & `logger.py` (Core)
+* **(Feat) Distributed Tracing:** Integrated OpenTelemetry with OTLP gRPC exporting for Jaeger compatibility.
+* **(Feat) Structured Logging:** Configured `structlog` with `JSONRenderer` for machine-readable logs.
+* **(Fix) Provider Guard:** Implemented a singleton check in `setup_telemetry` to prevent `Overriding of current TracerProvider` warnings during hot-reloads.
+
+#### 🦀 `engine.py` & `monte_carlo.py` (Simulation)
+* **(Feat) Span Instrumentation:** Added OTel spans to the evolutionary generation loop and Rust-powered Monte Carlo chunks.
+* **(Fix) Type Narrowing:** Resolved `None` type and protected member warnings for the `multiprocessing` module by implementing strict linter guards.
+* **(Fix) Index Logic:** Changed `extinction_gens` mapping to use integer indices, fixing a downstream `KeyError` in the plotting module.
+
+#### 📊 `plotting.py` & `analysis.py` (Analytics)
+* **(Fix) KeyError 7:** Resolved a fatal crash in `plot_metagame_evolution_interactive` by adding a safe `.get()` wrapper for the extinction generation lookup.
+* **(Refactor) JSON Compliance:** Migrated all `print` and `logging.info` statements to the structured `logger` instance to seal "plain-text leaks" in the CLI output.
+* **(Perf) Trace Bounds:** Wrapped cycle detection and Pearson correlation compute blocks in OTel spans.
+
+#### ⚡ `app.py` & `main.py` (Web/API)
+* **(Feat) Trace Propagation:** Implemented `RequestsInstrumentor` in the Streamlit frontend to inject trace headers into FastAPI requests.
+* **(Fix) Middleware Safety:** Added explicit type-narrowing for `request.client` in the HTTP logging middleware to resolve `Address | None` linter errors.
+
+#### 🔡 `cli.py` 
+* **(Fix) Model Enforcement:** Refactored the CLI predictor to strictly instantiate the `PredictionRequest` Pydantic model instead of passing raw keywords.
+
+---
+
+## Commit `576cee3` (Apr 21, 2026)
 ### 🧪 UI/UX & Data Fidelity Improvement
 
 This update focuses on stabilising the Streamlit frontend state, improving the Limitless TCG scraper, and introducing a new high-level utility for metagame distribution modelling.

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 import os
 import numpy as np
 from contextlib import asynccontextmanager
@@ -14,6 +15,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from src.api.models import PredictionRequest
+from src.core.logger import logger
 from src.worker.queue import execute_simulation_job, automated_daily_pipeline, huey
 
 # ==========================================
@@ -25,6 +27,7 @@ def numpy_safe_encoder(obj):
     if isinstance(obj, np.ndarray): return obj.tolist()
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
+
 # ==========================================
 # 1. Lifecycle Management
 # ==========================================
@@ -34,14 +37,14 @@ async def lifespan(_: FastAPI):
     Handles startup and shutdown events.
     Triggers the automated scraper immediately on startup to ensure data parity.
     """
-    print("Starting automated daily Limitless TCG data scrape...")
+    logger.info("api_startup_trigger_scrape")
     try:
         automated_daily_pipeline()
     except Exception as e:
-        print(f"Startup scrape failed: {e}")
+        logger.error("api_startup_scrape_failed", error=str(e), exc_info=True)
 
     yield
-    print("Shutting down Pokémon TCG Simulator API...")
+    logger.info("api_shutdown_initiated")
 
 # ==========================================
 # 2. Rate Limiter Configuration
@@ -68,18 +71,43 @@ app.state.limiter = limiter
 # ==========================================
 # 3. Middleware & Exception Handlers
 # ==========================================
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    client = request.client
+    client_ip = client.host if client is not None else "Unknown"
+
+    req_logger = logger.bind(
+        method=request.method,
+        path=request.url.path,
+        ip=client_ip
+    )
+
+    try:
+        response = await call_next(request)
+        duration = time.time() - start_time
+        req_logger.info(
+            "request_processed",
+            status_code=response.status_code,
+            duration_ms=duration * 1000
+        )
+        return response
+    except Exception:
+        req_logger.error("operation_failed", exc_info=True)
+        raise
+
 async def rate_limit_custom_handler(request: Request, exc: Exception) -> Response:
     """
     Handles slowapi rate limits.
     Strictly typed with 'Exception' and 'Response' to satisfy FastAPI's ASGI signatures.
     """
-    # Explicitly check for None to satisfy the linter's 'Address | None' warning
-    client_ip = "Unknown IP"
-    if request.client is not None and hasattr(request.client, 'host'):
-        client_ip = request.client.host
+    client = request.client
+    client_ip = client.host if client is not None else "Unknown IP"
 
     route = request.url.path
     detail_msg = str(exc) if exc else "Rate limit exceeded."
+
+    logger.warn("rate_limit_exceeded", ip=client_ip, path=route)
 
     return JSONResponse(
         status_code=429,
@@ -191,7 +219,7 @@ async def stream_task_progress(request: Request, task_id: str):
                 await asyncio.sleep(0.4)
 
         except Exception as e:
-            print(f"SSE stream error: {e}")
+            logger.error("sse_stream_exception", task_id=task_id, error=str(e), exc_info=True)
             yield {
                 "event": "message",
                 "data": json.dumps({"status": "failed", "error": "Stream disconnected internally"})
