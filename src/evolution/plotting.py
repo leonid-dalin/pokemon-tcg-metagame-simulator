@@ -1,6 +1,5 @@
 # plotting.py | Interactive metagame visualisations using Plotly
 from __future__ import annotations
-import os
 from typing import List, Optional, Union, Dict, Any
 import numpy as np
 import pandas as pd
@@ -10,7 +9,6 @@ import networkx as nx
 
 import structlog
 from opentelemetry import trace
-from src.core.config import aggressive_colorscale
 
 logger = structlog.get_logger()
 tracer = trace.get_tracer(__name__)
@@ -37,88 +35,64 @@ def plot_metagame_evolution_interactive(
     Returns:
         Plotly Figure object if save_path is None.
     """
-    with tracer.start_as_current_span("plot_metagame_evolution_interactive"):
-        if not history or len(history) == 0:
-            logger.warning("plot_aborted", detail="Cannot plot empty history.")
-            return None
+    history_arr = np.array(history)
+    n_gens = int(history_arr.shape[0])
+    final_freqs = history_arr[-1, :]
+    top_indices = np.argsort(-final_freqs)[:top_n]
 
-        history_arr = np.array(history)
-        n_gens = int(history_arr.shape[0])
+    top_deck_names = [deck_names[i] for i in top_indices]
+    history_top = history_arr[:, top_indices]
 
-        final_freqs = history_arr[-1, :]
-        top_indices = np.argsort(-final_freqs)[:top_n]
+    df = pd.DataFrame(history_top, columns=top_deck_names)
+    df.index.name = "Generation"
 
-        df_list = []
-        for gen in range(n_gens):
-            for idx_raw in top_indices:
-                i = int(idx_raw)
-                freq = float(history_arr[gen, i])
-                if freq > 0.001:
-                    df_list.append({
-                        "Generation": gen,
-                        "Deck": str(deck_names[i]),
-                        "Share": freq
-                    })
+    fig = px.line(
+        df,
+        title=title,
+        labels={"value": "Metagame Share", "variable": "Deck"},
+        color_discrete_sequence=px.colors.qualitative.Bold
+    )
 
-        df = pd.DataFrame(df_list)
+    for idx_raw in top_indices:
+        idx = int(idx_raw)
+        deck_name = str(deck_names[idx])
+        extinction_gen: Optional[int] = None
 
-        # Utilize high-level px API for pandas integration
-        fig = px.line(
-            df,
-            x="Generation",
-            y="Share",
-            color="Deck",
-            title=title,
-            labels={"Share": "Metagame Share", "Generation": "Generation"},
-            color_discrete_sequence=px.colors.qualitative.Bold
-        )
+        if extinction_gens is not None:
+            if isinstance(extinction_gens, dict):
+                val = extinction_gens.get(deck_name) or extinction_gens.get(idx) or extinction_gens.get(
+                    str(idx))
+                if isinstance(val, (int, float)): extinction_gen = int(val)
+            elif isinstance(extinction_gens, list) and idx < len(extinction_gens):
+                val_list = extinction_gens[idx]
+                if isinstance(val_list, (int, float)): extinction_gen = int(val_list)
 
-        for idx_raw in top_indices:
-            idx = int(idx_raw)
-            deck_name = str(deck_names[idx])
+        if extinction_gen is not None and extinction_gen < n_gens:
+            fig.add_vline(
+                x=extinction_gen,
+                line_dash="dot",
+                line_color="red",
+                annotation_text=f"{deck_name} Extinct",
+                annotation_position="top left",
+                opacity=0.5
+            )
 
-            # Resolve Unhashable & Signature errors with explicit type narrowing
-            extinction_gen: Optional[int] = None
-            if extinction_gens is not None:
-                if isinstance(extinction_gens, dict):
-                    # Safely handle both string and integer keys
-                    val = extinction_gens.get(deck_name)
-                    if val is None:
-                        val = extinction_gens.get(idx)
-                    if val is None:
-                        val = extinction_gens.get(str(idx))
-                    if isinstance(val, (int, float)):
-                        extinction_gen = int(val)
-                elif isinstance(extinction_gens, list):
-                    if idx < len(extinction_gens):
-                        val_list = extinction_gens[idx]
-                        if isinstance(val_list, (int, float)):
-                            extinction_gen = int(val_list)
+    fig.update_layout(
+        hovermode="x unified",
+        yaxis_tickformat=".1%",
+        template="plotly_white",
+        legend_orientation="h",
+        legend_yanchor="bottom",
+        legend_y=1.02,
+        legend_xanchor="right",
+        legend_x=1
+    )
 
-            if extinction_gen is not None and extinction_gen < n_gens:
-                # Add vertical line for extinction threshold
-                fig.add_vline(
-                    x=extinction_gen,
-                    line_dash="dot",
-                    line_color="red",
-                    annotation_text=f"{deck_name} Extinct",
-                    annotation_position="top left",
-                    opacity=0.5
-                )
+    if save_path:
+        fig.write_html(save_path, include_plotlyjs="cdn")
+        logger.info("plot_saved", type="evolution_plot", path=save_path)
 
-        fig.update_layout(
-            hovermode="x unified",
-            yaxis_tickformat=".1%",
-            template="plotly_white",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
-
-        if save_path:
-            # Export as interactive HTML
-            fig.write_html(save_path, include_plotlyjs="cdn")
-            logger.info("plot_saved", type="evolution_plot", path=save_path)
-
-        return fig
+    return fig
 
 
 # ----------------------------
@@ -159,39 +133,29 @@ def plot_matchup_heatmap_interactive(
 
         display_matrix_pct = display_matrix * 100.0
 
-        hover_text: List[List[str]] = []
-        for i in range(n):
-            hover_row: List[str] = []
-            for j in range(n):
-                d1 = display_names[i]
-                d2 = display_names[j]
-                wr = float(display_matrix_pct[i, j])
-                hover_row.append(f"{d1} vs {d2}<br>Win Rate: {wr:.1f}%")
-            hover_text.append(hover_row)
-
-        fig = go.Figure(data=go.Heatmap(
-            z=display_matrix_pct,
+        fig = px.imshow(
+            display_matrix_pct,
             x=display_names,
             y=display_names,
-            hoverinfo="text",
-            text=hover_text,
-            colorscale="RdBu",
-            zmid=50.0,
+            color_continuous_scale="RdBu",
             zmin=20.0,
             zmax=80.0,
-            colorbar=dict(title="Win Rate %", ticksuffix="%")
-        ))
+            title=title,
+            labels=dict(x="Opponent", y="Deck", color="Win Rate")
+        )
+
+        fig.update_traces(
+            hovertemplate="%{y} vs %{x}<br>Win Rate: %{z:.1f}%<extra></extra>"
+        )
 
         fig.update_layout(
-            title=title,
-            xaxis_title="Opponent",
-            yaxis_title="Deck",
-            xaxis=dict(tickangle=-45),
-            yaxis=dict(autorange="reversed"),
+            xaxis_tickangle=-45,
             width=max(800, 30 * n),
             height=max(800, 30 * n),
             template="plotly_white",
-            margin=dict(l=150, b=150)
+            margin_l=150,
+            margin_b=150,
+            coloraxis_colorbar_ticksuffix="%"
         )
 
         if save_path:
@@ -212,9 +176,9 @@ def plot_matchup_network(
     save_path: Optional[str] = None,
     title: str = "Metagame Matchup Network",
 ) -> Optional[go.Figure]:
-    """Create an interactive network graph visualizing significant win-rate edges and highlighting detected RPS cycles.
+    """Create an interactive network graph visualising significant win-rate edges and highlighting detected RPS cycles.
     Features:
-        - Click on a node to focus on it and its direct neighbors.
+        - Click on a node to focus on it and its direct neighbours.
         - Node size is scaled by the deck's all-time presence (if history is provided).
     """
     with tracer.start_as_current_span("plot_matchup_network"):
@@ -223,102 +187,74 @@ def plot_matchup_network(
 
         for i in range(n):
             for j in range(n):
-                if i == j:
-                    continue
-                if win_matrix[i, j] > 0.55:
-                    graph.add_edge(deck_names[i], deck_names[j], weight=win_matrix[i, j])
+                if i != j and win_matrix[i, j] > 0.55:
+                    graph.add_edge(str(deck_names[i]), str(deck_names[j]), weight=float(win_matrix[i, j]))
 
-        if len(graph.nodes) == 0:
-            logger.warning("network_plot_aborted", detail="No significant nodes to plot.")
+        if not graph.nodes:
+            logger.warning("network_plot_aborted", detail="No significant nodes.")
             return None
 
         pos = nx.kamada_kawai_layout(graph)
 
-        # --- Calculate All-Time Presence for Node Sizing ---
         if metagame_history is not None and len(metagame_history) > 0:
-            total_metagame = np.sum(metagame_history, axis=0) / len(metagame_history)
-            deck_presence = {deck_names[i]: total_metagame[i] for i in range(n)}
+            total_metagame = np.mean(metagame_history, axis=0)
+            deck_presence = {str(deck_names[i]): float(total_metagame[i]) for i in range(n)}
         else:
-            # Fallback: uniform size if no history is provided
-            deck_presence = {name: 1.0 for name in deck_names}
+            deck_presence = {str(name): 1.0 for name in deck_names}
 
-        edge_x = []
-        edge_y = []
-        edge_hover = []
-
-        edge_from_nodes = []
-        edge_to_nodes = []
-
-        for edge in graph.edges(data=True):
-            x0, y0 = pos[edge[0]]
-            x1, y1 = pos[edge[1]]
+        edge_x, edge_y, edge_hover = [], [], []
+        for u, v, d in graph.edges(data=True):
+            x0, y0 = pos[u]
+            x1, y1 = pos[v]
             edge_x.extend([x0, x1, None])
             edge_y.extend([y0, y1, None])
-            edge_hover.append(f"{edge[0]} → {edge[1]}: {edge[2]['weight']:.2%}")
-            edge_from_nodes.extend([edge[0], edge[0], None])
-            edge_to_nodes.extend([edge[1], edge[1], None])
+            edge_hover.append(f"{u} → {v}: {d['weight']:.2%}")
 
         edge_trace = go.Scatter(
-            x=edge_x,
-            y=edge_y,
+            x=edge_x, y=edge_y,
             line=dict(width=2, color="rgba(100, 100, 100, 0.8)"),
             hoverinfo="text",
             text=edge_hover,
             mode="lines",
-            customdata=np.array([edge_from_nodes, edge_to_nodes]).T,
-            showlegend=False,
+            showlegend=False
         )
 
         node_x = [pos[node][0] for node in graph.nodes()]
         node_y = [pos[node][1] for node in graph.nodes()]
-
-        base_size = 10
-        max_presence = max(deck_presence.values()) if deck_presence else 1.0
-        node_size = [base_size + 30 * (deck_presence[node] / max_presence) for node in graph.nodes()]
+        max_pres = max(deck_presence.values()) or 1.0
+        node_size = [10 + 30 * (deck_presence[str(node)] / max_pres) for node in graph.nodes()]
 
         node_trace = go.Scatter(
-            x=node_x,
-            y=node_y,
+            x=node_x, y=node_y,
             mode="markers+text",
             hoverinfo="text",
-            marker=dict(size=node_size, color="lightblue", line=dict(width=2, color="darkblue")),
+            marker=dict(
+                size=node_size,
+                color="lightblue",
+                line=dict(width=2, color="darkblue")
+            ),
             text=[str(node) for node in graph.nodes()],
             textposition="top center",
-            textfont=dict(size=10, color="black"),
-            hovertext=[f"{node} (Degree: {graph.degree(node)}, Presence: {deck_presence[str(node)]:.2%})" for node in
-                       graph.nodes()],
-            uid="node_trace",
+            textfont=dict(size=10),
+            hovertext=[f"{n} (Presence: {deck_presence[str(n)]:.2%})" for n in graph.nodes()]
         )
 
-        cycle_traces = []
-        cycle_colors = px.colors.qualitative.Set1
+        fig = go.Figure(data=[edge_trace, node_trace])
+
+        colors = px.colors.qualitative.Set1
         for idx, cycle in enumerate(cycles[:5]):
-            if len(cycle) < 3:
-                continue
-            cycle_x = []
-            cycle_y = []
+            cx, cy = [], []
             for i in range(len(cycle)):
-                start = cycle[i]
-                end = cycle[(i + 1) % len(cycle)]
-                if start in pos and end in pos:
-                    x0, y0 = pos[start]
-                    x1, y1 = pos[end]
-                    cycle_x.extend([x0, x1, None])
-                    cycle_y.extend([y0, y1, None])
-            cycle_traces.append(
-                go.Scatter(
-                    x=cycle_x,
-                    y=cycle_y,
-                    mode="lines",
-                    line=dict(width=4, color=cycle_colors[idx % len(cycle_colors)], dash="dash"),
-                    name=f"Cycle {idx+1}",
-                    hoverinfo="name",
-                )
-            )
+                u, v = str(cycle[i]), str(cycle[(i + 1) % len(cycle)])
+                if u in pos and v in pos:
+                    cx.extend([pos[u][0], pos[v][0], None])
+                    cy.extend([pos[u][1], pos[v][1], None])
+            fig.add_trace(go.Scatter(
+                x=cx, y=cy, mode="lines",
+                line=dict(width=4, color=colors[idx % len(colors)], dash="dash"),
+                name=f"Cycle {idx + 1}"
+            ))
 
-        fig = go.Figure(data=[edge_trace, node_trace] + cycle_traces)
-
-        # --- Interactive Callback for Node Click ---
         fig.update_layout(
             title=dict(text=title),
             showlegend=True,
@@ -327,37 +263,11 @@ def plot_matchup_network(
             xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
             yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
             height=800,
-            template="plotly_white",
-            updatemenus=[],
+            template="plotly_white"
         )
 
-        fig_config = {
-            "scrollZoom": True,
-            "displayModeBar": True,
-            "editable": True,
-            "toImageButtonOptions": {"format": "png", "filename": "matchup_network"},
-            "modeBarButtonsToAdd": [
-                "drawline",
-                "drawopenpath",
-                "drawclosedpath",
-                "drawcircle",
-                "drawrect",
-                "eraseshape",
-            ],
-            "responsive": True,
-            "doubleClick": "reset+autosize",
-        }
-        # --- End of Interactive Callback (Conceptual) ---
-
         if save_path:
-            os.makedirs(
-                os.path.dirname(save_path) if os.path.dirname(save_path) else ".",
-                exist_ok=True,
-            )
-            fig.write_html(save_path, config=fig_config)
-            logger.info("plot_saved", type="matchup_network", path=save_path)
-            return None
-
+            fig.write_html(save_path, config={"scrollZoom": True, "responsive": True})
         return fig
 
 # ----------------------------
@@ -367,12 +277,10 @@ def plot_metagame_scatter(df: pd.DataFrame, allow_negative_power: bool = False) 
     """Create an interactive scatter plot of the metagame based on the dataframe."""
     with tracer.start_as_current_span("plot_metagame_scatter"):
         scatter_df = df.copy()
-
         if not allow_negative_power:
             scatter_df = scatter_df[scatter_df["Power Score"] >= 0.0]
 
         scatter_df["Bubble Size"] = scatter_df["Meta Score"].clip(lower=1.0)
-        scatter_df["Label"] = scatter_df["Deck"] + " (" + scatter_df["Meta Score"].astype(str) + ")"
 
         fig = px.scatter(
             scatter_df,
@@ -381,13 +289,15 @@ def plot_metagame_scatter(df: pd.DataFrame, allow_negative_power: bool = False) 
             size="Bubble Size",
             color="Deck",
             hover_name="Deck",
-            hover_data={"Bubble Size": False, "Meta Score": True, "Power Score": True, "Freq Score": True, "Deck": False},
-            text="Label"
+            hover_data={"Meta Score": True, "Power Score": True, "Freq Score": True, "Bubble Size": False},
+            text=scatter_df["Deck"] + " (" + scatter_df["Meta Score"].astype(str) + ")"
         )
 
         fig.update_traces(textposition='bottom center')
-        min_power = float(scatter_df["Power Score"].min())
-        x_min = min(-5.0, min_power - 5.0) if allow_negative_power else -2.0
+
+        x_min = -2.0 if not allow_negative_power else min(-5.0, float(scatter_df["Power Score"].min()) - 5.0)
+
+        # Enforce dict assignment for layout constraints
         fig.update_layout(
             xaxis=dict(range=[x_min, 105], title=dict(text="Power Score (Expected Win Rate)")),
             yaxis=dict(range=[-5, 105], title=dict(text="Frequency Score (Popularity)")),
@@ -401,44 +311,77 @@ def plot_metagame_scatter(df: pd.DataFrame, allow_negative_power: bool = False) 
 # ----------------------------
 # Radar Chart
 # ----------------------------
-def plot_head_to_head_radar(deck_a: str, deck_b: str, categories: List[str], da_vals: List[float], db_vals: List[float], da_texts: List[str], db_texts: List[str]) -> go.Figure:
-    """Create a dynamic radar chart comparing two decks using normalized coordinates but real hover text."""
+def plot_head_to_head_radar(
+        deck_a: str, deck_b: str,
+        categories: List[str],
+        da_vals: List[float], db_vals: List[float],
+        da_texts: List[str], db_texts: List[str]
+) -> go.Figure:
+    """Renders an interactive radar chart with accessible, non-overlapping hover data."""
     with tracer.start_as_current_span("plot_head_to_head_radar"):
         fig = go.Figure()
 
+        marker_cfg = dict(size=12, line=dict(width=2, color='white'))
+
         fig.add_trace(go.Scatterpolar(
+            name=deck_a,
             r=da_vals,
             theta=categories,
             fill='toself',
-            name=deck_a,
-            hoverinfo="text",
-            text=da_texts,
-            line=dict(color='rgba(46, 204, 113, 1)')  # Emerald Green
+            fillcolor='rgba(46, 204, 113, 0.3)',
+            mode='lines+markers',
+            marker=marker_cfg,
+            line=dict(color='rgba(46, 204, 113, 1)', width=3),
+            hoveron='points',
+            customdata=da_texts,
+            hovertemplate="<b>%{fullData.name}</b><br>%{customdata}<extra></extra>"
         ))
+
         fig.add_trace(go.Scatterpolar(
+            name=deck_b,
             r=db_vals,
             theta=categories,
             fill='toself',
-            name=deck_b,
-            hoverinfo="text",
-            text=db_texts,
-            line=dict(color='rgba(231, 76, 60, 1)')  # Alizarin Red
+            fillcolor='rgba(231, 76, 60, 0.3)',
+            mode='lines+markers',
+            marker=marker_cfg,
+            line=dict(color='rgba(231, 76, 60, 1)', width=3),
+            hoveron='points',
+            customdata=db_texts,
+            hovertemplate="<b>%{fullData.name}</b><br>%{customdata}<extra></extra>"
         ))
 
         fig.update_layout(
+            hovermode="closest",
             polar=dict(
                 radialaxis=dict(
                     visible=True,
-                    showline=False,
                     range=[0, 100],
-                    gridcolor='rgba(255, 255, 255, 0.2)'
+                    tickvals=[20, 40, 60, 80],
+                    gridcolor='rgba(255, 255, 255, 0.2)',
+                    tickfont=dict(size=14, color='#131313', family='Arial Black'),
+                    angle=45,
+                    tickangle=45,
+                    layer='above traces'
+                ),
+                angularaxis=dict(
+                    tickfont=dict(size=20, color='#F5F5F5', family='Arial Black'),
+                    rotation=90,
+                    direction="clockwise"
                 )
             ),
             showlegend=True,
-            height=450,
-            margin=dict(t=50, b=30, l=30, r=30),
+            legend=dict(
+                font=dict(size=16, color='#F5F5F5'),
+                bgcolor='rgba(0, 0, 0, 0)',
+                x=1.1,
+                y=0.5,
+                xanchor='left',
+                yanchor='middle'
+            ),
+            height=650,
+            margin=dict(t=80, b=80, l=80, r=80),
             paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            template="plotly_white"
+            plot_bgcolor='rgba(0,0,0,0)'
         )
         return fig
