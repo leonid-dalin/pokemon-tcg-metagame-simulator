@@ -55,7 +55,13 @@ def execute_simulation_job(payload: dict):
 
             def _progress_handler(current_chunk: int, total_chunks: int):
                 pct = int((current_chunk / total_chunks) * 100)
-                huey.storage.put_data(f"prog_{job_id}", str(pct).encode('utf-8'))
+
+                msg_payload = json.dumps({"status": "processing", "progress": pct})
+
+                pipe = huey.storage.conn.pipeline()
+                pipe.setex(f"task:progress:{job_id}", 3600, msg_payload)
+                pipe.publish(f"channel:progress:{job_id}", msg_payload)
+                pipe.execute()
 
             # 4. Run Monte Carlo Brackets (Tracing Rust Engine execution)
             with tracer.start_as_current_span("monte_carlo_analytics") as mc_span:

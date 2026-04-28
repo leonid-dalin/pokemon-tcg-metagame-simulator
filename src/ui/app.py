@@ -33,6 +33,8 @@ from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_rada
 from src.core.logger import setup_structured_logging
 from src.core.telemetry import setup_telemetry, tracer
 
+if "temp_input_mode" not in st.session_state:
+    st.session_state.temp_input_mode = "Exact"
 
 # ==========================================
 # Observability Initialisation
@@ -614,46 +616,64 @@ def main():
                     task_id = response.json()["task_id"]
 
                     # 3. Connect to the SSE Stream
-                    status.update(label="Establishing SSE Connection...", state="running")
+                    status.update(label="Establishing SSE Connection...", state="running", expanded=True)
                     is_complete = False
+                    max_retries = 3
+                    retries = 0
 
                     with tracer.start_as_current_span("sse_stream_polling"):
-                        with requests.get(f"{api_url}/tasks/{task_id}/stream?job_id={job_id}", stream=True,
-                                          timeout=45) as stream_response:
-                            stream_response.raise_for_status()
+                        while retries < max_retries and not is_complete:
+                            try:
+                                with requests.get(f"{api_url}/tasks/{task_id}/stream?job_id={job_id}", stream=True,
+                                                  timeout=45) as stream_response:
+                                    stream_response.raise_for_status()
 
-                            for line in stream_response.iter_lines():
-                                if not line: continue
-                                decoded_line = line.decode('utf-8')
+                                    for line in stream_response.iter_lines():
+                                        if not line: continue
+                                        decoded_line = line.decode('utf-8')
 
-                                if decoded_line.startswith("data:"):
-                                    data_str = decoded_line[5:].strip()
-                                    task_res = json.loads(data_str)
+                                        if decoded_line.startswith("data:"):
+                                            data_str = decoded_line[5:].strip()
+                                            task_res = json.loads(data_str)
 
-                                    if task_res["status"] == "processing":
-                                        pct = task_res.get("progress", 0)
-                                        elapsed = time.time() - start_time
+                                            if task_res["status"] == "processing":
+                                                pct = task_res.get("progress", 0)
+                                                elapsed = time.time() - start_time
 
-                                        # ETA Math
-                                        if pct > 0:
-                                            total_est = elapsed / (pct / 100.0)
-                                            eta = total_est - elapsed
-                                            status.update(label=f"Simulating... {pct}%", state="running")
-                                            st_progress_bar.progress(pct / 100.0,
-                                                                     text=f"Processing Monte Carlo Brackets: {pct}% | ETA: {eta:.1f}s")
-                                        else:
-                                            status.update(label="Solving Water-Filling Constraints...", state="running")
+                                                # ETA Math
+                                                if pct > 0:
+                                                    total_est = elapsed / (pct / 100.0)
+                                                    eta = total_est - elapsed
+                                                    status.update(label=f"Simulating... {pct}%", state="running", expanded=True)
+                                                    st_progress_bar.progress(pct / 100.0,
+                                                                             text=f"Processing Monte Carlo Brackets: {pct}% | ETA: {eta:.1f}s")
+                                                else:
+                                                    status.update(label="Solving Water-Filling Constraints...",
+                                                                  state="running")
 
-                                    elif task_res["status"] == "complete":
-                                        st_progress_bar.progress(1.0, text="Simulation Complete! Rendering Data...")
-                                        st.session_state.prediction_result = task_res["data"]["solver_results"]
-                                        st.session_state.mc_result = task_res["data"]["mc_results"]
-                                        status.update(label="✅ Run Complete!", state="complete", expanded=False)
-                                        is_complete = True
-                                        break
+                                            elif task_res["status"] == "complete":
+                                                st_progress_bar.progress(1.0,
+                                                                         text="Simulation Complete! Rendering Data...")
+                                                st.session_state.prediction_result = task_res["data"]["solver_results"]
+                                                st.session_state.mc_result = task_res["data"]["mc_results"]
+                                                status.update(label="✅ Run Complete!", state="complete", expanded=False)
+                                                is_complete = True
+                                                break
 
-                                    elif task_res["status"] == "failed":
-                                        raise Exception(task_res.get("error", "Unknown background task failure."))
+                                            elif task_res["status"] == "failed":
+                                                raise Exception(
+                                                    task_res.get("error", "Unknown background task failure."))
+
+                                # If stream drops mid-process, it will break the loop and retry
+                                if not is_complete:
+                                    retries += 1
+                                    time.sleep(2)
+
+                            except requests.exceptions.RequestException:
+                                retries += 1
+                                if retries >= max_retries:
+                                    break
+                                time.sleep(2)
 
                         if not is_complete:
                             raise Exception("Lost connection to the backend server and exhausted all retry attempts.")

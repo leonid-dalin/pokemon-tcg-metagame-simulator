@@ -1,4 +1,27 @@
-## Commit `?` (Apr 21, 2026)
+## Commit `?` (Apr 28, 2026)
+### 🛡️ SSE Resilience, Telemetry Unification & Production Hardening
+
+This update introduces highly resilient Server-Sent Events (SSE) for task streaming, upgrades the observability stack to Jaeger v2, and hardens the Docker orchestration to prevent resource exhaustion during heavy Rust-driven Monte Carlo simulations.
+
+#### 📡 `main.py` & `queue.py` (Event-Driven Resilience)
+* **(Feat) Atomic Pub/Sub:** Replaced inefficient database polling with an atomic Redis Pub/Sub push model. The FastAPI server now listens passively for progress updates, cutting idle CPU usage to zero.
+* **(Feat) State Reconciliation:** Introduced a Key-Value fallback state fetch immediately upon SSE connection. If a client's network drops mid-simulation, the API fetches the exact progress payload from Redis and synchronises the UI before re-subscribing to the live channel.
+
+#### 🏗️ `docker-compose.yml` (Infrastructure Hardening)
+* **(Perf) API Concurrency:** Scaled the FastAPI gateway to utilise multiple `uvicorn` workers, ensuring the event loop does not block when handling dozens of long-lived concurrent SSE connections.
+* **(Fix) Resource Capping:** Restricted the Huey `worker` service to 2 processes and a 2GB memory ceiling. This prevents the hyper-parallelised Rust `tcg_engine` from triggering host-level Out-of-Memory (OOM) cascades during the 250,000-iteration bracket tiers.
+
+#### 🛰️ Observability & Telemetry Pipeline
+* **(Feat) Jaeger v2 Upgrade:** Replaced the deprecated `all-in-one` image with the unified Jaeger v2 binary (`cr.jaegertracing.io/jaegertracing/jaeger:2.17.0`), clearing the end-of-life warning and securing future OpenTelemetry Collector updates.
+* **(Fix) Global OTLP Routing:** Standardized `OTEL_EXPORTER_OTLP_ENDPOINT` to strictly target `jaeger:4317` with `grpc` protocol configuration across the `api`, `worker`, and `ui` services. This completely resolves the `StatusCode.UNAVAILABLE` localhost routing failures, achieving full end-to-end distributed tracing.
+
+#### 🧠 `app.py` (Frontend Stability)
+* **(Fix) Session State Initialisation:** Initialised the `temp_input_mode` variable in the Streamlit session state dictionary at container startup. This prevents fatal `AttributeError` crashes upon initial user interaction.
+* **(Fix) UI Collapse Bug:** Decoupled the high-frequency progress bar updates from the `st.status` container, resolving a visual glitch where the execution expander would forcefully collapse itself multiple times per second.
+
+---
+
+## Commit `53c06a4` (Apr 21, 2026)
 ### 🛰️ Observability Overhaul & Production Hardening
 
 This update implements a unified telemetry pipeline and resolves critical runtime exceptions in the visualisation and simulation layers.

@@ -12,40 +12,55 @@ services:
 
   api:
     build: .
+    command: [ "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4" ]
     ports:
       - "8000:8000"
     environment:
-      - REDIS_URL=redis://redis:6379/?db=0
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/?db=0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
     depends_on:
       redis:
         condition: service_healthy
-    command: ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
 
   jaeger:
-      image: jaegertracing/all-in-one:latest
+      image: cr.jaegertracing.io/jaegertracing/jaeger:2.17.0
       ports:
-        - "16686:16686" # UI
+        - "16686:16686" # Web UI
         - "4317:4317"   # OTLP gRPC
         - "4318:4318"   # OTLP HTTP
+        - "5778:5778"   # Sampling strategies
+        - "9411:9411"   # Zipkin fallback
 
   worker:
     build: .
+    command: [ "huey_consumer", "src.worker.queue.huey", "--worker-type=process", "--workers=2" ]
     environment:
-      - REDIS_URL=redis://redis:6379/?db=0
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/?db=0}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
       - PYTHONPATH=/app
     depends_on:
-      jaeger:
-        condition: service_started
-      redis:
-        condition: service_healthy
-    command: ["huey_consumer", "src.worker.queue.huey", "--worker-type=process", "--workers=4"]
+      - jaeger
+      - redis
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: "2G"
+          cpus: "2.0"
 
   ui:
     build: .
+    command: [ "streamlit", "run", "src/ui/app.py" ]
     ports:
       - "8501:8501"
     environment:
       - API_URL=http://api:8000/api/v1
-    command: ["streamlit", "run", "src/ui/app.py"]
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+    depends_on:
+      - api
+      - jaeger
 

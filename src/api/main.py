@@ -177,53 +177,62 @@ async def get_task_status(request: Request, task_id: str):
 async def stream_task_progress(request: Request, task_id: str):
     """
     SSE Endpoint for real-time progress updates.
-    Restored to use the Huey storage peek method to correctly read progress.
+    Uses Redis Pub/Sub with a stateful fallback to survive network blips.
     """
 
     async def event_generator():
+        pubsub = None
         try:
+            # 1. Fetch the linked job_id
+            link_bytes = await asyncio.to_thread(huey.storage.peek_data, f"link_{task_id}")
+            job_id = link_bytes.decode('utf-8') if isinstance(link_bytes, bytes) else request.query_params.get("job_id",
+                                                                                                               "unknown_job")
+
+            redis_conn = huey.storage.conn
+            pubsub = redis_conn.pubsub()
+
+            # 2. Subscribe BEFORE fetching the fallback state to prevent race conditions
+            await asyncio.to_thread(pubsub.subscribe, f"channel:progress:{job_id}")
+
+            # 3. Fetch Initial State (Fallback)
+            initial_state = await asyncio.to_thread(redis_conn.get, f"task:progress:{job_id}")
+            if initial_state:
+                yield {
+                    "event": "message",
+                    "data": initial_state.decode('utf-8')
+                }
+
+            # 4. Stream from Pub/Sub
             while True:
-                # Halt if the Streamlit client drops the connection
                 if await request.is_disconnected():
                     break
 
-                # 1. Check if the background math is completely finished
+                # Check completion status
                 result = await asyncio.to_thread(huey.result, task_id, blocking=False)
-
                 if isinstance(result, Exception):
-                    yield {
-                        "event": "message",
-                        "data": json.dumps({"status": "failed", "error": str(result)})
-                    }
+                    yield {"event": "message", "data": json.dumps({"status": "failed", "error": str(result)})}
                     break
                 elif result is not None:
-                    yield {
-                        "event": "message",
-                        "data": json.dumps({"status": "complete", "data": result}, default=numpy_safe_encoder)
-                    }
+                    yield {"event": "message",
+                           "data": json.dumps({"status": "complete", "data": result}, default=numpy_safe_encoder)}
                     break
 
-                # 2. Fetch the linked job_id to read the correct progress mailbox
-                link_bytes = await asyncio.to_thread(huey.storage.peek_data, f"link_{task_id}")
-                job_id = link_bytes.decode('utf-8') if isinstance(link_bytes, bytes) else "unknown_job"
-
-                progress_bytes = await asyncio.to_thread(huey.storage.peek_data, f"prog_{job_id}")
-                current_pct = int(progress_bytes.decode('utf-8')) if isinstance(progress_bytes, bytes) else 0
-
-                yield {
-                    "event": "message",
-                    "data": json.dumps({"status": "processing", "progress": current_pct})
-                }
-
-                # 3. Yield control back to the event loop
-                await asyncio.sleep(0.4)
+                # Poll pubsub with a timeout
+                message = await asyncio.to_thread(pubsub.get_message, ignore_subscribe_messages=True, timeout=0.5)
+                if message and message['type'] == 'message':
+                    yield {
+                        "event": "message",
+                        "data": message['data'].decode('utf-8')
+                    }
 
         except Exception as e:
             logger.error("sse_stream_exception", task_id=task_id, error=str(e), exc_info=True)
-            yield {
-                "event": "message",
-                "data": json.dumps({"status": "failed", "error": "Stream disconnected internally"})
-            }
+            yield {"event": "message",
+                   "data": json.dumps({"status": "failed", "error": "Stream disconnected internally"})}
+        finally:
+            if pubsub:
+                await asyncio.to_thread(pubsub.unsubscribe)
+                await asyncio.to_thread(pubsub.close)
 
     return EventSourceResponse(
         event_generator(),
