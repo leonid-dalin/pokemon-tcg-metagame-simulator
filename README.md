@@ -27,22 +27,23 @@ Currently, only the **Monte Carlo Bracket Engine** is fed into the Streamlit das
 *   **Meta & Power Scoring:** Decks receive 0–100 rankings based on their win rates against the field (Power Score) and their overall format dominance (Meta Score). The mathematical framework for these metrics is directly inspired by the **[Vicious Syndicate Data Reaper](https://www.vicioussyndicate.com/drr/faq-data-reaper-report/)** methodology.
 *   **Vectorised field constraints.** A high-speed NumPy water-filling algorithm enforces exact, minimum, or maximum field share constraints. You can use the "Omission Split" utility to mathematically normalise the remaining unconstrained archetypes proportionally to historical data.
 *  **Clustering and RPS detection:** The project groups archetypes by their strategic matchup shape using K-Means and Silhouette Optimisation. Network graphs help identify non-transitive Rock-Paper-Scissors cycles.
+
 ### 💻 Containerized Microservice Architecture
-_I completely decoupled the architecture to stop the heavy math from freezing the API._
-* **Defensive Gateway:** FastAPI validates payloads and uses `slowapi` for distributed rate limiting. It enforces strict OWASP security headers.
-* **Headless worker:** A Redis-backed Huey task runner isolates the array calculations. It streams granular progress updates back to the UI via Server-Sent Events (SSE).
+> _I completely decoupled the architecture to stop the heavy math from freezing the API._
+*   **Defensive Gateway:** FastAPI validates payloads and uses `slowapi` for distributed rate limiting. It enforces strict OWASP security headers.
+*   **Headless worker:** A Redis-backed Huey task runner isolates the array calculations. It streams granular progress updates back to the UI via Server-Sent Events (SSE).
 * **Autonomous scraping:** A daily cron job automatically fetches live HTML from LimitlessTCG. It parses the DOM, runs the data through strict Pydantic thermodynamic purity checks, and updates the local JSON store.
 * **Distributed tracing:** The entire suite uses OpenTelemetry (OTLP gRPC) for span tracing and `structlog` for machine-readable JSON logging.
 
 ### 🧬 Metagame Evolution (Replicator Dynamics)
-* **Evolutionary stability:** Models the format using an Optimistic Multiplicative Weights Update (MWU). It applies gradient extrapolation and ambient entropy regularisation to prevent limit cycles and force convergence into a Nash Equilibrium.
-***Extinction and reintroduction:** Simulates innovation by letting poorly performing decks die out while randomly reintroducing extinct decks to challenge the established order.
+* **Evolutionary Stability:** Models the format using an Optimistic Multiplicative Weights Update (MWU). It applies gradient extrapolation and ambient entropy regularisation to prevent limit cycles and force convergence into a Nash Equilibrium.
+* **Extinction and Reintroduction:** Simulates innovation by letting poorly performing decks die out while randomly reintroducing extinct decks to challenge the established order.
 
 ---
 
 ## 📦 Installation
 
-⚠️ You **must** use Docker Compose as the application now relies on a Redis instance for rate limiting and SSE state management, so running it purely locally without Redis will cause the solver and streams to stall.
+> **⚠️ You must use Docker Compose** as the application now relies on a Redis instance for rate limiting and SSE state management, so running it purely locally without Redis will cause the solver and streams to stall.
 
 1. **Clone the repository:**
 ```bash
@@ -54,7 +55,10 @@ cd pokemon-tcg-metagame-simulator
 docker-compose up --build -d
 ```
 
-This boots three containers: the FastAPI gateway (`api` on port 8000), the Huey task runner (`worker`), and the Streamlit frontend (`ui` on port 8501).
+This boots three containers:
+- the FastAPI gateway (`api` on port 8000),
+- the Huey task runner (`worker`), 
+- and the Streamlit frontend (`ui` on port 8501).
 
 ---
 
