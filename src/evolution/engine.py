@@ -350,7 +350,7 @@ def find_evolutionary_stable_state(
         if config.mode == "tournament" and config.use_multiproc and MULTIPROC_AVAILABLE:
             if mp is not None:
                 with tracer.start_as_current_span("initialise_multiprocessing_pool"):
-                    safe_cores = max(1, mp.cpu_count() // 2)
+                    safe_cores = max(1, get_container_cores())
                     pool = mp.Pool(processes=safe_cores)
                     logger.info("multiprocessing_enabled", cores=safe_cores)
         history_file_handle = None

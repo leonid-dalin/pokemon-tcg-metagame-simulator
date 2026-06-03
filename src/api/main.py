@@ -39,7 +39,15 @@ async def lifespan(_: FastAPI):
     """
     logger.info("api_startup_trigger_scrape")
     try:
-        automated_daily_pipeline()
+        redis_conn = huey.storage.conn
+        lock_acquired = redis_conn.set("startup_scrape_lock", "1", nx=True, ex=300)
+        
+        if lock_acquired:
+            automated_daily_pipeline()
+            logger.info("startup_scrape_enqueued", locked=True)
+        else:
+            logger.info("startup_scrape_bypassed", reason="lock_held_by_peer_worker")
+            
     except Exception as e:
         logger.error("api_startup_scrape_failed", error=str(e), exc_info=True)
 
@@ -181,33 +189,45 @@ async def stream_task_progress(request: Request, task_id: str):
     """
 
     async def event_generator():
-        pubsub = None
+        # 1. Scope-Safe Imports
         try:
-            # 1. Fetch the linked job_id
+            import redis.asyncio as aioredis
+        except ImportError:
+            import aioredis
+
+        pubsub = None
+        async_redis = None
+
+        try:
+            async_redis = aioredis.from_url(redis_url)
+            pubsub = async_redis.pubsub()
+
+            # 2. Fetch linked job_id with safe type parsing
             link_bytes = await asyncio.to_thread(huey.storage.peek_data, f"link_{task_id}")
-            job_id = link_bytes.decode('utf-8') if isinstance(link_bytes, bytes) else request.query_params.get("job_id",
-                                                                                                               "unknown_job")
 
-            redis_conn = huey.storage.conn
-            pubsub = redis_conn.pubsub()
+            if isinstance(link_bytes, bytes):
+                job_id = link_bytes.decode('utf-8')
+            elif isinstance(link_bytes, str):
+                job_id = link_bytes
+            else:
+                job_id = request.query_params.get("job_id", "unknown_job")
 
-            # 2. Subscribe BEFORE fetching the fallback state to prevent race conditions
-            await asyncio.to_thread(pubsub.subscribe, f"channel:progress:{job_id}")
+            await pubsub.subscribe(f"channel:progress:{job_id}")
 
-            # 3. Fetch Initial State (Fallback)
-            initial_state = await asyncio.to_thread(redis_conn.get, f"task:progress:{job_id}")
+            # 3. Fetch Initial State (fallback) asynchronously
+            initial_state = await async_redis.get(f"task:progress:{job_id}")
             if initial_state:
+                state_str = initial_state.decode('utf-8') if isinstance(initial_state, bytes) else initial_state
                 yield {
                     "event": "message",
-                    "data": initial_state.decode('utf-8')
+                    "data": state_str
                 }
 
-            # 4. Stream from Pub/Sub
+            # 4. Stream from Pub/Sub natively
             while True:
                 if await request.is_disconnected():
                     break
 
-                # Check completion status
                 result = await asyncio.to_thread(huey.result, task_id, blocking=False)
                 if isinstance(result, Exception):
                     yield {"event": "message", "data": json.dumps({"status": "failed", "error": str(result)})}
@@ -217,22 +237,36 @@ async def stream_task_progress(request: Request, task_id: str):
                            "data": json.dumps({"status": "complete", "data": result}, default=numpy_safe_encoder)}
                     break
 
-                # Poll pubsub with a timeout
-                message = await asyncio.to_thread(pubsub.get_message, ignore_subscribe_messages=True, timeout=0.5)
-                if message and message['type'] == 'message':
-                    yield {
-                        "event": "message",
-                        "data": message['data'].decode('utf-8')
-                    }
+                # 5. Safe Polling with Timeout guards
+                try:
+                    message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.5)
+                    if message and message['type'] == 'message':
+                        msg_data = message['data']
+                        data_str = msg_data.decode('utf-8') if isinstance(msg_data, bytes) else msg_data
+                        yield {
+                            "event": "message",
+                            "data": data_str
+                        }
+                except (TimeoutError, asyncio.TimeoutError):
+                    pass
 
         except Exception as e:
             logger.error("sse_stream_exception", task_id=task_id, error=str(e), exc_info=True)
             yield {"event": "message",
-                   "data": json.dumps({"status": "failed", "error": "Stream disconnected internally"})}
+                   "data": json.dumps({"status": "failed", "error": f"API Stream Error: {str(e)}", "data": None})}
+
         finally:
+            # 6. Silent Cleanup
             if pubsub:
-                await asyncio.to_thread(pubsub.unsubscribe)
-                await asyncio.to_thread(pubsub.close)
+                try:
+                    await pubsub.unsubscribe()
+                except Exception:
+                    pass
+            if async_redis:
+                try:
+                    await async_redis.aclose() if hasattr(async_redis, 'aclose') else await async_redis.close()
+                except Exception:
+                    pass
 
     return EventSourceResponse(
         event_generator(),

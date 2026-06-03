@@ -105,8 +105,8 @@ def automated_daily_pipeline():
         log = q_logger.bind(task="daily_pipeline", schedule="02:00")
         log.info("starting_daily_scrape")  # Initialise the structured log entry
 
-        from src.core.urls import POR_URLS
-        target_urls = POR_URLS
+        from src.core.urls import ASC_URLS, CRI_URLS
+        target_urls = CRI_URLS
 
         try:
             canonical_map = {}

@@ -1,5 +1,7 @@
 # config.py | Global constants
 from typing import Literal, Dict, Tuple
+import os
+import multiprocessing
 
 # ----------------------------
 # Type Definitions
@@ -105,3 +107,20 @@ aggressive_colorscale = [
     [0.55, 'rgb(116, 173, 209)'],
     [1.0, 'rgb(69, 117, 180)']
 ]
+
+# ----------------------------
+# Utils
+# ----------------------------
+def get_container_cores() -> int:
+    """
+    Safely determines available CPU cores within a Docker cgroup.
+    Prevents CPU oversubscription and context-switching thrash in containers.
+    """
+
+    if "MAX_CORES" in os.environ:
+        return int(os.environ["MAX_CORES"])
+    try:
+        return len(os.sched_getaffinity(0))
+    except AttributeError:
+        # macOS/Windows
+        return max(1, multiprocessing.cpu_count() // 2)

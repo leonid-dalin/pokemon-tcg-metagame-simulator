@@ -8,11 +8,12 @@ import numpy as np
 import tcg_engine
 from typing import Dict, List, Optional, Callable
 
+from src.core.config import get_container_cores
 from src.api.models import GLOBAL_TIE_RATE
 from src.core.telemetry import tracer
 
 logger = structlog.get_logger()
-safe_cores = max(1, multiprocessing.cpu_count() // 2)
+safe_cores = max(1, get_container_cores())
 os.environ["RAYON_NUM_THREADS"] = str(safe_cores)
 
 

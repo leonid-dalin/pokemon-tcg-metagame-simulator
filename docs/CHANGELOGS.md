@@ -1,4 +1,29 @@
-## Commit `?` (Apr 28, 2026)
+### Commit `?` (Jun 03, 2026)
+
+### 🚀 Distributed resource locking, async telemetry streams, and cgroup fixes
+#### `feat(infra): implement distributed startup lock, async SSE streaming, and cgroup-aware core scaling`
+
+This release stops parallel container instances from running redundant startup scrapes, prevents SSE streams from starving the API thread pool, fixes host core limits leaking into Docker, and adds shared volumes for data persistence.
+
+#### 📡 `main.py` & `queue.py`
+
+* **Fix:** Added an atomic Redis lock (`startup_scrape_lock`) with a 300-second timeout to the API lifespan hook. Now, only one worker boots the daily scraper pipeline, even if 4 workers spin up at once.
+* **Fix:** Rewrote the SSE progress stream endpoint using native async Redis Pub/Sub (`redis.asyncio`). This keeps idle connection polling non-blocking, freeing up the thread pool for active FastAPI loops.
+* **Feat:** Updated target URLs from the old Perfect Order format to Chaos Rising (`CRI_URLS`).
+
+#### ⚙ `config.py`, `engine.py` & `monte_carlo.py`
+
+* **Perf:** Swapped out global thread counting for `os.sched_getaffinity(0)` inside a new `get_container_cores()` helper. This forces the engine to respect the actual Docker container cgroup limits.
+* **Fix:** Bound the parallel Rust `tcg_engine` and evolutionary simulation loops to the container's core limits instead of calling `multiprocessing.cpu_count()`, stopping host-level CPU thrashing.
+
+#### 🏗️ `docker-compose.yml`
+
+* **Feat:** Added a `shared_data` volume mounted to `/app/data` to stop JSON matrix data from wiping on container restarts.
+* **Perf:** Set `network: host` on the build context to work around network bottlenecks when building wheels inside the container. (Workaround for my Docker Linux + AdGuard Home setup)
+
+---
+
+## Commit `c73562c` (Apr 28, 2026)
 ### 🛡️ SSE Resilience, Telemetry Unification & Production Hardening
 
 This update introduces highly resilient Server-Sent Events (SSE) for task streaming, upgrades the observability stack to Jaeger v2, and hardens the Docker orchestration to prevent resource exhaustion during heavy Rust-driven Monte Carlo simulations.

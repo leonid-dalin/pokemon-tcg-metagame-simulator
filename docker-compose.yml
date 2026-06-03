@@ -11,7 +11,9 @@ services:
       retries: 5
 
   api:
-    build: .
+    build: 
+      context: .
+      network: host
     command: [ "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4" ]
     ports:
       - "8000:8000"
@@ -19,6 +21,8 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/?db=0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+    volumes:
+      - shared_data:/app/data
     depends_on:
       redis:
         condition: service_healthy
@@ -34,13 +38,18 @@ services:
         - "9411:9411"   # Zipkin fallback
 
   worker:
-    build: .
+    build: 
+      context: .
+      network: host
+    user: "1000:1000"
     command: [ "huey_consumer", "src.worker.queue.huey", "--worker-type=process", "--workers=2" ]
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/?db=0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
       - PYTHONPATH=/app
+    volumes:
+      - shared_data:/app/data
     depends_on:
       - jaeger
       - redis
@@ -52,7 +61,9 @@ services:
           cpus: "2.0"
 
   ui:
-    build: .
+    build: 
+      context: .
+      network: host
     command: [ "streamlit", "run", "src/ui/app.py" ]
     ports:
       - "8501:8501"
@@ -60,7 +71,11 @@ services:
       - API_URL=http://api:8000/api/v1
       - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+    volumes:
+      - shared_data:/app/data
     depends_on:
       - api
       - jaeger
-
+      
+volumes:
+  shared_data:	
