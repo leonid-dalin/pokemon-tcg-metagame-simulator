@@ -33,6 +33,7 @@ class Args(NamedTuple):
     players: int
     meta: str
     tournament_style: str
+    min_games: int
 
 
 def parse_args() -> Args:
@@ -56,6 +57,14 @@ def parse_args() -> Args:
         default=OUTPUT_DIR,
         metavar="DIR",
         help="Directory where simulation logs and interactive plots will be saved. (default: %(default)s)",
+    )
+
+    io_group.add_argument(
+        "-m", "--min-games",
+        type=int,
+        default=MIN_GAMES,
+        dest="min_games",
+        help="Minimum match count required to consider an archetype's data valid. (default: %(default)s)",
     )
 
     # ⚙️ Core Simulation Setup
@@ -265,4 +274,5 @@ def parse_args() -> Args:
         mutation_rate=args.mutation_rate,
         selection_pressure=args.selection_pressure,
         tournament_style=args.tournament_style,
+        min_games=args.min_games,
     )

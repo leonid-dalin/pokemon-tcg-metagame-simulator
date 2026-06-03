@@ -66,35 +66,54 @@ def resolve_meta_constraints(
     """
     n = len(live_baseline)
     final_meta = np.zeros(n, dtype=float)
-    exact_mask = np.zeros(n, dtype=bool)
+    min_bounds = np.zeros(n, dtype=float)
+    max_bounds = np.ones(n, dtype=float)
 
+    # 1. Extract Constraints
     for deck, spec in user_meta_spec.items():
         if deck in deck_to_idx:
             idx = deck_to_idx[deck]
-            val = 0.0
+            if isinstance(spec, (float, int)):
+                min_bounds[idx] = max_bounds[idx] = float(spec)
+            elif isinstance(spec, dict):
+                if "exact" in spec:
+                    min_bounds[idx] = max_bounds[idx] = float(spec["exact"])
+                else:
+                    min_bounds[idx] = float(spec.get("min", 0.0))
+                    max_bounds[idx] = float(spec.get("max", 1.0))
+            else:
+                if hasattr(spec, "exact"):
+                    min_bounds[idx] = max_bounds[idx] = float(getattr(spec, "exact"))
+                else:
+                    min_bounds[idx] = float(getattr(spec, "min", 0.0))
+                    max_bounds[idx] = float(getattr(spec, "max", 1.0))
 
-            if isinstance(spec, float) or isinstance(spec, int):
-                val = float(spec)
-            elif isinstance(spec, dict) and "exact" in spec:
-                val = float(spec["exact"])
-            elif hasattr(spec, "exact"):
-                val = float(getattr(spec, "exact"))
+    # 2. Establish Minimum Thresholds
+    final_meta = min_bounds.copy()
+    remaining = 1.0 - float(np.sum(final_meta))
 
-            final_meta[idx] = val
-            exact_mask[idx] = True
-
-    remaining = 1.0 - float(np.sum(final_meta[exact_mask]))
     if remaining <= 0.0:
         return safe_normalize(final_meta)
 
-    unfixed_mask = ~exact_mask
-    if not bool(np.any(unfixed_mask)):
-        return final_meta
+    # 3. Iterative Water-Filling
+    distributable_mask = final_meta < max_bounds
 
-    unfixed_baseline = safe_normalize(live_baseline[unfixed_mask])
-    final_meta[unfixed_mask] = unfixed_baseline * remaining
+    while remaining > 1e-5 and np.any(distributable_mask):
+        weights = live_baseline[distributable_mask]
+        s = np.sum(weights)
+        weights = weights / s if s > 0 else np.ones(np.sum(distributable_mask)) / np.sum(distributable_mask)
+
+        allocation = weights * remaining
+        space = max_bounds[distributable_mask] - final_meta[distributable_mask]
+
+        actual = np.minimum(allocation, space)
+        final_meta[distributable_mask] += actual
+        remaining -= np.sum(actual)
+
+        distributable_mask = final_meta < (max_bounds - 1e-5)
 
     return safe_normalize(final_meta)
+
 
 def predict_best_decks(request: PredictionRequest) -> dict:
     """

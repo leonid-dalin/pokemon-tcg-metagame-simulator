@@ -969,28 +969,31 @@ def main():
 
             comp_df = pd.DataFrame(comp_data)
 
-            def highlight_winrates(v: Any) -> str:
-                if not isinstance(v, (int, float)): return ''
-                norm_val = float(v) / 100.0
-                target_rgb = aggressive_colorscale[0][1]
-                for threshold, co in aggressive_colorscale:
-                    if norm_val >= threshold:
-                        target_rgb = co
-                    else:
-                        break
-                nums = re.findall(r'\d+', target_rgb)
-                return f'background-color: rgba({nums[0]}, {nums[1]}, {nums[2]}, 0.55); color: #ffffff; font-weight: bold;'
+            if not comp_df.empty:
+                def highlight_winrates(v: Any) -> str:
+                    if not isinstance(v, (int, float)): return ''
+                    norm_val = float(v) / 100.0
+                    target_rgb = aggressive_colorscale[0][1]
+                    for threshold, co in aggressive_colorscale:
+                        if norm_val >= threshold:
+                            target_rgb = co
+                        else:
+                            break
+                    nums = re.findall(r'\d+', target_rgb)
+                    return f'background-color: rgba({nums[0]}, {nums[1]}, {nums[2]}, 0.55); color: #ffffff; font-weight: bold;'
 
-            styled_comp_df = comp_df.style.map(highlight_winrates, subset=[f"{deck_a} WR", f"{deck_b} WR"])
+                styled_comp_df = comp_df.style.map(highlight_winrates, subset=[f"{deck_a} WR", f"{deck_b} WR"])
 
-            st.dataframe(
-                styled_comp_df, width="stretch", hide_index=True,
-                column_config={
-                    "Share % (Day 1)": st.column_config.NumberColumn(width="small", format="%.2f %%"),
-                    f"{deck_a} WR": st.column_config.NumberColumn(format="%.2f %%"),
-                    f"{deck_b} WR": st.column_config.NumberColumn(format="%.2f %%")
-                }
-            )
+                st.dataframe(
+                    styled_comp_df, width="stretch", hide_index=True,
+                    column_config={
+                        "Share % (Day 1)": st.column_config.NumberColumn(width="small", format="%.2f %%"),
+                        f"{deck_a} WR": st.column_config.NumberColumn(format="%.2f %%"),
+                        f"{deck_b} WR": st.column_config.NumberColumn(format="%.2f %%")
+                    }
+                )
+            else:
+                st.info("No common opponents found exceeding the 3% field threshold.")
 
         st.divider()
 

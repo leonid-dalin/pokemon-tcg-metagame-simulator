@@ -161,7 +161,7 @@ List[Dict[str, Any]]:
 
         norm_opponent = normalize_archetype(opponent_str)
         if norm_opponent not in canonical_map:
-            continue
+            canonical_map[norm_opponent] = opponent_str
 
         opponent_archetype = canonical_map[norm_opponent]
 
