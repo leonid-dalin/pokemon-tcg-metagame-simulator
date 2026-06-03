@@ -98,8 +98,15 @@ def parse_limitless_html(html_str: str, valid_decks: List[str]) -> Tuple[Dict[st
     if not isinstance(script_content, str):
         raise ValueError("Script tag content is invalid or None.")
     wrapper_json = json.loads(script_content)
-    body_json = json.loads(wrapper_json.get("body", "{}"))
-    decks = body_json.get("message", [])
+    if "body" in wrapper_json and isinstance(wrapper_json["body"], str):
+        body_json = json.loads(wrapper_json["body"])
+        decks = body_json.get("message", [])
+    elif "message" in wrapper_json:
+        decks = wrapper_json["message"]
+    elif isinstance(wrapper_json, list):
+        decks = wrapper_json
+    else:
+        decks = []
 
     if not decks:
         raise ValueError("Deck array was empty in the parsed JSON.")
@@ -392,6 +399,24 @@ def main():
     seen_decks = set()
 
     with st.expander("🛠️ Custom Metagame Constraints", expanded=st.session_state.expander_constraints_open):
+        # Calculate live widget state
+        current_locked_sum = 0.0
+        for r in st.session_state.meta_rows:
+            if r.get("spec_type") == "Exact":
+                row_id = r["id"]
+                v = st.session_state.get(f"val_{row_id}", r.get("val", 0.0))
+                if st.session_state.internal_input_mode == "Raw Players":
+                    current_locked_sum += float(v) / (players if players > 0 else 1)
+                else:
+                    current_locked_sum += float(v) / 100.0
+
+        clamped_sum = max(0.0, min(current_locked_sum, 1.0))
+        remaining_pct = (1.0 - clamped_sum) * 100.0
+
+        st.progress(clamped_sum,
+                    text=f"Metagame Allocation: {clamped_sum * 100:.1f}% Assigned | {remaining_pct:.1f}% Remaining")
+        st.markdown("<br>", unsafe_allow_html=True)
+
         col1, col2, col3, col4 = st.columns([0.25, 0.25, 0.25, 0.25])
         with col1:
             if st.button("➕ Add Constraint", use_container_width=True):
@@ -428,6 +453,8 @@ def main():
 
                 # 3. Process unfixed mask
                 unfixed_mask = np.array([d not in locked_decks for d in d_names], dtype=bool)
+                if not np.any(unfixed_mask) or remaining <= 0.0:
+                    st.rerun()
                 unfixed_baseline = np.asarray(baseline[unfixed_mask], dtype=float)
 
                 s_unfixed = float(np.sum(unfixed_baseline))

@@ -95,7 +95,7 @@ def execute_simulation_job(payload: dict):
             raise
 
 
-@huey.periodic_task(crontab(minute='0', hour='4'))
+@huey.periodic_task(crontab(minute='0', hour='*/2'))
 def automated_daily_pipeline():
     """
     Asynchronous periodic task to refresh metagame data with full observability.

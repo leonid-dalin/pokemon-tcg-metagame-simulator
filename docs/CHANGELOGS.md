@@ -1,4 +1,4 @@
-### Commit `?` (Jun 03, 2026)
+### Commit `6f6dbe0` (Jun 03, 2026)
 
 ### 🚀 Distributed resource locking, async telemetry streams, and cgroup fixes
 #### `feat(infra): implement distributed startup lock, async SSE streaming, and cgroup-aware core scaling`
