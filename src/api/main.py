@@ -242,7 +242,14 @@ async def stream_task_progress(request: Request, task_id: str):
 
         except Exception as e:
             logger.error("sse_stream_exception", task_id=task_id, error=str(e), exc_info=True)
-            yield {"event": "message", "data": "Stream disconnected internally"}
+            yield {
+                "event": "message",
+                "data": json.dumps({
+                    "status": "failed",
+                    "error": "Stream disconnected internally",
+                    "data": None,
+                }),
+            }
 
         finally:
             if pubsub is not None:
