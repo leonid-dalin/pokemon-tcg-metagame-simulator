@@ -12,6 +12,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir maturin
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN groupadd --gid 1000 appuser && useradd --uid 1000 --gid appuser --create-home appuser
+RUN mkdir -p /app/data/input /app/data/matchups /app/output && chown -R appuser:appuser /app
+
 # RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
 
 COPY . .
@@ -19,4 +22,5 @@ COPY . .
 RUN cd src/tournament/tcg_engine && maturin build --release
 RUN pip install src/tournament/tcg_engine/target/wheels/*.whl
 
+USER appuser
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

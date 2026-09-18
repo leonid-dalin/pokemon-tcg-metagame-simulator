@@ -11,9 +11,7 @@ services:
       retries: 5
 
   api:
-    build: 
-      context: .
-      network: host
+    build: .
     command: [ "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4" ]
     ports:
       - "8000:8000"
@@ -38,10 +36,7 @@ services:
         - "9411:9411"   # Zipkin fallback
 
   worker:
-    build: 
-      context: .
-      network: host
-    user: "1000:1000"
+    build: .
     command: [ "huey_consumer", "src.worker.queue.huey", "--worker-type=process", "--workers=2" ]
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/?db=0}
@@ -76,6 +71,6 @@ services:
     depends_on:
       - api
       - jaeger
-      
+
 volumes:
-  shared_data:	
+  shared_data:
