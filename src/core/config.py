@@ -22,6 +22,7 @@ OUTPUT_DIR = "output/"
 SIMULATION_MODE: SimulationMode = "replicator"
 RNG_SEED = 1312
 MIN_GAMES = 100
+MIN_OPPONENT_MATCHES = 50
 
 # ----------------------------
 # Evolutionary Dynamics (Replicator Engine)

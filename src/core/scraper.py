@@ -11,7 +11,7 @@ from bs4.element import Tag
 from typing import List, Dict, Tuple, Set, Any, cast
 
 from opentelemetry import trace
-from src.core.config import MATCHUP_DIR, INPUT_DIR, INPUT_FILE
+from src.core.config import MATCHUP_DIR, INPUT_DIR, INPUT_FILE, MIN_OPPONENT_MATCHES
 from src.core.logger import setup_structured_logging
 
 logger = structlog.get_logger()
@@ -159,18 +159,23 @@ List[Dict[str, Any]]:
         if not opponent_str or opponent_str.lower() in excluded_opponents:
             continue
 
-        norm_opponent = normalize_archetype(opponent_str)
-        if norm_opponent not in canonical_map:
-            canonical_map[norm_opponent] = opponent_str
-
-        opponent_archetype = canonical_map[norm_opponent]
-
         raw_attr = row.get("data-matches")
         if isinstance(raw_attr, list):
             matches_attr = raw_attr[0] if raw_attr else "0"
         else:
             matches_attr = raw_attr
-        matches = int(matches_attr) if matches_attr is not None else 0
+        try:
+            matches = int(matches_attr) if matches_attr is not None else 0
+        except (TypeError, ValueError):
+            matches = 0
+
+        norm_opponent = normalize_archetype(opponent_str)
+        if norm_opponent not in canonical_map:
+            if matches < MIN_OPPONENT_MATCHES:
+                continue
+            canonical_map[norm_opponent] = opponent_str
+
+        opponent_archetype = canonical_map[norm_opponent]
 
         wins = losses = ties = 0
         score_tds = row.find_all("td")
