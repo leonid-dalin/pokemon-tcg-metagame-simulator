@@ -8,7 +8,7 @@ import numpy as np
 import tcg_engine
 from typing import Dict, List, Optional, Callable
 
-from src.core.config import get_container_cores
+from src.core.runtime import get_container_cores
 from src.api.models import GLOBAL_TIE_RATE
 from src.core.telemetry import tracer
 

@@ -24,6 +24,7 @@ except ImportError:
     mp = None
 
 from src.core.config import *
+from src.core.runtime import get_container_cores
 from src.core.data import safe_normalize
 from src.core.types import SimulationConfig
 from src.tournament.solver import get_variant_5_structure
