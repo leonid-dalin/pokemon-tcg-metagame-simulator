@@ -155,20 +155,23 @@ def cluster_decks_by_matchup_profile(
             if n_clusters == "auto" and n_samples > 2:
                 best_score = -1.0
                 for k in range(2, max_possible_k + 1):
-                    try:
-                        kmeans = KMeans(n_clusters=k, random_state=RNG_SEED, n_init=10)
-                        labels = kmeans.fit_predict(wm_scaled)
-                        score = silhouette_score(wm_scaled, labels)
-
-                        if score > best_score:
-                            best_score = score
-                            best_k = k
-                            best_labels = labels
-                            best_centroids = kmeans.cluster_centers_
-                    except ValueError:
+                    kmeans = KMeans(n_clusters=k, random_state=RNG_SEED, n_init=10)
+                    labels = kmeans.fit_predict(wm_scaled)
+                    if len(np.unique(labels)) < 2:
                         continue
 
-                logger.info("silhouette_optimization", best_k=best_k, score=float(best_score))
+                    score = silhouette_score(wm_scaled, labels)
+                    if score > best_score:
+                        best_score = score
+                        best_k = k
+                        best_labels = labels
+                        best_centroids = kmeans.cluster_centers_
+
+                if best_labels is None:
+                    best_k = 1
+                    logger.info("silhouette_optimization_degenerate", n_samples=n_samples)
+                else:
+                    logger.info("silhouette_optimization", best_k=best_k, score=float(best_score))
             else:
                 kmeans = KMeans(n_clusters=best_k, random_state=RNG_SEED, n_init=10)
                 best_labels = kmeans.fit_predict(wm_scaled)
