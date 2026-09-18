@@ -7,12 +7,13 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union, cast
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+from pydantic import ValidationError
 from bs4 import BeautifulSoup
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
@@ -28,7 +29,8 @@ from src.api.models import PrecisionTier, RangeSpec, ExactSpec, PredictionReques
 from src.core.data import load_matchup_data
 from src.core.config import NASH_EQUILIBRIUM, INPUT_DATA, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, \
     TIER_2_THRESHOLD
-from src.tournament.solver import swiss_rounds_from_players, get_variant_5_structure
+from src.tournament.solver import swiss_rounds_from_players, get_variant_5_structure, \
+    calculate_empirical_baseline, resolve_meta_constraints
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
 from src.core.logger import setup_structured_logging
 from src.core.telemetry import setup_telemetry, tracer
@@ -596,7 +598,7 @@ def main():
                                 else:
                                     min_prop, max_prop = 0.0, 0.0
 
-                            user_meta[str(deck)] = cast(RangeSpec, cast(object, {"min": min_prop, "max": max_prop}))
+                            user_meta[str(deck)] = RangeSpec(min=min_prop, max=max_prop)
                     with cols[3]:
                         st.button("🗑️", key=f"del_{row_id}", on_click=delete_meta_row, args=(row_id,))
 
@@ -635,10 +637,13 @@ def main():
                         "min_sample_threshold": min_sample_threshold,
                     }
 
-                    # 2. POST to FastAPI
+                    # 2. Validate client-side, then POST to FastAPI.
+                    request_model = PredictionRequest(**payload)
                     api_url = os.environ.get("API_URL", "http://localhost:8000/api/v1")
                     app_logger.info("dispatching_prediction_request", job_id=job_id, api_url=api_url)
-                    response = requests.post(f"{api_url}/predict", json=payload)
+                    response = requests.post(
+                        f"{api_url}/predict", json=request_model.model_dump(mode="json")
+                    )
                     response.raise_for_status()
                     task_id = response.json()["task_id"]
 
@@ -705,6 +710,12 @@ def main():
                         if not is_complete:
                             raise Exception("Lost connection to the backend server and exhausted all retry attempts.")
 
+                except ValidationError as ve:
+                    app_logger.warning("prediction_request_invalid", job_id=job_id, error=str(ve))
+                    ui_span.record_exception(ve)
+                    status.update(label="❌ Invalid Configuration", state="error", expanded=True)
+                    st.error(f"The simulation request failed validation:\n\n```\n{ve}\n```")
+                    st.stop()
                 except Exception as e:
                     app_logger.error("simulation_workflow_failed", error=str(e), exc_info=True)
                     ui_span.record_exception(e)
