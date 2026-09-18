@@ -3,6 +3,7 @@ import json
 import time
 import os
 import numpy as np
+import redis.asyncio as aioredis
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -15,6 +16,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from src.api.models import PredictionRequest
+from src.api.stream_helpers import resolve_job_id
 from src.core.logger import logger
 from src.worker.queue import execute_simulation_job, automated_daily_pipeline, huey
 
@@ -38,21 +40,28 @@ async def lifespan(_: FastAPI):
     Triggers the automated scraper immediately on startup to ensure data parity.
     """
     logger.info("api_startup_trigger_scrape")
+    app.state.redis = aioredis.from_url(redis_url, decode_responses=True)
     try:
-        redis_conn = huey.storage.conn
-        lock_acquired = redis_conn.set("startup_scrape_lock", "1", nx=True, ex=300)
-        
+        lock_acquired = await asyncio.to_thread(
+            huey.storage.conn.set,
+            "startup_scrape_lock",
+            "1",
+            nx=True,
+            ex=300,
+        )
+
         if lock_acquired:
             automated_daily_pipeline()
             logger.info("startup_scrape_enqueued", locked=True)
         else:
             logger.info("startup_scrape_bypassed", reason="lock_held_by_peer_worker")
-            
+
     except Exception as e:
         logger.error("api_startup_scrape_failed", error=str(e), exc_info=True)
 
     yield
     logger.info("api_shutdown_initiated")
+    await app.state.redis.aclose()
 
 # ==========================================
 # 2. Rate Limiter Configuration
@@ -189,41 +198,25 @@ async def stream_task_progress(request: Request, task_id: str):
     """
 
     async def event_generator():
-        # 1. Scope-Safe Imports
-        try:
-            import redis.asyncio as aioredis
-        except ImportError:
-            import aioredis
-
+        redis = request.app.state.redis
         pubsub = None
-        async_redis = None
-
         try:
-            async_redis = aioredis.from_url(redis_url)
-            pubsub = async_redis.pubsub()
-
-            # 2. Fetch linked job_id with safe type parsing
+            pubsub = redis.pubsub()
             link_bytes = await asyncio.to_thread(huey.storage.peek_data, f"link_{task_id}")
-
-            if isinstance(link_bytes, bytes):
-                job_id = link_bytes.decode('utf-8')
-            elif isinstance(link_bytes, str):
-                job_id = link_bytes
-            else:
-                job_id = request.query_params.get("job_id", "unknown_job")
+            job_id = resolve_job_id(
+                link_bytes,
+                request.query_params.get("job_id", "unknown_job"),
+            )
 
             await pubsub.subscribe(f"channel:progress:{job_id}")
 
-            # 3. Fetch Initial State (fallback) asynchronously
-            initial_state = await async_redis.get(f"task:progress:{job_id}")
+            initial_state = await redis.get(f"task:progress:{job_id}")
             if initial_state:
-                state_str = initial_state.decode('utf-8') if isinstance(initial_state, bytes) else initial_state
                 yield {
                     "event": "message",
-                    "data": state_str
+                    "data": initial_state,
                 }
 
-            # 4. Stream from Pub/Sub natively
             while True:
                 if await request.is_disconnected():
                     break
@@ -237,36 +230,23 @@ async def stream_task_progress(request: Request, task_id: str):
                            "data": json.dumps({"status": "complete", "data": result}, default=numpy_safe_encoder)}
                     break
 
-                # 5. Safe Polling with Timeout guards
                 try:
                     message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.5)
                     if message and message['type'] == 'message':
-                        msg_data = message['data']
-                        data_str = msg_data.decode('utf-8') if isinstance(msg_data, bytes) else msg_data
                         yield {
                             "event": "message",
-                            "data": data_str
+                            "data": message['data'],
                         }
-                except (TimeoutError, asyncio.TimeoutError):
+                except asyncio.TimeoutError:
                     pass
 
         except Exception as e:
             logger.error("sse_stream_exception", task_id=task_id, error=str(e), exc_info=True)
-            yield {"event": "message",
-                   "data": json.dumps({"status": "failed", "error": f"API Stream Error: {str(e)}", "data": None})}
+            yield {"event": "message", "data": "Stream disconnected internally"}
 
         finally:
-            # 6. Silent Cleanup
-            if pubsub:
-                try:
-                    await pubsub.unsubscribe()
-                except Exception:
-                    pass
-            if async_redis:
-                try:
-                    await async_redis.aclose() if hasattr(async_redis, 'aclose') else await async_redis.close()
-                except Exception:
-                    pass
+            if pubsub is not None:
+                await pubsub.aclose()
 
     return EventSourceResponse(
         event_generator(),
