@@ -98,14 +98,15 @@ def execute_simulation_job(payload: dict):
 @huey.periodic_task(crontab(minute='0', hour='*/2'))
 def automated_daily_pipeline():
     """
-    Asynchronous periodic task to refresh metagame data with full observability.
+    Periodic task to refresh metagame data with full observability.
+    Runs every two hours; also triggered once on API startup under a lock.
     """
     # Start a root span for the daily ingestion process
     with tracer.start_as_current_span("automated_daily_pipeline") as span:
-        log = q_logger.bind(task="daily_pipeline", schedule="02:00")
+        log = q_logger.bind(task="daily_pipeline", schedule="0 */2 * * *")
         log.info("starting_daily_scrape")  # Initialise the structured log entry
 
-        from src.core.urls import ASC_URLS, CRI_URLS
+        from src.core.urls import CRI_URLS
         target_urls = CRI_URLS
 
         try:
