@@ -24,7 +24,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install Python dependencies
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
-      - name: Build the Rust extension
-        run: python -m maturin develop --release --manifest-path src/tournament/tcg_engine/Cargo.toml
+      - name: Build and install the Rust extension
+        run: python -m maturin build --release --manifest-path src/tournament/tcg_engine/Cargo.toml && python -m pip install src/tournament/tcg_engine/target/wheels/*.whl
       - name: Run tests
         run: python -m pytest -q
