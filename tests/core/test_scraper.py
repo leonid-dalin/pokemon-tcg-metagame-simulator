@@ -1,7 +1,7 @@
 import pytest
 from bs4 import BeautifulSoup
 
-from src.core.scraper import scrape_matchup_soup
+from src.core.scraper import build_complete_matchup_matrix, scrape_matchup_soup
 
 
 def _soup(rows: str) -> BeautifulSoup:
@@ -62,3 +62,26 @@ def test_win_rate_counts_ties_as_half():
         _soup(_row("Known Deck", 100, "60 - 30 - 10")), "Mine", "Standard", canonical
     )
     assert result[0]["win_rate"] == pytest.approx(0.65)
+
+
+@pytest.mark.unit
+def test_an_observed_half_win_rate_is_not_replaced_by_a_mirrored_result():
+    result = build_complete_matchup_matrix([
+        {
+            "deck_archetype": "Mine",
+            "opponent_archetype": "Other",
+            "win_rate": 0.5,
+            "total_matches": 4,
+        },
+        {
+            "deck_archetype": "Other",
+            "opponent_archetype": "Mine",
+            "win_rate": 0.7,
+            "total_matches": 10,
+        },
+    ])
+
+    assert result["matchup_matrix"]["Mine"]["Other"] == {
+        "win_rate": 0.5,
+        "match_count": 4,
+    }

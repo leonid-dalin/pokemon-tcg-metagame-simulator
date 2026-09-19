@@ -248,7 +248,7 @@ def build_complete_matchup_matrix(all_matchup_data: List[Dict[str, Any]]) -> Dic
             for b in valid_archetypes:
                 if a == b:
                     matrix[a][b] = {"win_rate": 0.5, "match_count": 0}
-                elif matrix[a][b]["win_rate"] == 0.5 and matrix[b][a]["win_rate"] != 0.5:
+                elif matrix[a][b]["match_count"] == 0 and matrix[b][a]["match_count"] > 0:
                     matrix[a][b] = {
                         "win_rate": 1.0 - matrix[b][a]["win_rate"],
                         "match_count": matrix[b][a]["match_count"],
