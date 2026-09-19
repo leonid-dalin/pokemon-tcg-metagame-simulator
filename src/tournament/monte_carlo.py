@@ -52,6 +52,7 @@ def run_monte_carlo_analytics(
     if meta_sum > 0:
         meta_vec = meta_vec / meta_sum
     else:
+        logger.warning("empty_meta_distribution_using_uniform_field", deck_count=n_decks)
         meta_vec.fill(1.0 / n_decks)
 
     working_matrix = win_matrix.copy()
