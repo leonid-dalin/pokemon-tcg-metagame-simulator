@@ -148,8 +148,27 @@ def automated_daily_pipeline():
                 }
             }
 
-            with open(INPUT_DATA, "w", encoding="utf-8") as f:
-                json.dump(final_json_structure, f, indent=2)
+            temp_path = f"{INPUT_DATA}.tmp"
+            target_mode = None
+            if os.path.exists(INPUT_DATA):
+                target_mode = os.stat(INPUT_DATA).st_mode & 0o777
+
+            try:
+                with open(temp_path, "w", encoding="utf-8") as f:
+                    json.dump(final_json_structure, f, indent=2)
+                    f.flush()
+                    os.fsync(f.fileno())
+
+                if target_mode is not None:
+                    os.chmod(temp_path, target_mode)
+
+                os.replace(temp_path, INPUT_DATA)
+            except Exception:
+                try:
+                    os.remove(temp_path)
+                except FileNotFoundError:
+                    pass
+                raise
 
             log.info("pipeline_successful", deck_count=len(matrix_data["archetypes"]))  # Log success with metadata
 
