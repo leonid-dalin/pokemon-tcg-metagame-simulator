@@ -1,7 +1,16 @@
 import pytest
 from bs4 import BeautifulSoup
 
+from src.core import scraper as scraper_module
 from src.core.scraper import build_complete_matchup_matrix, scrape_matchup_soup
+
+
+class _CapturingLogger:
+    def __init__(self):
+        self.events = []
+
+    def warning(self, event, **kwargs):
+        self.events.append((event, kwargs))
 
 
 def _soup(rows: str) -> BeautifulSoup:
@@ -20,7 +29,7 @@ def _row(name: str, matches: int, record: str = "60 - 30 - 10") -> str:
 @pytest.mark.unit
 def test_a_known_archetype_is_always_parsed():
     canonical = {"known deck": "Known Deck"}
-    result = scrape_matchup_soup(_soup(_row("Known Deck", 5)), "Mine", "Standard", canonical)
+    result = scrape_matchup_soup(_soup(_row("Known Deck", 100)), "Mine", "Standard", canonical)
     assert [m["opponent_archetype"] for m in result] == ["Known Deck"]
 
 
@@ -43,7 +52,7 @@ def test_a_low_volume_unknown_archetype_is_rejected():
 @pytest.mark.unit
 def test_rejecting_a_stranger_does_not_affect_a_known_deck_in_the_same_table():
     canonical = {"known deck": "Known Deck"}
-    soup = _soup(_row("Fringe Deck", 1) + _row("Known Deck", 1))
+    soup = _soup(_row("Fringe Deck", 1) + _row("Known Deck", 100))
     result = scrape_matchup_soup(soup, "Mine", "Standard", canonical)
     assert [m["opponent_archetype"] for m in result] == ["Known Deck"]
 
@@ -62,6 +71,53 @@ def test_win_rate_counts_ties_as_half():
         _soup(_row("Known Deck", 100, "60 - 30 - 10")), "Mine", "Standard", canonical
     )
     assert result[0]["win_rate"] == pytest.approx(0.65)
+
+
+@pytest.mark.unit
+def test_valid_two_part_record_is_parsed(monkeypatch):
+    logger = _CapturingLogger()
+    monkeypatch.setattr(scraper_module, "logger", logger)
+    result = scrape_matchup_soup(
+        _soup(_row("Known Deck", 90, "60 - 30")), "Mine", "Standard", {"known deck": "Known Deck"}
+    )
+
+    assert result[0]["wins"] == 60
+    assert result[0]["losses"] == 30
+    assert result[0]["ties"] == 0
+    assert result[0]["win_rate"] == pytest.approx(0.6666666667)
+    assert not logger.events
+
+
+@pytest.mark.unit
+def test_malformed_record_is_skipped_and_logged(monkeypatch):
+    logger = _CapturingLogger()
+    monkeypatch.setattr(scraper_module, "logger", logger)
+    result = scrape_matchup_soup(
+        _soup(_row("Known Deck", 100, "60 - 30 - not-a-number")),
+        "Mine",
+        "Standard",
+        {"known deck": "Known Deck"},
+    )
+
+    assert result == []
+    assert any(event == "matchup_row_skipped" for event, _ in logger.events)
+    assert any(kwargs.get("reason") == "malformed_record" for _, kwargs in logger.events)
+
+
+@pytest.mark.unit
+def test_over_counted_record_is_skipped_and_logged(monkeypatch):
+    logger = _CapturingLogger()
+    monkeypatch.setattr(scraper_module, "logger", logger)
+    result = scrape_matchup_soup(
+        _soup(_row("Known Deck", 100, "60 - 30 - 20")),
+        "Mine",
+        "Standard",
+        {"known deck": "Known Deck"},
+    )
+
+    assert result == []
+    assert any(event == "matchup_row_skipped" for event, _ in logger.events)
+    assert any(kwargs.get("reason") == "record_exceeds_matches" for _, kwargs in logger.events)
 
 
 @pytest.mark.unit

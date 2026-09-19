@@ -170,27 +170,69 @@ List[Dict[str, Any]]:
             matches = 0
 
         norm_opponent = normalize_archetype(opponent_str)
+        opponent_archetype = canonical_map.get(norm_opponent, opponent_str)
+
+        wins = losses = ties = 0
+        score_tds = row.find_all("td")
+        if len(score_tds) <= 3:
+            logger.warning(
+                "matchup_row_skipped",
+                deck_archetype=deck_archetype,
+                opponent_archetype=opponent_archetype,
+                reason="malformed_record",
+            )
+            continue
+
+        score_text = score_tds[3].get_text(strip=True)
+        parts = [part.strip() for part in score_text.split("-")]
+        if len(parts) not in (2, 3) or any(not part for part in parts):
+            logger.warning(
+                "matchup_row_skipped",
+                deck_archetype=deck_archetype,
+                opponent_archetype=opponent_archetype,
+                reason="malformed_record",
+            )
+            continue
+
+        try:
+            values = [int(part) for part in parts]
+        except (TypeError, ValueError):
+            logger.warning(
+                "matchup_row_skipped",
+                deck_archetype=deck_archetype,
+                opponent_archetype=opponent_archetype,
+                reason="malformed_record",
+            )
+            continue
+
+        if any(value < 0 for value in values):
+            logger.warning(
+                "matchup_row_skipped",
+                deck_archetype=deck_archetype,
+                opponent_archetype=opponent_archetype,
+                reason="malformed_record",
+            )
+            continue
+
+        if len(values) == 2:
+            wins, losses = values
+            ties = 0
+        else:
+            wins, losses, ties = values
+
+        if wins + losses + ties > matches:
+            logger.warning(
+                "matchup_row_skipped",
+                deck_archetype=deck_archetype,
+                opponent_archetype=opponent_archetype,
+                reason="record_exceeds_matches",
+            )
+            continue
+
         if norm_opponent not in canonical_map:
             if matches < MIN_OPPONENT_MATCHES:
                 continue
             canonical_map[norm_opponent] = opponent_str
-
-        opponent_archetype = canonical_map[norm_opponent]
-
-        wins = losses = ties = 0
-        score_tds = row.find_all("td")
-        if len(score_tds) > 3:
-            score_text = score_tds[3].get_text(strip=True)
-            # Parse the "W - L - T" string (e.g., "6 - 12 - 5")
-            parts = [p.strip() for p in score_text.split("-") if p.strip()]
-
-            try:
-                if len(parts) >= 3:
-                    wins, losses, ties = map(int, parts[:3])
-                elif len(parts) == 2:
-                    wins, losses = map(int, parts)
-            except (ValueError, TypeError):
-                pass
 
         if matches > 0:
             # Formula: (Wins + 0.5 * Ties) / Total Matches
