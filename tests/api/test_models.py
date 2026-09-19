@@ -47,3 +47,15 @@ def test_prediction_request_rejects_matrix_with_more_than_sixty_four_decks():
 
     with pytest.raises(ValidationError):
         PredictionRequest(deck_names=deck_names, matchup_matrix=matchup_matrix)
+
+
+@pytest.mark.unit
+def test_prediction_request_rejects_duplicate_deck_names():
+    with pytest.raises(ValidationError):
+        PredictionRequest(**_request_payload(deck_names=["dragon", "dragon"]))
+
+
+@pytest.mark.unit
+def test_prediction_request_rejects_asymmetric_matchup_matrix():
+    with pytest.raises(ValidationError):
+        PredictionRequest(**_request_payload(matchup_matrix=[[0.5, 0.7], [0.5, 0.5]]))

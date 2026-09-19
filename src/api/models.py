@@ -118,6 +118,9 @@ class PredictionRequest(BaseModel):
         n_decks = len(self.deck_names)
         matrix = self.matchup_matrix
 
+        if len(set(self.deck_names)) != n_decks:
+            raise ValueError("deck_names must be unique")
+
         # Dimension Check
         if len(matrix) != n_decks:
             raise ValueError(f"Matrix row count ({len(matrix)}) must match deck_names length ({n_decks}).")
@@ -133,6 +136,12 @@ class PredictionRequest(BaseModel):
                 if i == j and win_rate != 0.5:
                     raise ValueError(
                         f"Mirror match violation at [{i}][{j}]. Diagonal must be exactly 0.5, got {win_rate}.")
+
+            for j in range(i + 1, n_decks):
+                if matrix[i][j] + matrix[j][i] != 1.0:
+                    raise ValueError(
+                        f"Matchup matrix must be symmetric around 0.5 at [{i}][{j}] and [{j}][i]."
+                    )
 
         return self
 
