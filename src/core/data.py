@@ -42,8 +42,17 @@ def load_matchup_data(
         span.set_attribute("file.path", file_path)
         logger.info("loading_matchup_data", path=file_path)
 
-        with open(file_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "matchup_data_load_failed",
+                path=file_path,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            return [], np.zeros((0, 0)), {}
 
         archetypes: List[str] = list(data.get("archetypes", []))
         raw_win = data.get("win_rate_matrix", {})
