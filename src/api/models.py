@@ -64,11 +64,16 @@ class PredictionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")  # Prevents mass-assignment injection attacks
 
     # 1. Identity & Metadata
-    job_id: str = Field(default="unknown")
+    job_id: str = Field(default="unknown", max_length=64)
 
     # 2. Required Core Data
     deck_names: List[str] = Field(..., min_length=2, description="List of active archetypes in the simulation.")
-    matchup_matrix: List[List[float]] = Field(..., description="2D matrix of win rates corresponding to deck_names.")
+    matchup_matrix: List[List[float]] = Field(
+        ...,
+        min_length=2,
+        max_length=64,
+        description="2D matrix of win rates corresponding to deck_names.",
+    )
 
     # 3. Primary Tournament Parameters
     tournament_style: Literal["pure_swiss", "championship_series"] = Field(default="pure_swiss")

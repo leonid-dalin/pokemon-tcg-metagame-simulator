@@ -29,3 +29,21 @@ def test_range_spec_rejects_a_minimum_above_the_maximum():
 def test_tournament_style_accepts_only_supported_values():
     with pytest.raises(ValidationError):
         PredictionRequest(**_request_payload(tournament_style="single_elimination"))
+
+
+@pytest.mark.unit
+def test_prediction_request_rejects_job_id_longer_than_sixty_four_characters():
+    with pytest.raises(ValidationError):
+        PredictionRequest(**_request_payload(job_id="x" * 65))
+
+
+@pytest.mark.unit
+def test_prediction_request_rejects_matrix_with_more_than_sixty_four_decks():
+    deck_names = [f"deck-{index}" for index in range(65)]
+    matchup_matrix = [
+        [0.5 if row == column else 0.0 for column in range(65)]
+        for row in range(65)
+    ]
+
+    with pytest.raises(ValidationError):
+        PredictionRequest(deck_names=deck_names, matchup_matrix=matchup_matrix)
