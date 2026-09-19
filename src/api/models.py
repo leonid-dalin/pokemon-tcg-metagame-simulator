@@ -1,6 +1,6 @@
 # src/api/models.py
 from pydantic import BaseModel, Field, model_validator, ConfigDict
-from typing import Dict, Union, List, Any
+from typing import Dict, Union, List, Any, Literal
 from enum import Enum
 
 
@@ -30,6 +30,12 @@ class ExactSpec(BaseModel):
 class RangeSpec(BaseModel):
     min: float = Field(ge=0.0, le=1.0)
     max: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_order(self):
+        if self.min > self.max:
+            raise ValueError("min must be less than or equal to max")
+        return self
 
 
 class DeckRecommendation(BaseModel):
@@ -65,7 +71,7 @@ class PredictionRequest(BaseModel):
     matchup_matrix: List[List[float]] = Field(..., description="2D matrix of win rates corresponding to deck_names.")
 
     # 3. Primary Tournament Parameters
-    tournament_style: str = Field(default="pure_swiss")
+    tournament_style: Literal["pure_swiss", "championship_series"] = Field(default="pure_swiss")
     match_format: str = Field(default="BO3", pattern="^(BO1|BO3)$")
     total_players: int = Field(
         default=256,
@@ -78,9 +84,6 @@ class PredictionRequest(BaseModel):
     user_meta_spec: Dict[str, Union[float, ExactSpec, RangeSpec]] = Field(
         default_factory=dict,
         max_length=256,
-    )
-    meta_constraints: Dict[str, Union[ExactSpec, RangeSpec]] = Field(
-        default_factory=dict
     )
 
     # 5. Simulation & Numerical Settings
