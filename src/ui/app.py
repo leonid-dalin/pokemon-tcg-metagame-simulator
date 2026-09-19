@@ -612,7 +612,7 @@ def main():
                     api_url = os.environ.get("API_URL", "http://localhost:8000/api/v1")
                     app_logger.info("dispatching_prediction_request", job_id=job_id, api_url=api_url)
                     response = requests.post(
-                        f"{api_url}/predict", json=request_model.model_dump(mode="json")
+                        f"{api_url}/predict", json=request_model.model_dump(mode="json"), timeout=45
                     )
                     response.raise_for_status()
                     task_id = response.json()["task_id"]
