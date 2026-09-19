@@ -10,6 +10,8 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 from typing import List, Dict, Tuple, Set, Any, cast
 
+from urllib.parse import parse_qs, urljoin, urlsplit, urlunsplit
+
 from opentelemetry import trace
 from src.core.config import MATCHUP_DIR, INPUT_DIR, INPUT_FILE, MIN_OPPONENT_MATCHES
 from src.core.logger import setup_structured_logging
@@ -68,6 +70,35 @@ def get_deck_archetype(file_path: str, filename: str) -> Tuple[str, str]:
                     return deck_name, deck_format
 
         raise ValueError(f"Archetype extraction failed for {filename}")
+
+
+def discover_live_matchup_urls(session: requests.Session) -> List[str]:
+    _, soup = _fetch_url(session, "https://play.limitlesstcg.com/decks?game=PTCG")
+    if soup is None:
+        raise RuntimeError("Unable to fetch Limitless PBL deck index")
+
+    matched_urls = set()
+    for anchor in soup.find_all("a", href=True):
+        href = anchor["href"]
+        parsed = urlsplit(urljoin("https://play.limitlesstcg.com", href))
+        if not re.match(r"^/decks/[^/]+/matchups(?:[?#]|$)", parsed.path):
+            continue
+        if parsed.path == "/decks/other/matchups":
+            continue
+
+        query = parse_qs(parsed.query)
+        if (
+            query.get("format") == ["standard"]
+            and query.get("rotation") == ["2026"]
+            and query.get("set") == ["PBL"]
+        ):
+            matched_urls.add(urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, parsed.fragment)))
+
+    if not matched_urls:
+        raise ValueError("No eligible PBL matchup URLs found")
+
+    return sorted(matched_urls)
+
 
 
 def _fetch_url(session: requests.Session, url: str) -> Tuple[str, BeautifulSoup | None]:

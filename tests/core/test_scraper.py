@@ -1,7 +1,69 @@
 import pytest
 from bs4 import BeautifulSoup
 
-from src.core.scraper import build_complete_matchup_matrix, scrape_matchup_soup
+from src.core.scraper import build_complete_matchup_matrix, discover_live_matchup_urls, scrape_matchup_soup
+
+
+INDEX_URL = "https://play.limitlesstcg.com/decks?game=PTCG"
+INDEX_HTML = """
+<a href="/decks/dragapult-ex/matchups?format=standard&rotation=2026&set=PBL">Dragapult</a>
+<a href="decks/greavard/matchups?format=standard&rotation=2026&set=PBL">Greavard</a>
+<a href="/decks/dragapult-ex/matchups?format=standard&rotation=2026&set=PBL">Duplicate</a>
+<a href="/decks/other/matchups?format=standard&rotation=2026&set=PBL">Other</a>
+<a href="/decks/charizard/matchups?format=standard&rotation=2026&set=SV">Charizard</a>
+<a href="/decks/charizard?format=standard&rotation=2026&set=PBL">Not a matchup</a>
+"""
+
+
+class FakeResponse:
+    def __init__(self, text: str, error: Exception | None = None):
+        self.text = text
+        self.error = error
+
+    def raise_for_status(self) -> None:
+        if self.error is not None:
+            raise self.error
+
+
+class FakeSession:
+    def __init__(self, response: FakeResponse):
+        self.response = response
+        self.calls = []
+
+    def get(self, url: str, timeout: int | None = None):
+        self.calls.append((url, timeout))
+        return self.response
+
+
+@pytest.fixture
+def index_session() -> FakeSession:
+    return FakeSession(FakeResponse(INDEX_HTML))
+
+
+def test_discover_live_matchup_urls_filters_resolves_deduplicates_and_sorts(index_session: FakeSession):
+    result = discover_live_matchup_urls(index_session)
+
+    assert result == [
+        "https://play.limitlesstcg.com/decks/dragapult-ex/matchups?format=standard&rotation=2026&set=PBL",
+        "https://play.limitlesstcg.com/decks/greavard/matchups?format=standard&rotation=2026&set=PBL",
+    ]
+    assert index_session.calls == [(INDEX_URL, 10)]
+
+
+@pytest.mark.unit
+def test_discover_live_matchup_urls_raises_when_request_fails():
+    session = FakeSession(FakeResponse("", RuntimeError("network unavailable")))
+
+    with pytest.raises(RuntimeError, match="Unable to fetch Limitless PBL deck index"):
+        discover_live_matchup_urls(session)
+
+
+@pytest.mark.unit
+def test_discover_live_matchup_urls_raises_when_no_eligible_urls_are_found():
+    session = FakeSession(FakeResponse('<a href="/decks/other/matchups?format=standard&rotation=2026&set=PBL">Other</a>'))
+
+    with pytest.raises(ValueError, match="No eligible PBL matchup URLs"):
+        discover_live_matchup_urls(session)
 
 
 def _soup(rows: str) -> BeautifulSoup:
