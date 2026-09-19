@@ -5,13 +5,16 @@ from src.core.scraper import build_complete_matchup_matrix, discover_live_matchu
 
 
 INDEX_URL = "https://play.limitlesstcg.com/decks?game=PTCG"
-INDEX_HTML = """
-<a href="/decks/dragapult-ex/matchups?format=standard&rotation=2026&set=PBL">Dragapult</a>
-<a href="decks/greavard/matchups?format=standard&rotation=2026&set=PBL">Greavard</a>
-<a href="/decks/dragapult-ex/matchups?format=standard&rotation=2026&set=PBL">Duplicate</a>
-<a href="/decks/other/matchups?format=standard&rotation=2026&set=PBL">Other</a>
-<a href="/decks/charizard/matchups?format=standard&rotation=2026&set=SV">Charizard</a>
-<a href="/decks/charizard?format=standard&rotation=2026&set=PBL">Not a matchup</a>
+TEST_ROTATION = "2027"
+TEST_SET = "XYZ"
+INDEX_HTML = f"""
+<a href="/decks/dragapult-ex/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}">Dragapult</a>
+<a href="decks/greavard/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}">Greavard</a>
+<a href="/decks/charizard/matchups?format=standard&rotation={TEST_ROTATION}&set=ABC">Other set</a>
+<a href="/decks/dragapult-ex/matchups?format=standard&rotation=2026&set=PBL">Wrong rotation</a>
+<a href="/decks/other/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}">Other</a>
+<a href="/decks/charizard/matchups?format=standard&rotation={TEST_ROTATION}&set=SV">Charizard</a>
+<a href="/decks/charizard?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}">Not a matchup</a>
 """
 
 
@@ -44,8 +47,8 @@ def test_discover_live_matchup_urls_filters_resolves_deduplicates_and_sorts(inde
     result = discover_live_matchup_urls(index_session)
 
     assert result == [
-        "https://play.limitlesstcg.com/decks/dragapult-ex/matchups?format=standard&rotation=2026&set=PBL",
-        "https://play.limitlesstcg.com/decks/greavard/matchups?format=standard&rotation=2026&set=PBL",
+        f"https://play.limitlesstcg.com/decks/dragapult-ex/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}",
+        f"https://play.limitlesstcg.com/decks/greavard/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}",
     ]
     assert index_session.calls == [(INDEX_URL, 10)]
 
@@ -54,15 +57,17 @@ def test_discover_live_matchup_urls_filters_resolves_deduplicates_and_sorts(inde
 def test_discover_live_matchup_urls_raises_when_request_fails():
     session = FakeSession(FakeResponse("", RuntimeError("network unavailable")))
 
-    with pytest.raises(RuntimeError, match="Unable to fetch Limitless PBL deck index"):
+    with pytest.raises(RuntimeError, match="Unable to fetch Limitless deck index"):
         discover_live_matchup_urls(session)
 
 
 @pytest.mark.unit
 def test_discover_live_matchup_urls_raises_when_no_eligible_urls_are_found():
-    session = FakeSession(FakeResponse('<a href="/decks/other/matchups?format=standard&rotation=2026&set=PBL">Other</a>'))
+    session = FakeSession(FakeResponse(
+        f'<a href="/decks/other/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}">Other</a>'
+    ))
 
-    with pytest.raises(ValueError, match="No eligible PBL matchup URLs"):
+    with pytest.raises(ValueError, match="No eligible standard matchup URLs"):
         discover_live_matchup_urls(session)
 
 

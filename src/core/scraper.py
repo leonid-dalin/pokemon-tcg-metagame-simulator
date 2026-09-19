@@ -6,6 +6,7 @@ import os
 import re
 import requests
 import structlog
+from collections import Counter
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from typing import List, Dict, Tuple, Set, Any, cast
@@ -75,9 +76,9 @@ def get_deck_archetype(file_path: str, filename: str) -> Tuple[str, str]:
 def discover_live_matchup_urls(session: requests.Session) -> List[str]:
     _, soup = _fetch_url(session, "https://play.limitlesstcg.com/decks?game=PTCG")
     if soup is None:
-        raise RuntimeError("Unable to fetch Limitless PBL deck index")
+        raise RuntimeError("Unable to fetch Limitless deck index")
 
-    matched_urls = set()
+    eligible_urls = []
     for anchor in soup.find_all("a", href=True):
         href = anchor["href"]
         parsed = urlsplit(urljoin("https://play.limitlesstcg.com", href))
@@ -87,15 +88,34 @@ def discover_live_matchup_urls(session: requests.Session) -> List[str]:
             continue
 
         query = parse_qs(parsed.query)
-        if (
-            query.get("format") == ["standard"]
-            and query.get("rotation") == ["2026"]
-            and query.get("set") == ["PBL"]
-        ):
-            matched_urls.add(urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, parsed.fragment)))
+        if query.get("format") != ["standard"]:
+            continue
 
-    if not matched_urls:
-        raise ValueError("No eligible PBL matchup URLs found")
+        rotations = query.get("rotation", [])
+        sets = query.get("set", [])
+        if len(rotations) != 1 or len(sets) != 1 or not sets[0]:
+            continue
+        try:
+            rotation = int(rotations[0])
+        except ValueError:
+            continue
+
+        eligible_urls.append((
+            urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, parsed.fragment)),
+            rotation,
+            sets[0],
+        ))
+
+    if not eligible_urls:
+        raise ValueError("No eligible standard matchup URLs found")
+
+    latest_rotation = max(rotation for _, rotation, _ in eligible_urls)
+    latest_sets = Counter(set_code for _, rotation, set_code in eligible_urls if rotation == latest_rotation)
+    latest_set = sorted(latest_sets, key=lambda set_code: (-latest_sets[set_code], set_code))[0]
+    matched_urls = {
+        url for url, rotation, set_code in eligible_urls
+        if rotation == latest_rotation and set_code == latest_set
+    }
 
     return sorted(matched_urls)
 
