@@ -1,5 +1,6 @@
 import json
 import os
+import requests
 import structlog
 from opentelemetry import trace
 from opentelemetry.instrumentation.redis import RedisInstrumentor
@@ -8,7 +9,11 @@ from huey import RedisHuey, crontab
 from src.api.models import ScrapedMatrix, TIER_MAPPING, PredictionRequest
 from src.core.config import INPUT_DATA, MIN_GAMES, RNG_SEED
 from src.core.data import load_matchup_data
-from src.core.scraper import fetch_live_matchup_data, build_complete_matchup_matrix
+from src.core.scraper import (
+    build_complete_matchup_matrix,
+    discover_live_matchup_urls,
+    fetch_live_matchup_data,
+)
 from src.core.telemetry import tracer
 from src.tournament.monte_carlo import run_monte_carlo_analytics
 from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
@@ -107,11 +112,10 @@ def automated_daily_pipeline():
         log = q_logger.bind(task="daily_pipeline", schedule="0 */2 * * *")
         log.info("starting_daily_scrape")  # Initialise the structured log entry
 
-        from src.core.urls import CRI_URLS
-        target_urls = CRI_URLS
-
         try:
             canonical_map = {}
+            with requests.Session() as session:
+                target_urls = discover_live_matchup_urls(session)
 
             # Trace the HTTP overhead of fetching data from Limitless TCG
             with tracer.start_as_current_span("fetch_live_data"):
