@@ -7,12 +7,13 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union, cast
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+from pydantic import ValidationError
 from bs4 import BeautifulSoup
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
@@ -28,7 +29,9 @@ from src.api.models import PrecisionTier, RangeSpec, ExactSpec, PredictionReques
 from src.core.data import load_matchup_data
 from src.core.config import NASH_EQUILIBRIUM, INPUT_DATA, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, \
     TIER_2_THRESHOLD
-from src.tournament.solver import swiss_rounds_from_players, get_variant_5_structure
+from src.ui.meta_rows import locked_exact_spec, locked_share, minimum_share
+from src.tournament.solver import swiss_rounds_from_players, get_variant_5_structure, \
+    calculate_empirical_baseline, resolve_meta_constraints
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
 from src.core.logger import setup_structured_logging
 from src.core.telemetry import setup_telemetry, tracer
@@ -399,18 +402,9 @@ def main():
     seen_decks = set()
 
     with st.expander("🛠️ Custom Metagame Constraints", expanded=st.session_state.expander_constraints_open):
-        # Calculate live widget state
-        current_locked_sum = 0.0
-        for r in st.session_state.meta_rows:
-            if r.get("spec_type") == "Exact":
-                row_id = r["id"]
-                v = st.session_state.get(f"val_{row_id}", r.get("val", 0.0))
-                if st.session_state.internal_input_mode == "Raw Players":
-                    current_locked_sum += float(v) / (players if players > 0 else 1)
-                else:
-                    current_locked_sum += float(v) / 100.0
-
-        clamped_sum = max(0.0, min(current_locked_sum, 1.0))
+        clamped_sum = max(0.0, min(locked_share(
+            st.session_state.meta_rows, players, st.session_state.internal_input_mode
+        ), 1.0))
         remaining_pct = (1.0 - clamped_sum) * 100.0
 
         st.progress(clamped_sum,
@@ -425,59 +419,41 @@ def main():
             if st.button("💧 Auto-Fill Remaining", use_container_width=True,
                          help="Splits the remaining percentage among all other archetypes proportionally to their online play rates."):
                 d_names, _, matchup_details = load_full_win_matrix()
-
-                # 1. Calc empirical baseline
-                counts = np.zeros(len(d_names), dtype=float)
                 deck_to_idx = {name: i for i, name in enumerate(d_names)}
-                for (d1, d2), details in matchup_details.items():
-                    if d1 in deck_to_idx:
-                        counts[deck_to_idx[d1]] += float(details.get("match_count", 0.0))
 
-                s = float(np.sum(counts))
-                baseline = np.asarray(counts / s if s > 0 else np.ones(len(d_names)) / len(d_names), dtype=float)
+                spec = locked_exact_spec(
+                    st.session_state.meta_rows, players, st.session_state.internal_input_mode
+                )
+                baseline = calculate_empirical_baseline(d_names, matchup_details)
+                try:
+                    filled = resolve_meta_constraints(baseline, spec, deck_to_idx)
+                except ValueError as exc:
+                    st.error(f"Cannot auto-fill the remaining field: {exc}")
+                    st.stop()
 
-                # 2. Extract locked percentage
-                locked_sum = 0.0
-                locked_decks = set()
-                for r in st.session_state.meta_rows:
-                    if r.get("spec_type") == "Exact":
-                        locked_decks.add(r["deck"])
-                        val = r["val"]
-                        if st.session_state.internal_input_mode == "Raw Players":
-                            locked_sum += float(
-                                val) / st.session_state.imported_players if st.session_state.imported_players > 0 else 0.0
-                        else:
-                            locked_sum += float(val) / 100.0
+                added = 0
+                for i, deck in enumerate(d_names):
+                    if deck in spec:
+                        continue
 
-                remaining = max(0.0, 1.0 - locked_sum)
-
-                # 3. Process unfixed mask
-                unfixed_mask = np.array([d not in locked_decks for d in d_names], dtype=bool)
-                if not np.any(unfixed_mask) or remaining <= 0.0:
-                    st.rerun()
-                unfixed_baseline = np.asarray(baseline[unfixed_mask], dtype=float)
-
-                s_unfixed = float(np.sum(unfixed_baseline))
-                unfixed_baseline = np.asarray(
-                    unfixed_baseline / s_unfixed if s_unfixed > 0 else np.ones(len(unfixed_baseline)) / len(
-                        unfixed_baseline), dtype=float)
-
-                final_unfixed_props = np.asarray(unfixed_baseline * remaining, dtype=float)
-                unfixed_decks = [d for i, d in enumerate(d_names) if unfixed_mask[i]]
-
-                for i, d in enumerate(unfixed_decks):
-                    prop = float(final_unfixed_props[i])
-                    if prop < NASH_EQUILIBRIUM: continue  # ignore sub 0% stragglers
+                    prop = float(filled[i])
+                    if prop < NASH_EQUILIBRIUM:
+                        continue
 
                     if st.session_state.internal_input_mode == "Raw Players":
                         val = int(prop * st.session_state.imported_players)
-                        if val < 1: continue
+                        if val < 1:
+                            continue
                     else:
                         val = round(prop * 100.0, 2)
 
-                    add_meta_row(deck=d, spec_type="Exact", val=val, is_locked=True)
+                    add_meta_row(deck=deck, spec_type="Exact", val=val, is_locked=True)
+                    added += 1
 
-                st.rerun()
+                if added:
+                    st.rerun()
+                else:
+                    st.toast("Nothing left to allocate - the field is already fully assigned.")
         with col3:
             export_data = {
                 "input_mode": st.session_state.internal_input_mode,
@@ -562,7 +538,6 @@ def main():
 
                             if prop > 0:
                                 user_meta[str(deck)] = prop
-                                total_min += prop
 
                         else:  # Range Mode
                             if is_raw:
@@ -596,10 +571,13 @@ def main():
                                 else:
                                     min_prop, max_prop = 0.0, 0.0
 
-                            user_meta[str(deck)] = cast(RangeSpec, cast(object, {"min": min_prop, "max": max_prop}))
+                            user_meta[str(deck)] = RangeSpec(min=min_prop, max=max_prop)
                     with cols[3]:
                         st.button("🗑️", key=f"del_{row_id}", on_click=delete_meta_row, args=(row_id,))
 
+    total_min = minimum_share(
+        st.session_state.meta_rows, players, st.session_state.internal_input_mode
+    )
     if total_min > 1.0: st.error(
         f"❌ Minimum total across all constraints ({total_min:.1%}) exceeds 100%. Please adjust your values before predicting."); st.stop()
 
@@ -635,10 +613,13 @@ def main():
                         "min_sample_threshold": min_sample_threshold,
                     }
 
-                    # 2. POST to FastAPI
+                    # 2. Validate client-side, then POST to FastAPI.
+                    request_model = PredictionRequest(**payload)
                     api_url = os.environ.get("API_URL", "http://localhost:8000/api/v1")
                     app_logger.info("dispatching_prediction_request", job_id=job_id, api_url=api_url)
-                    response = requests.post(f"{api_url}/predict", json=payload)
+                    response = requests.post(
+                        f"{api_url}/predict", json=request_model.model_dump(mode="json"), timeout=45
+                    )
                     response.raise_for_status()
                     task_id = response.json()["task_id"]
 
@@ -705,6 +686,12 @@ def main():
                         if not is_complete:
                             raise Exception("Lost connection to the backend server and exhausted all retry attempts.")
 
+                except ValidationError as ve:
+                    app_logger.warning("prediction_request_invalid", job_id=job_id, error=str(ve))
+                    ui_span.record_exception(ve)
+                    status.update(label="❌ Invalid Configuration", state="error", expanded=True)
+                    st.error(f"The simulation request failed validation:\n\n```\n{ve}\n```")
+                    st.stop()
                 except Exception as e:
                     app_logger.error("simulation_workflow_failed", error=str(e), exc_info=True)
                     ui_span.record_exception(e)

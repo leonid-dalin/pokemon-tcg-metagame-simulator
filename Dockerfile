@@ -19,4 +19,8 @@ COPY . .
 RUN cd src/tournament/tcg_engine && maturin build --release
 RUN pip install src/tournament/tcg_engine/target/wheels/*.whl
 
+RUN groupadd --gid 1000 appuser && useradd --uid 1000 --gid appuser --create-home appuser
+RUN mkdir -p /app/data/input /app/data/matchups /app/output && chown -R appuser:appuser /app
+
+USER appuser
 CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

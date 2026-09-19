@@ -106,8 +106,7 @@ def run_single_experiment(args: Args, config_override: Optional[dict[str, Any]] 
         span.set_attribute("experiment.id", experiment_id)
         span.set_attribute("simulation.mode", mode_literal)
 
-        derived_min_games = getattr(args, "min_games", MIN_GAMES)
-        deck_names, win_matrix, matchup_details = load_matchup_data(args.input, derived_min_games)
+        deck_names, win_matrix, matchup_details = load_matchup_data(args.input, args.min_games)
         if not deck_names:
             logger.error("missing_deck_data", detail="No reliable decks loaded. Aborting.")
             return {}

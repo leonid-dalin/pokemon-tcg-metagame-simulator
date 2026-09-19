@@ -8,7 +8,7 @@ import numpy as np
 import tcg_engine
 from typing import Dict, List, Optional, Callable
 
-from src.core.config import get_container_cores
+from src.core.runtime import get_container_cores
 from src.api.models import GLOBAL_TIE_RATE
 from src.core.telemetry import tracer
 
@@ -32,6 +32,7 @@ def run_monte_carlo_analytics(
         use_tie_convergence: bool = True,
         global_tie_rate: float = GLOBAL_TIE_RATE,
         use_drop_feature: bool = False,
+        seed: int = 0,
 ) -> Dict[str, Dict[str, float]]:
     if not hasattr(run_monte_carlo_analytics, "_rayon_initialized"):
         try:
@@ -48,7 +49,11 @@ def run_monte_carlo_analytics(
         meta_vec[i] = meta_distribution.get(name, 0.0)
 
     meta_sum = np.sum(meta_vec)
-    if meta_sum > 0: meta_vec = meta_vec / meta_sum
+    if meta_sum > 0:
+        meta_vec = meta_vec / meta_sum
+    else:
+        logger.warning("empty_meta_distribution_using_uniform_field", deck_count=n_decks)
+        meta_vec.fill(1.0 / n_decks)
 
     working_matrix = win_matrix.copy()
     if match_format == "BO3":
@@ -70,7 +75,7 @@ def run_monte_carlo_analytics(
         if current_chunk == 0: continue
 
         # Ensure a unique, deterministic seed per chunk
-        base_seed = int(time.time() * 1000) % (1 << 32) + i
+        base_seed = (seed + i) % (1 << 32)
 
         with tracer.start_as_current_span("rust_tcg_engine_batch") as rust_span:
             rust_span.set_attribute("chunk.size", current_chunk)

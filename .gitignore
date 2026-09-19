@@ -80,8 +80,8 @@ temp/
 docs/_build/
 
 ### --- MISC --- ###
-# NOT READY YET FOR DEPLOYMENT
-tests/
+# Local-only Compose overrides
+docker-compose.override.yml
 diagnose.py
 test_scraper.py
 data/extras

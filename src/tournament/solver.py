@@ -6,7 +6,7 @@ import os
 import structlog
 from typing import Dict, List, Any, Tuple
 
-from src.api.models import DeckRecommendation, PredictionRequest, PredictionResult
+from src.api.models import DeckRecommendation, ExactSpec, PredictionRequest, PredictionResult, RangeSpec
 from src.core.config import INPUT_DATA, MIN_GAMES
 import src.core.config as core_config
 from src.core.data import load_matchup_data, safe_normalize
@@ -57,7 +57,7 @@ def calculate_empirical_baseline(deck_names: List[str],
 
 def resolve_meta_constraints(
         live_baseline: np.ndarray,
-        user_meta_spec: Dict[str, Any],
+        user_meta_spec: Dict[str, float | ExactSpec | RangeSpec],
         deck_to_idx: Dict[str, int]
 ) -> np.ndarray:
     """
@@ -71,29 +71,23 @@ def resolve_meta_constraints(
 
     # 1. Extract Constraints
     for deck, spec in user_meta_spec.items():
-        if deck in deck_to_idx:
-            idx = deck_to_idx[deck]
-            if isinstance(spec, (float, int)):
+        idx = deck_to_idx.get(deck)
+        if idx is None:
+            continue
+        match spec:
+            case float() | int():
                 min_bounds[idx] = max_bounds[idx] = float(spec)
-            elif isinstance(spec, dict):
-                if "exact" in spec:
-                    min_bounds[idx] = max_bounds[idx] = float(spec["exact"])
-                else:
-                    min_bounds[idx] = float(spec.get("min", 0.0))
-                    max_bounds[idx] = float(spec.get("max", 1.0))
-            else:
-                if hasattr(spec, "exact"):
-                    min_bounds[idx] = max_bounds[idx] = float(getattr(spec, "exact"))
-                else:
-                    min_bounds[idx] = float(getattr(spec, "min", 0.0))
-                    max_bounds[idx] = float(getattr(spec, "max", 1.0))
+            case ExactSpec():
+                min_bounds[idx] = max_bounds[idx] = spec.exact
+            case RangeSpec():
+                min_bounds[idx], max_bounds[idx] = spec.min, spec.max
 
     # 2. Establish Minimum Thresholds
     final_meta = min_bounds.copy()
     remaining = 1.0 - float(np.sum(final_meta))
 
-    if remaining <= 0.0:
-        return safe_normalize(final_meta)
+    if remaining < 0.0:
+        raise ValueError("cannot satisfy minimum constraints")
 
     # 3. Iterative Water-Filling
     distributable_mask = final_meta < max_bounds
@@ -112,7 +106,9 @@ def resolve_meta_constraints(
 
         distributable_mask = final_meta < (max_bounds - 1e-5)
 
-    return safe_normalize(final_meta)
+    if remaining > 1e-5:
+        raise ValueError("cannot satisfy maximum constraints")
+    return final_meta
 
 
 def predict_best_decks(request: PredictionRequest) -> dict:

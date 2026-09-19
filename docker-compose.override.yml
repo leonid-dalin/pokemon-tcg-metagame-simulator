@@ -1,0 +1,13 @@
+services:
+  api:
+    build:
+      context: .
+      network: host
+  worker:
+    build:
+      context: .
+      network: host
+  ui:
+    build:
+      context: .
+      network: host

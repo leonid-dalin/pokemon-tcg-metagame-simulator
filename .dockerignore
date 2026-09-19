@@ -1,0 +1,4 @@
+src/tournament/tcg_engine/target/
+.venv-qa/
+.venv/
+.git/

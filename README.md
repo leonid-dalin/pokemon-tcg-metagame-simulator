@@ -52,10 +52,10 @@ cd pokemon-tcg-metagame-simulator
 ```
 2. **Build and launch the services:**
 ```bash
-docker-compose up --build -d
+docker compose up -d --build
 ```
 
-This boots three containers:
+This builds the image before starting the services and stops on a build error. It starts:
 - the FastAPI gateway (`api` on port 8000),
 - the Huey task runner (`worker`), 
 - and the Streamlit frontend (`ui` on port 8501).

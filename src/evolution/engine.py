@@ -24,6 +24,7 @@ except ImportError:
     mp = None
 
 from src.core.config import *
+from src.core.runtime import get_container_cores
 from src.core.data import safe_normalize
 from src.core.types import SimulationConfig
 from src.tournament.solver import get_variant_5_structure
@@ -335,6 +336,7 @@ def find_evolutionary_stable_state(
 ) -> tuple[List[dict], List[np.ndarray], dict]:
     with tracer.start_as_current_span("find_evolutionary_stable_state") as ess_span:
         n = len(deck_names)
+        rng = np.random.default_rng(config.seed)
         current_freq = np.full(n, 1.0 / n)
         history: List[np.ndarray] = [current_freq.copy()]
 
@@ -407,7 +409,7 @@ def find_evolutionary_stable_state(
                             payoffs /= config.num_tournaments_per_gen
 
                     if config.noise_scale > 0:
-                        noise = np.random.normal(0, config.noise_scale, n)
+                        noise = rng.normal(0, config.noise_scale, n)
                         payoffs += noise
 
                     avg_payoff = current_freq @ payoffs
@@ -418,7 +420,7 @@ def find_evolutionary_stable_state(
 
                     for i in range(n):
                         if i in extinct_decks:
-                            if np.random.random() < config.mutation_rate:
+                            if rng.random() < config.mutation_rate:
                                 next_freq[i] = config.mutation_rate
                                 extinct_decks.remove(i)
                                 inactive_counts[i] = 0

@@ -6,7 +6,7 @@ from opentelemetry.instrumentation.redis import RedisInstrumentor
 from huey import RedisHuey, crontab
 
 from src.api.models import ScrapedMatrix, TIER_MAPPING, PredictionRequest
-from src.core.config import INPUT_DATA, MIN_GAMES
+from src.core.config import INPUT_DATA, MIN_GAMES, RNG_SEED
 from src.core.data import load_matchup_data
 from src.core.scraper import fetch_live_matchup_data, build_complete_matchup_matrix
 from src.core.telemetry import tracer
@@ -80,6 +80,7 @@ def execute_simulation_job(payload: dict):
                     use_tie_convergence=request.use_tie_convergence,
                     global_tie_rate=request.global_tie_rate,
                     use_drop_feature=request.use_drop_feature,
+                    seed=RNG_SEED,
                     progress_callback=_progress_handler
                 )
 
@@ -98,14 +99,15 @@ def execute_simulation_job(payload: dict):
 @huey.periodic_task(crontab(minute='0', hour='*/2'))
 def automated_daily_pipeline():
     """
-    Asynchronous periodic task to refresh metagame data with full observability.
+    Periodic task to refresh metagame data with full observability.
+    Runs every two hours; also triggered once on API startup under a lock.
     """
     # Start a root span for the daily ingestion process
     with tracer.start_as_current_span("automated_daily_pipeline") as span:
-        log = q_logger.bind(task="daily_pipeline", schedule="02:00")
+        log = q_logger.bind(task="daily_pipeline", schedule="0 */2 * * *")
         log.info("starting_daily_scrape")  # Initialise the structured log entry
 
-        from src.core.urls import ASC_URLS, CRI_URLS
+        from src.core.urls import CRI_URLS
         target_urls = CRI_URLS
 
         try:
@@ -155,7 +157,9 @@ def automated_daily_pipeline():
             log.warn("data_validation_failed", reason=str(ve))  # Log warnings for non-critical integrity issues
             span.record_exception(ve)
             span.set_status(trace.Status(trace.StatusCode.ERROR))
+            raise
         except Exception as e:
             log.error("critical_pipeline_failure", error=str(e), exc_info=True)  # Log critical errors with stack traces
             span.record_exception(e)
             span.set_status(trace.Status(trace.StatusCode.ERROR))
+            raise
