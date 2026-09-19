@@ -56,9 +56,12 @@ services:
     volumes:
       - shared_data:/app/data
     depends_on:
-      - jaeger
-      - redis
-      - init-data
+      jaeger:
+        condition: service_started
+      redis:
+        condition: service_started
+      init-data:
+        condition: service_completed_successfully
     restart: unless-stopped
     deploy:
       resources:
