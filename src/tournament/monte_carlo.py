@@ -32,6 +32,7 @@ def run_monte_carlo_analytics(
         use_tie_convergence: bool = True,
         global_tie_rate: float = GLOBAL_TIE_RATE,
         use_drop_feature: bool = False,
+        seed: int = 0,
 ) -> Dict[str, Dict[str, float]]:
     if not hasattr(run_monte_carlo_analytics, "_rayon_initialized"):
         try:
@@ -70,7 +71,7 @@ def run_monte_carlo_analytics(
         if current_chunk == 0: continue
 
         # Ensure a unique, deterministic seed per chunk
-        base_seed = int(time.time() * 1000) % (1 << 32) + i
+        base_seed = (seed + i) % (1 << 32)
 
         with tracer.start_as_current_span("rust_tcg_engine_batch") as rust_span:
             rust_span.set_attribute("chunk.size", current_chunk)
