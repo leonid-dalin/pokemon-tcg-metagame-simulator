@@ -49,7 +49,10 @@ def run_monte_carlo_analytics(
         meta_vec[i] = meta_distribution.get(name, 0.0)
 
     meta_sum = np.sum(meta_vec)
-    if meta_sum > 0: meta_vec = meta_vec / meta_sum
+    if meta_sum > 0:
+        meta_vec = meta_vec / meta_sum
+    else:
+        meta_vec.fill(1.0 / n_decks)
 
     working_matrix = win_matrix.copy()
     if match_format == "BO3":

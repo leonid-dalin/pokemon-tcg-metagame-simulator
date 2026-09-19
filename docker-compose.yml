@@ -10,6 +10,14 @@ services:
       timeout: 3s
       retries: 5
 
+  init-data:
+    build: .
+    user: "0:0"
+    command: ["sh", "-c", "mkdir -p /app/data/input /app/data/matchups /app/output && chown -R 1000:1000 /app/data /app/output"]
+    volumes:
+      - shared_data:/app/data
+    restart: "no"
+
   api:
     build: .
     command: [ "uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4" ]
@@ -24,6 +32,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      init-data:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   jaeger:
@@ -48,6 +58,7 @@ services:
     depends_on:
       - jaeger
       - redis
+      - init-data
     restart: unless-stopped
     deploy:
       resources:
@@ -71,6 +82,7 @@ services:
     depends_on:
       - api
       - jaeger
+      - init-data
 
 volumes:
   shared_data:
