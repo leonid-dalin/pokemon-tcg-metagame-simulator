@@ -18,4 +18,5 @@ async def test_task_status_reports_huey_exceptions_as_failed(monkeypatch):
     assert json.loads(response.body) == {
         "task_id": "task-id",
         "status": "failed",
+        "error": "worker failed",
     }

@@ -26,6 +26,20 @@ def locked_share(rows: Sequence[Row], players: int, input_mode: str) -> float:
     return total / divisor
 
 
+def minimum_share(rows: Sequence[Row], players: int, input_mode: str) -> float:
+    divisor = _divisor(players, input_mode)
+    if divisor <= 0:
+        return 0.0
+    total = 0.0
+    for row in rows:
+        value = row.get("val")
+        if row.get("spec_type") == "Exact":
+            total += _scalar(value)
+        elif row.get("spec_type") == "Range" and isinstance(value, (list, tuple)):
+            total += _scalar(value)
+    return total / divisor
+
+
 def locked_exact_spec(rows: Sequence[Row], players: int, input_mode: str) -> Dict[str, float]:
     divisor = _divisor(players, input_mode)
     if divisor <= 0:

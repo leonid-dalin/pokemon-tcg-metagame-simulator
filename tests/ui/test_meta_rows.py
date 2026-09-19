@@ -1,6 +1,6 @@
 import pytest
 
-from src.ui.meta_rows import RAW_PLAYERS, locked_exact_spec, locked_share
+from src.ui.meta_rows import RAW_PLAYERS, locked_exact_spec, locked_share, minimum_share
 
 
 def _row(deck="alpha", spec_type="Exact", val=25.0):
@@ -63,3 +63,15 @@ def test_spec_omits_rows_with_no_deck_selected():
 def test_spec_omits_range_rows():
     rows = [_row(deck="alpha", spec_type="Range", val=(10.0, 40.0))]
     assert locked_exact_spec(rows, players=256, input_mode="Percentage") == {}
+
+
+@pytest.mark.unit
+def test_minimum_share_includes_range_minimums():
+    rows = [_row(val=20.0), _row(deck="beta", spec_type="Range", val=(60.0, 90.0))]
+    assert minimum_share(rows, players=256, input_mode="Percentage") == pytest.approx(0.80)
+
+
+@pytest.mark.unit
+def test_minimum_share_detects_overallocated_exact_rows():
+    rows = [_row(val=70.0), _row(deck="beta", val=50.0)]
+    assert minimum_share(rows, players=256, input_mode="Percentage") == pytest.approx(1.20)

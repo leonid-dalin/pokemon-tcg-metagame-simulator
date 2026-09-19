@@ -187,7 +187,7 @@ async def get_task_status(request: Request, task_id: str):
     if isinstance(result, Exception):
         return JSONResponse(
             status_code=200,
-            content={"task_id": task_id, "status": "failed"}
+            content={"task_id": task_id, "status": "failed", "error": str(result)}
         )
     return JSONResponse(
         status_code=200,

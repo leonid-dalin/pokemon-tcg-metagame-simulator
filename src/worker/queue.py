@@ -6,7 +6,7 @@ from opentelemetry.instrumentation.redis import RedisInstrumentor
 from huey import RedisHuey, crontab
 
 from src.api.models import ScrapedMatrix, TIER_MAPPING, PredictionRequest
-from src.core.config import INPUT_DATA, MIN_GAMES
+from src.core.config import INPUT_DATA, MIN_GAMES, RNG_SEED
 from src.core.data import load_matchup_data
 from src.core.scraper import fetch_live_matchup_data, build_complete_matchup_matrix
 from src.core.telemetry import tracer
@@ -80,6 +80,7 @@ def execute_simulation_job(payload: dict):
                     use_tie_convergence=request.use_tie_convergence,
                     global_tie_rate=request.global_tie_rate,
                     use_drop_feature=request.use_drop_feature,
+                    seed=RNG_SEED,
                     progress_callback=_progress_handler
                 )
 

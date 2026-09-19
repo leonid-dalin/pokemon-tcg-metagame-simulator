@@ -29,7 +29,7 @@ from src.api.models import PrecisionTier, RangeSpec, ExactSpec, PredictionReques
 from src.core.data import load_matchup_data
 from src.core.config import NASH_EQUILIBRIUM, INPUT_DATA, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, \
     TIER_2_THRESHOLD
-from src.ui.meta_rows import locked_exact_spec, locked_share
+from src.ui.meta_rows import locked_exact_spec, locked_share, minimum_share
 from src.tournament.solver import swiss_rounds_from_players, get_variant_5_structure, \
     calculate_empirical_baseline, resolve_meta_constraints
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
@@ -425,7 +425,11 @@ def main():
                     st.session_state.meta_rows, players, st.session_state.internal_input_mode
                 )
                 baseline = calculate_empirical_baseline(d_names, matchup_details)
-                filled = resolve_meta_constraints(baseline, spec, deck_to_idx)
+                try:
+                    filled = resolve_meta_constraints(baseline, spec, deck_to_idx)
+                except ValueError as exc:
+                    st.error(f"Cannot auto-fill the remaining field: {exc}")
+                    st.stop()
 
                 added = 0
                 for i, deck in enumerate(d_names):
@@ -534,7 +538,6 @@ def main():
 
                             if prop > 0:
                                 user_meta[str(deck)] = prop
-                                total_min += prop
 
                         else:  # Range Mode
                             if is_raw:
@@ -572,6 +575,9 @@ def main():
                     with cols[3]:
                         st.button("🗑️", key=f"del_{row_id}", on_click=delete_meta_row, args=(row_id,))
 
+    total_min = minimum_share(
+        st.session_state.meta_rows, players, st.session_state.internal_input_mode
+    )
     if total_min > 1.0: st.error(
         f"❌ Minimum total across all constraints ({total_min:.1%}) exceeds 100%. Please adjust your values before predicting."); st.stop()
 
