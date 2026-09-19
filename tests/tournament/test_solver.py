@@ -46,11 +46,9 @@ def test_a_range_spec_floor_is_honoured():
 
 
 @pytest.mark.unit
-def test_overallocated_constraints_are_normalised_rather_than_exceeding_one():
-    result = resolve_meta_constraints(BASELINE, {"a": 0.8, "b": 0.8}, IDX)
-    assert result.sum() == pytest.approx(1.0)
-    assert result[IDX["a"]] == pytest.approx(0.5)
-    assert result[IDX["b"]] == pytest.approx(0.5)
+def test_overallocated_minimum_constraints_are_rejected():
+    with pytest.raises(ValueError, match="cannot satisfy minimum constraints"):
+        resolve_meta_constraints(BASELINE, {"a": 0.8, "b": 0.8}, IDX)
 
 
 @pytest.mark.unit
@@ -66,10 +64,16 @@ def test_an_empty_spec_returns_the_normalised_baseline():
 
 
 @pytest.mark.unit
-def test_every_deck_capped_below_one_still_returns_a_normalised_vector():
+def test_every_deck_capped_below_one_is_rejected_as_infeasible():
     spec = {name: RangeSpec(min=0.0, max=0.1) for name in DECKS}
-    result = resolve_meta_constraints(BASELINE, spec, IDX)
-    assert result.sum() == pytest.approx(1.0)
+    with pytest.raises(ValueError, match="cannot satisfy maximum constraints"):
+        resolve_meta_constraints(BASELINE, spec, IDX)
+
+
+@pytest.mark.unit
+def test_minimum_constraints_cannot_exceed_field_capacity():
+    with pytest.raises(ValueError, match="cannot satisfy minimum constraints"):
+        resolve_meta_constraints(BASELINE, {"a": 0.8, "b": 0.8}, IDX)
 
 
 @pytest.mark.unit

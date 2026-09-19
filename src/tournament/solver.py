@@ -86,8 +86,8 @@ def resolve_meta_constraints(
     final_meta = min_bounds.copy()
     remaining = 1.0 - float(np.sum(final_meta))
 
-    if remaining <= 0.0:
-        return safe_normalize(final_meta)
+    if remaining < 0.0:
+        raise ValueError("cannot satisfy minimum constraints")
 
     # 3. Iterative Water-Filling
     distributable_mask = final_meta < max_bounds
@@ -106,7 +106,9 @@ def resolve_meta_constraints(
 
         distributable_mask = final_meta < (max_bounds - 1e-5)
 
-    return safe_normalize(final_meta)
+    if remaining > 1e-5:
+        raise ValueError("cannot satisfy maximum constraints")
+    return final_meta
 
 
 def predict_best_decks(request: PredictionRequest) -> dict:
