@@ -51,7 +51,7 @@ async def lifespan(_: FastAPI):
         )
 
         if lock_acquired:
-            automated_daily_pipeline()
+            asyncio.create_task(asyncio.to_thread(automated_daily_pipeline))
             logger.info("startup_scrape_enqueued", locked=True)
         else:
             logger.info("startup_scrape_bypassed", reason="lock_held_by_peer_worker")
