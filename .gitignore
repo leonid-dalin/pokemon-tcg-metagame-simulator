@@ -82,8 +82,6 @@ docs/_build/
 ### --- MISC --- ###
 # Local-only Compose overrides
 docker-compose.override.yml
-# NOT READY YET FOR DEPLOYMENT
-tests/
 diagnose.py
 test_scraper.py
 data/extras

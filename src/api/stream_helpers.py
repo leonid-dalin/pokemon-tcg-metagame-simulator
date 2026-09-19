@@ -5,7 +5,7 @@ def resolve_job_id(link_value: str | bytes | None, fallback: str) -> str:
         except UnicodeDecodeError:
             return fallback
 
-    if not isinstance(link_value, (str, bytes)) or not link_value:
+    if not link_value:
         return fallback
 
     return link_value
