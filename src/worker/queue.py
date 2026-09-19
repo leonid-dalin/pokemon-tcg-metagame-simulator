@@ -156,7 +156,9 @@ def automated_daily_pipeline():
             log.warn("data_validation_failed", reason=str(ve))  # Log warnings for non-critical integrity issues
             span.record_exception(ve)
             span.set_status(trace.Status(trace.StatusCode.ERROR))
+            raise
         except Exception as e:
             log.error("critical_pipeline_failure", error=str(e), exc_info=True)  # Log critical errors with stack traces
             span.record_exception(e)
             span.set_status(trace.Status(trace.StatusCode.ERROR))
+            raise
