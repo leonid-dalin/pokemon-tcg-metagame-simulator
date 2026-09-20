@@ -116,6 +116,7 @@ def automated_daily_pipeline():
             canonical_map = {}
             with requests.Session() as session:
                 target_urls = discover_live_matchup_urls(session)
+            log.info("discovered_pbl_matchup_urls", count=len(target_urls))
 
             # Trace the HTTP overhead of fetching data from Limitless TCG
             with tracer.start_as_current_span("fetch_live_data"):
