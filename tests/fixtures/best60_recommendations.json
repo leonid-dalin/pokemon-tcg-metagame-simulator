@@ -1,0 +1,31 @@
+{
+  "Crustle": {
+    "cards": [
+      {
+        "card": "Positive fixture card",
+        "copies": 4,
+        "score": 0.12,
+        "lower": 0.04,
+        "upper": 0.2,
+        "bucket": "signal"
+      }
+    ],
+    "no_signal": [
+      {
+        "card": "Uncertain fixture card",
+        "score": 0.01,
+        "lower": -0.03,
+        "upper": 0.05,
+        "bucket": "no signal"
+      }
+    ],
+    "observational": true,
+    "total_copies": 4
+  },
+  "N's Zoroark": {
+    "cards": [],
+    "no_signal": [],
+    "observational": true,
+    "total_copies": 0
+  }
+}

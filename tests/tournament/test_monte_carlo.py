@@ -1,5 +1,7 @@
 import numpy as np
 import pytest
+import json
+from pathlib import Path
 
 from src.tournament import monte_carlo
 
@@ -154,7 +156,7 @@ def test_posterior_report_contains_intervals_and_ranked_split(monkeypatch):
         report=True,
     )
 
-    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel"}
+    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel", "best60_recommendations", "h1_report"}
     assert not result["insufficient_data"]
     assert result["ranked_metrics"]["a"]["day2_share_lower"] <= result["ranked_metrics"]["a"]["day2_share_upper"]
 
@@ -217,6 +219,39 @@ def test_report_true_exposes_matchup_panel(monkeypatch):
     )
     assert "matchup_panel" in result
     assert result["matchup_panel"]["rows"]["Crustle"]
+
+
+@pytest.mark.unit
+def test_report_true_preserves_best60_fixture_payload(monkeypatch):
+    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
+    monkeypatch.setattr(monte_carlo.tcg_engine, "run_parallel_monte_carlo", lambda *args: ([1], [1], [1], [1]))
+    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
+    best60 = {"Crustle": {"cards": [{"card": "Positive", "copies": 4}], "observational": True}}
+    result = monte_carlo.run_monte_carlo_analytics(
+        deck_names=["Crustle"],
+        win_matrix=np.array([[0.5]]),
+        meta_distribution={"Crustle": 1.0},
+        matchup_details={("Crustle", "Crustle"): {"win_rate": 0.5, "match_count": 0}},
+        d1_rounds=1,
+        cut_points=1,
+        d2_rounds=1,
+        top_cut=1,
+        iterations=1,
+        posterior_draws=1,
+        report=True,
+        best60_recommendations=best60,
+        h1_report={"hypothesis": "H1", "status": "supported"},
+    )
+
+    assert result["best60_recommendations"] == best60
+    assert result["h1_report"]["hypothesis"] == "H1"
+
+
+@pytest.mark.unit
+def test_best60_fixture_has_observational_and_no_signal_sections():
+    fixture = json.loads(Path("tests/fixtures/best60_recommendations.json").read_text(encoding="utf-8"))
+    assert fixture["Crustle"]["observational"] is True
+    assert fixture["Crustle"]["no_signal"][0]["bucket"] == "no signal"
 
 
 @pytest.mark.unit

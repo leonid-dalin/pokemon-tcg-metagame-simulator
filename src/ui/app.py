@@ -829,6 +829,42 @@ def main():
 
         st.caption("Click any column header to sort. Hover over headers for detailed metric definitions.")
         st.dataframe(df[final_column_order], width="stretch", hide_index=True, column_config=col_config)
+
+        matchup_tab, best60_tab = st.tabs(["BDIF matchup panel", "Best-60 card recommendations"])
+        with matchup_tab:
+            matchup_panel = mc_res.get("matchup_panel", {}) if isinstance(mc_res, dict) else {}
+            panel_rows = []
+            for panel_deck, rows in matchup_panel.get("rows", {}).items():
+                for row in rows:
+                    panel_rows.append({
+                        "Deck": panel_deck,
+                        "Opponent": row["opponent"],
+                        "Posterior mean %": round(float(row["mean"]) * 100, 2),
+                        "95% lower %": round(float(row["lower"]) * 100, 2),
+                        "95% upper %": round(float(row["upper"]) * 100, 2),
+                        "Matches": int(row["match_count"]),
+                        "Reliable": "Yes" if row["reliable"] else "Thin sample",
+                        "Mirror": "Yes" if row["mirror"] else "",
+                    })
+            if panel_rows:
+                st.caption("Posterior matchup estimates against the six most-played decks in this simulation.")
+                st.dataframe(pd.DataFrame(panel_rows), width="stretch", hide_index=True)
+            if matchup_panel.get("unmatched"):
+                st.warning("Unmatched panel decks: " + ", ".join(matchup_panel["unmatched"]))
+        with best60_tab:
+            recommendations = mc_res.get("best60_recommendations", {}) if isinstance(mc_res, dict) else {}
+            if recommendations:
+                for archetype, recommendation in recommendations.items():
+                    st.markdown(f"#### {archetype}")
+                    st.caption("Observational associations, not causal effects. Cards whose interval spans zero are no signal.")
+                    st.dataframe(pd.DataFrame(recommendation.get("cards", [])), width="stretch", hide_index=True)
+            else:
+                st.info("Best-60 recommendations require an enabled card model and populated Limitless fixtures.")
+            h1_report = mc_res.get("h1_report", {}) if isinstance(mc_res, dict) else {}
+            if h1_report:
+                st.markdown("#### H1: Misty Energy vs Alakazam Dudunsparce")
+                st.caption("Flat-Elo observational association. The report is not a causal claim.")
+                st.json(h1_report)
         st.divider()
 
         # --- Metagame Scatter Plot ---

@@ -44,3 +44,10 @@ def test_auto_fill_guards_infeasible_constraints():
         for parent in ast.walk(tree)
     )
     assert guarded
+
+
+@pytest.mark.unit
+def test_dashboard_renders_the_bd_if_matchup_panel():
+    source = Path("src/ui/app.py").read_text(encoding="utf-8")
+    assert 'mc_res.get("matchup_panel", {})' in source
+    assert 'st.tabs(["BDIF matchup panel", "Best-60 card recommendations"])' in source

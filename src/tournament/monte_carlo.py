@@ -167,6 +167,8 @@ def run_monte_carlo_analytics(
         report: bool = False,
         posterior_draws: int = BDIF_POSTERIOR_DRAWS,
         panel_decks: Optional[List[str]] = None,
+        best60_recommendations: Optional[Dict[str, Any]] = None,
+        h1_report: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     if not hasattr(run_monte_carlo_analytics, "_rayon_initialized"):
         try:
@@ -329,4 +331,6 @@ def run_monte_carlo_analytics(
             "unmatched": list(panel_decks if panel_decks is not None else BDIF_PANEL_DECKS),
             "opponents": [],
         },
+        "best60_recommendations": best60_recommendations or {},
+        "h1_report": h1_report or {},
     }
