@@ -1,0 +1,8 @@
+# Repository policy and contribution files
+/CONTRIBUTING.md @leonid-dalin
+/SECURITY.md @leonid-dalin
+/.gitattributes @leonid-dalin
+/.github/CODEOWNERS @leonid-dalin
+/.github/ISSUE_TEMPLATE/* @leonid-dalin
+
+# CODE_OF_CONDUCT.md is intentionally not gated
