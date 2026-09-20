@@ -77,7 +77,7 @@ def _soup(rows: str) -> BeautifulSoup:
     )
 
 
-def _row(name: str, matches: int, record: str = "60 - 30 - 10") -> str:
+def _row(name: str, matches: int, record: str = "50 - 30 - 10") -> str:
     return (
         f'<tr data-name="{name}" data-matches="{matches}">'
         f"<td>a</td><td>b</td><td>c</td><td>{record}</td></tr>"
@@ -87,7 +87,7 @@ def _row(name: str, matches: int, record: str = "60 - 30 - 10") -> str:
 @pytest.mark.unit
 def test_a_known_archetype_is_always_parsed():
     canonical = {"known deck": "Known Deck"}
-    result = scrape_matchup_soup(_soup(_row("Known Deck", 5)), "Mine", "Standard", canonical)
+    result = scrape_matchup_soup(_soup(_row("Known Deck", 100)), "Mine", "Standard", canonical)
     assert [m["opponent_archetype"] for m in result] == ["Known Deck"]
 
 
@@ -110,7 +110,7 @@ def test_a_low_volume_unknown_archetype_is_rejected():
 @pytest.mark.unit
 def test_rejecting_a_stranger_does_not_affect_a_known_deck_in_the_same_table():
     canonical = {"known deck": "Known Deck"}
-    soup = _soup(_row("Fringe Deck", 1) + _row("Known Deck", 1))
+    soup = _soup(_row("Fringe Deck", 1) + _row("Known Deck", 100))
     result = scrape_matchup_soup(soup, "Mine", "Standard", canonical)
     assert [m["opponent_archetype"] for m in result] == ["Known Deck"]
 

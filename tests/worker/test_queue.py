@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+import os
 
 import pytest
 
@@ -10,7 +10,6 @@ def test_daily_pipeline_reraises_scraper_failures(monkeypatch):
     def fail_fetch(*args, **kwargs):
         raise RuntimeError("scraper failed")
 
-    monkeypatch.setattr(queue, "discover_live_matchup_urls", lambda session: [])
     monkeypatch.setattr(queue, "fetch_live_matchup_data", fail_fetch)
 
     with pytest.raises(RuntimeError, match="scraper failed"):
@@ -18,35 +17,153 @@ def test_daily_pipeline_reraises_scraper_failures(monkeypatch):
 
 
 @pytest.mark.unit
-def test_daily_pipeline_uses_discovered_live_urls(monkeypatch):
-    discovered_urls = [
-        "https://play.limitlesstcg.com/decks/dragapult-ex/matchups?format=standard&rotation=2026&set=PBL",
-        "https://play.limitlesstcg.com/decks/greavard/matchups?format=standard&rotation=2026&set=PBL",
-    ]
-    fetch_mock = MagicMock(return_value=[])
+def test_daily_pipeline_writes_through_same_directory_temp_file_and_replaces_target(
+    monkeypatch,
+    tmp_path,
+):
+    target = tmp_path / "ea_input.json"
+    target.write_text("old data")
+    target.chmod(0o600)
+    target_mode = target.stat().st_mode & 0o777
+    monkeypatch.setattr(queue, "INPUT_DATA", str(target))
+    monkeypatch.setattr(
+        queue,
+        "fetch_live_matchup_data",
+        lambda target_urls, canonical_map: [
+            {
+                "deck_archetype": "Archetype",
+                "opponent_archetype": "Archetype",
+                "total_matches": 0,
+                "wins": 0,
+                "losses": 0,
+                "ties": 0,
+                "win_rate": 0.5,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        queue,
+        "build_complete_matchup_matrix",
+        lambda matchups: {
+            "archetypes": ["Archetype"],
+            "matchup_matrix": {
+                "Archetype": {
+                    "Archetype": {"win_rate": 0.5, "match_count": 0},
+                },
+            },
+        },
+    )
 
-    monkeypatch.setattr(queue, "discover_live_matchup_urls", lambda session: discovered_urls)
-    monkeypatch.setattr(queue, "fetch_live_matchup_data", fetch_mock)
+    replaced = []
+    chmod_calls = []
+    real_replace = queue.os.replace
+    real_chmod = queue.os.chmod
 
-    with pytest.raises(ValueError, match="Scraper returned zero matchups"):
-        queue.automated_daily_pipeline.call_local()
+    def record_replace(source, destination):
+        replaced.append((source, destination))
+        return real_replace(source, destination)
 
-    fetch_mock.assert_called_once_with(discovered_urls, {})
+    def record_chmod(path, mode):
+        assert mode == target_mode
+        chmod_calls.append((path, mode))
+        return real_chmod(path, mode)
+
+    monkeypatch.setattr(queue.os, "replace", record_replace)
+    monkeypatch.setattr(queue.os, "chmod", record_chmod)
+
+    queue.automated_daily_pipeline.call_local()
+
+    assert replaced
+    source, destination = replaced[0]
+    assert source == f"{target}.tmp"
+    assert destination == str(target)
+    assert target.read_text() != "old data"
+    assert target.stat().st_mode & 0o777 == target_mode
+    assert not os.path.exists(source)
+    assert chmod_calls == [(source, target_mode)]
 
 
 @pytest.mark.unit
-def test_daily_pipeline_reraises_discovery_failures(monkeypatch):
-    discovery_error = RuntimeError("discovery failed")
-    fetch_mock = MagicMock(return_value=[])
-
+def test_daily_pipeline_removes_temp_file_when_write_fails(monkeypatch, tmp_path):
+    target = tmp_path / "ea_input.json"
+    target.write_text("old data")
+    monkeypatch.setattr(queue, "INPUT_DATA", str(target))
     monkeypatch.setattr(
         queue,
-        "discover_live_matchup_urls",
-        lambda session: (_ for _ in ()).throw(discovery_error),
+        "fetch_live_matchup_data",
+        lambda target_urls, canonical_map: [
+            {
+                "deck_archetype": "Archetype",
+                "opponent_archetype": "Archetype",
+                "total_matches": 0,
+                "wins": 0,
+                "losses": 0,
+                "ties": 0,
+                "win_rate": 0.5,
+            }
+        ],
     )
-    monkeypatch.setattr(queue, "fetch_live_matchup_data", fetch_mock)
+    monkeypatch.setattr(
+        queue,
+        "build_complete_matchup_matrix",
+        lambda matchups: {
+            "archetypes": ["Archetype"],
+            "matchup_matrix": {
+                "Archetype": {
+                    "Archetype": {"win_rate": 0.5, "match_count": 0},
+                },
+            },
+        },
+    )
+    monkeypatch.setattr(
+        queue.json,
+        "dump",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("write failed")),
+    )
 
-    with pytest.raises(RuntimeError, match="discovery failed"):
+    with pytest.raises(OSError, match="write failed"):
         queue.automated_daily_pipeline.call_local()
 
-    fetch_mock.assert_not_called()
+    assert target.read_text() == "old data"
+    assert not os.path.exists(str(tmp_path / "ea_input.json.tmp"))
+
+
+@pytest.mark.unit
+def test_daily_pipeline_removes_temp_file_when_replace_fails(monkeypatch, tmp_path):
+    target = tmp_path / "ea_input.json"
+    target.write_text("old data")
+    monkeypatch.setattr(queue, "INPUT_DATA", str(target))
+    monkeypatch.setattr(
+        queue,
+        "fetch_live_matchup_data",
+        lambda target_urls, canonical_map: [
+            {
+                "deck_archetype": "Archetype",
+                "opponent_archetype": "Archetype",
+                "total_matches": 0,
+                "wins": 0,
+                "losses": 0,
+                "ties": 0,
+                "win_rate": 0.5,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        queue,
+        "build_complete_matchup_matrix",
+        lambda matchups: {
+            "archetypes": ["Archetype"],
+            "matchup_matrix": {
+                "Archetype": {
+                    "Archetype": {"win_rate": 0.5, "match_count": 0},
+                },
+            },
+        },
+    )
+    monkeypatch.setattr(queue.os, "replace", lambda source, destination: (_ for _ in ()).throw(OSError("replace failed")))
+
+    with pytest.raises(OSError, match="replace failed"):
+        queue.automated_daily_pipeline.call_local()
+
+    assert target.read_text() == "old data"
+    assert not os.path.exists(str(tmp_path / "ea_input.json.tmp"))
