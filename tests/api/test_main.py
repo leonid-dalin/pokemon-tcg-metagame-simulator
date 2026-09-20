@@ -404,6 +404,7 @@ async def test_sse_terminates_at_the_injected_deadline_without_result(monkeypatc
     monkeypatch.setenv("API_TOKEN", "correct-token")
     monkeypatch.setattr(main, "sse_clock", clock)
     monkeypatch.setattr(main.huey.storage, "peek_data", lambda key: None)
+    monkeypatch.setattr(main.huey, "result", lambda task_id, blocking=False: None)
     monkeypatch.setattr(
         main.asyncio,
         "to_thread",
