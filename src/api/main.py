@@ -24,6 +24,16 @@ from src.worker.queue import execute_simulation_job, automated_daily_pipeline, h
 
 SSE_MAX_LIFETIME_SECONDS = 10 * 60
 sse_clock = time.monotonic
+_startup_tasks = set()
+
+
+def _log_startup_task_result(task):
+    _startup_tasks.discard(task)
+    if task.cancelled():
+        return
+    error = task.exception()
+    if error is not None:
+        logger.error("startup_scrape_failed", error=str(error), exc_info=error)
 
 
 def is_protected_request(request: Request) -> bool:
@@ -85,7 +95,9 @@ async def lifespan(_: FastAPI):
         )
 
         if lock_acquired:
-            asyncio.create_task(asyncio.to_thread(automated_daily_pipeline))
+            task = asyncio.create_task(asyncio.to_thread(automated_daily_pipeline))
+            _startup_tasks.add(task)
+            task.add_done_callback(_log_startup_task_result)
             logger.info("startup_scrape_enqueued", locked=True)
         else:
             logger.info("startup_scrape_bypassed", reason="lock_held_by_peer_worker")
@@ -244,7 +256,9 @@ async def stream_task_progress(request: Request, task_id: str):
         deadline = sse_clock() + SSE_MAX_LIFETIME_SECONDS
         try:
             pubsub = await redis.pubsub()
-            link_bytes = huey.storage.peek_data(f"link_{task_id}")
+            link_bytes = await asyncio.to_thread(
+                huey.storage.peek_data, f"link_{task_id}"
+            )
             job_id = resolve_job_id(
                 link_bytes,
                 request.query_params.get("job_id", "unknown_job"),
@@ -263,7 +277,9 @@ async def stream_task_progress(request: Request, task_id: str):
                 if await request.is_disconnected():
                     break
 
-                result = huey.result(task_id, blocking=False)
+                result = await asyncio.to_thread(
+                    huey.result, task_id, blocking=False
+                )
                 if isinstance(result, Exception):
                     logger.error("task_exception", task_id=task_id, error=str(result), exc_info=True)
                     error = str(result) if is_api_token_authorized(request) else "Task failed"
@@ -275,6 +291,10 @@ async def stream_task_progress(request: Request, task_id: str):
                     break
 
                 if sse_clock() >= deadline:
+                    yield {
+                        "event": "message",
+                        "data": json.dumps({"status": "timeout"}),
+                    }
                     break
 
                 try:

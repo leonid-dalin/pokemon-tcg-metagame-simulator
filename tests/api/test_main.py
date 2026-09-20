@@ -186,8 +186,11 @@ async def test_startup_scrape_is_dispatched_without_blocking_lifespan(monkeypatc
     async with main.lifespan(main.app):
         assert scrape_called is False
         assert len(dispatched) == 1
+        assert dispatched[0] in main._startup_tasks
         release_scrape.set()
         await asyncio.gather(*dispatched)
+
+    assert not main._startup_tasks
 
 
 @pytest.mark.parametrize(
@@ -405,11 +408,10 @@ async def test_sse_terminates_at_the_injected_deadline_without_result(monkeypatc
     monkeypatch.setattr(main, "sse_clock", clock)
     monkeypatch.setattr(main.huey.storage, "peek_data", lambda key: None)
     monkeypatch.setattr(main.huey, "result", lambda task_id, blocking=False: None)
-    monkeypatch.setattr(
-        main.asyncio,
-        "to_thread",
-        lambda func, *args, **kwargs: func(*args, **kwargs),
-    )
+    async def run_in_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(main.asyncio, "to_thread", run_in_thread)
 
     response = await main.stream_task_progress.__wrapped__(
         stream_request(redis),
@@ -417,7 +419,12 @@ async def test_sse_terminates_at_the_injected_deadline_without_result(monkeypatc
     )
     events = await consume_events(response)
 
-    assert events == []
+    assert events == [
+        {
+            "event": "message",
+            "data": json.dumps({"status": "timeout"}),
+        }
+    ]
     assert redis.pubsub_instance.closed
 
 
@@ -428,11 +435,10 @@ async def test_sse_reports_completion_at_the_injected_deadline(monkeypatch):
     monkeypatch.setenv("API_TOKEN", "correct-token")
     monkeypatch.setattr(main, "sse_clock", clock)
     monkeypatch.setattr(main.huey.storage, "peek_data", lambda key: None)
-    monkeypatch.setattr(
-        main.asyncio,
-        "to_thread",
-        lambda func, *args, **kwargs: func(*args, **kwargs),
-    )
+    async def run_in_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(main.asyncio, "to_thread", run_in_thread)
     monkeypatch.setattr(
         main.huey,
         "result",
@@ -460,11 +466,10 @@ async def test_sse_preserves_a_complete_task_termination(monkeypatch):
     monkeypatch.setenv("API_TOKEN", "correct-token")
     monkeypatch.setattr(main, "sse_clock", FakeClock([0.0, 0.0]))
     monkeypatch.setattr(main.huey.storage, "peek_data", lambda key: None)
-    monkeypatch.setattr(
-        main.asyncio,
-        "to_thread",
-        lambda func, *args, **kwargs: func(*args, **kwargs),
-    )
+    async def run_in_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(main.asyncio, "to_thread", run_in_thread)
     monkeypatch.setattr(
         main.huey,
         "result",
@@ -493,11 +498,10 @@ async def test_unauthenticated_sse_reports_a_generic_task_failure(monkeypatch):
     monkeypatch.setenv("API_TOKEN", "correct-token")
     monkeypatch.setattr(main, "sse_clock", FakeClock([0.0, 0.0]))
     monkeypatch.setattr(main.huey.storage, "peek_data", lambda key: None)
-    monkeypatch.setattr(
-        main.asyncio,
-        "to_thread",
-        lambda func, *args, **kwargs: func(*args, **kwargs),
-    )
+    async def run_in_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(main.asyncio, "to_thread", run_in_thread)
     monkeypatch.setattr(main.huey, "result", lambda task_id, blocking=False: RuntimeError("worker failed"))
     monkeypatch.setattr(
         main.logger,
@@ -527,11 +531,10 @@ async def test_authenticated_sse_can_report_the_worker_error(monkeypatch):
     monkeypatch.setenv("API_TOKEN", "correct-token")
     monkeypatch.setattr(main, "sse_clock", FakeClock([0.0, 0.0]))
     monkeypatch.setattr(main.huey.storage, "peek_data", lambda key: None)
-    monkeypatch.setattr(
-        main.asyncio,
-        "to_thread",
-        lambda func, *args, **kwargs: func(*args, **kwargs),
-    )
+    async def run_in_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(main.asyncio, "to_thread", run_in_thread)
     monkeypatch.setattr(main.huey, "result", lambda task_id, blocking=False: RuntimeError("worker failed"))
 
     response = await main.stream_task_progress.__wrapped__(

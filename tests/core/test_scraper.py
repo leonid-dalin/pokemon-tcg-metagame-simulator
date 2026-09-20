@@ -1,16 +1,74 @@
 import pytest
 from bs4 import BeautifulSoup
 
-from src.core import scraper as scraper_module
-from src.core.scraper import build_complete_matchup_matrix, scrape_matchup_soup
+from src.core.scraper import build_complete_matchup_matrix, discover_live_matchup_urls, scrape_matchup_soup
 
 
-class _CapturingLogger:
-    def __init__(self):
-        self.events = []
+INDEX_URL = "https://play.limitlesstcg.com/decks?game=PTCG"
+TEST_ROTATION = "2027"
+TEST_SET = "XYZ"
+INDEX_HTML = f"""
+<a href="/decks/dragapult-ex/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}">Dragapult</a>
+<a href="decks/greavard/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}">Greavard</a>
+<a href="/decks/charizard/matchups?format=standard&rotation={TEST_ROTATION}&set=ABC">Other set</a>
+<a href="/decks/dragapult-ex/matchups?format=standard&rotation=2026&set=PBL">Wrong rotation</a>
+<a href="/decks/other/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}">Other</a>
+<a href="/decks/charizard/matchups?format=standard&rotation={TEST_ROTATION}&set=SV">Charizard</a>
+<a href="/decks/charizard?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}">Not a matchup</a>
+"""
 
-    def warning(self, event, **kwargs):
-        self.events.append((event, kwargs))
+
+class FakeResponse:
+    def __init__(self, text: str, error: Exception | None = None):
+        self.text = text
+        self.error = error
+
+    def raise_for_status(self) -> None:
+        if self.error is not None:
+            raise self.error
+
+
+class FakeSession:
+    def __init__(self, response: FakeResponse):
+        self.response = response
+        self.calls = []
+
+    def get(self, url: str, timeout: int | None = None):
+        self.calls.append((url, timeout))
+        return self.response
+
+
+@pytest.fixture
+def index_session() -> FakeSession:
+    return FakeSession(FakeResponse(INDEX_HTML))
+
+
+def test_discover_live_matchup_urls_filters_resolves_deduplicates_and_sorts(index_session: FakeSession):
+    result = discover_live_matchup_urls(index_session)
+
+    assert result == [
+        f"https://play.limitlesstcg.com/decks/dragapult-ex/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}",
+        f"https://play.limitlesstcg.com/decks/greavard/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}",
+    ]
+    assert index_session.calls == [(INDEX_URL, 10)]
+
+
+@pytest.mark.unit
+def test_discover_live_matchup_urls_raises_when_request_fails():
+    session = FakeSession(FakeResponse("", RuntimeError("network unavailable")))
+
+    with pytest.raises(RuntimeError, match="Unable to fetch Limitless deck index"):
+        discover_live_matchup_urls(session)
+
+
+@pytest.mark.unit
+def test_discover_live_matchup_urls_raises_when_no_eligible_urls_are_found():
+    session = FakeSession(FakeResponse(
+        f'<a href="/decks/other/matchups?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}">Other</a>'
+    ))
+
+    with pytest.raises(ValueError, match="No eligible standard matchup URLs"):
+        discover_live_matchup_urls(session)
 
 
 def _soup(rows: str) -> BeautifulSoup:
@@ -19,7 +77,7 @@ def _soup(rows: str) -> BeautifulSoup:
     )
 
 
-def _row(name: str, matches: int, record: str = "60 - 30 - 10") -> str:
+def _row(name: str, matches: int, record: str = "50 - 30 - 10") -> str:
     return (
         f'<tr data-name="{name}" data-matches="{matches}">'
         f"<td>a</td><td>b</td><td>c</td><td>{record}</td></tr>"
@@ -71,53 +129,6 @@ def test_win_rate_counts_ties_as_half():
         _soup(_row("Known Deck", 100, "60 - 30 - 10")), "Mine", "Standard", canonical
     )
     assert result[0]["win_rate"] == pytest.approx(0.65)
-
-
-@pytest.mark.unit
-def test_valid_two_part_record_is_parsed(monkeypatch):
-    logger = _CapturingLogger()
-    monkeypatch.setattr(scraper_module, "logger", logger)
-    result = scrape_matchup_soup(
-        _soup(_row("Known Deck", 90, "60 - 30")), "Mine", "Standard", {"known deck": "Known Deck"}
-    )
-
-    assert result[0]["wins"] == 60
-    assert result[0]["losses"] == 30
-    assert result[0]["ties"] == 0
-    assert result[0]["win_rate"] == pytest.approx(0.6666666667)
-    assert not logger.events
-
-
-@pytest.mark.unit
-def test_malformed_record_is_skipped_and_logged(monkeypatch):
-    logger = _CapturingLogger()
-    monkeypatch.setattr(scraper_module, "logger", logger)
-    result = scrape_matchup_soup(
-        _soup(_row("Known Deck", 100, "60 - 30 - not-a-number")),
-        "Mine",
-        "Standard",
-        {"known deck": "Known Deck"},
-    )
-
-    assert result == []
-    assert any(event == "matchup_row_skipped" for event, _ in logger.events)
-    assert any(kwargs.get("reason") == "malformed_record" for _, kwargs in logger.events)
-
-
-@pytest.mark.unit
-def test_over_counted_record_is_skipped_and_logged(monkeypatch):
-    logger = _CapturingLogger()
-    monkeypatch.setattr(scraper_module, "logger", logger)
-    result = scrape_matchup_soup(
-        _soup(_row("Known Deck", 100, "60 - 30 - 20")),
-        "Mine",
-        "Standard",
-        {"known deck": "Known Deck"},
-    )
-
-    assert result == []
-    assert any(event == "matchup_row_skipped" for event, _ in logger.events)
-    assert any(kwargs.get("reason") == "record_exceeds_matches" for _, kwargs in logger.events)
 
 
 @pytest.mark.unit

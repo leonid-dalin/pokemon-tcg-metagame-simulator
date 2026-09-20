@@ -59,3 +59,12 @@ def test_prediction_request_rejects_duplicate_deck_names():
 def test_prediction_request_rejects_asymmetric_matchup_matrix():
     with pytest.raises(ValidationError):
         PredictionRequest(**_request_payload(matchup_matrix=[[0.5, 0.7], [0.5, 0.5]]))
+
+
+@pytest.mark.unit
+def test_prediction_request_accepts_tiny_floating_point_symmetry_error():
+    request = PredictionRequest(
+        **_request_payload(matchup_matrix=[[0.5, 0.1 + 0.2], [0.7, 0.5]])
+    )
+
+    assert request.matchup_matrix[0][1] == pytest.approx(0.3)

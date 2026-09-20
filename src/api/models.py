@@ -138,7 +138,7 @@ class PredictionRequest(BaseModel):
                         f"Mirror match violation at [{i}][{j}]. Diagonal must be exactly 0.5, got {win_rate}.")
 
             for j in range(i + 1, n_decks):
-                if matrix[i][j] + matrix[j][i] != 1.0:
+                if abs(matrix[i][j] + matrix[j][i] - 1.0) > 1e-9:
                     raise ValueError(
                         f"Matchup matrix must be symmetric around 0.5 at [{i}][{j}] and [{j}][i]."
                     )
