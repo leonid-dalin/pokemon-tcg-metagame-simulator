@@ -6,15 +6,68 @@ import time
 import structlog
 import numpy as np
 import tcg_engine
-from typing import Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional, Callable, Tuple
 
 from src.core.runtime import get_container_cores
 from src.api.models import GLOBAL_TIE_RATE
 from src.core.telemetry import tracer
+from src.core.config import (
+    BDIF_COVERAGE_RATIO,
+    BDIF_MIN_MATCHES,
+    BDIF_PAIR_MIN_GAMES,
+    BDIF_POSTERIOR_DRAWS,
+    BDIF_PRIOR_STRENGTH,
+)
 
 logger = structlog.get_logger()
 safe_cores = max(1, get_container_cores())
 os.environ["RAYON_NUM_THREADS"] = str(safe_cores)
+
+
+def build_hierarchical_beta_posteriors(
+        deck_names: List[str],
+        win_matrix: np.ndarray,
+        matchup_details: Dict[Tuple[str, str], Dict[str, Any]],
+        prior_strength: float = BDIF_PRIOR_STRENGTH,
+) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+    """Build matchup posteriors and identify decks with sufficient evidence."""
+    n_decks = len(deck_names)
+    index = {name: i for i, name in enumerate(deck_names)}
+    totals = np.zeros(n_decks, dtype=float)
+    wins = np.zeros(n_decks, dtype=float)
+    covered = np.zeros(n_decks, dtype=float)
+
+    for (deck, opponent), details in matchup_details.items():
+        i = index.get(deck)
+        if i is None:
+            continue
+        matches = max(0, int(details.get("match_count", 0)))
+        totals[i] += matches
+        wins[i] += float(details.get("win_rate", 0.5)) * matches
+        if matches >= BDIF_PAIR_MIN_GAMES:
+            covered[i] += matches
+
+    field_wr = np.divide(wins, totals, out=np.full(n_decks, 0.5), where=totals > 0)
+    coverage = np.divide(covered, totals, out=np.zeros(n_decks), where=totals > 0)
+    insufficient = [
+        deck for i, deck in enumerate(deck_names)
+        if totals[i] < BDIF_MIN_MATCHES or coverage[i] < BDIF_COVERAGE_RATIO
+    ]
+
+    alpha = np.zeros((n_decks, n_decks), dtype=float)
+    beta = np.zeros((n_decks, n_decks), dtype=float)
+    for i, deck in enumerate(deck_names):
+        for j, opponent in enumerate(deck_names):
+            if i == j:
+                alpha[i, j] = beta[i, j] = 1.0
+                continue
+            details = matchup_details.get((deck, opponent), {})
+            matches = max(0, int(details.get("match_count", 0)))
+            observed_wr = float(details.get("win_rate", win_matrix[i, j]))
+            prior = float(field_wr[i])
+            alpha[i, j] = observed_wr * matches + prior_strength * prior
+            beta[i, j] = (1.0 - observed_wr) * matches + prior_strength * (1.0 - prior)
+    return alpha, beta, insufficient
 
 
 def run_monte_carlo_analytics(
@@ -33,7 +86,10 @@ def run_monte_carlo_analytics(
         global_tie_rate: float = GLOBAL_TIE_RATE,
         use_drop_feature: bool = False,
         seed: int = 0,
-) -> Dict[str, Dict[str, float]]:
+        matchup_details: Optional[Dict[Tuple[str, str], Dict[str, Any]]] = None,
+        report: bool = False,
+        posterior_draws: int = BDIF_POSTERIOR_DRAWS,
+) -> Dict[str, Any]:
     if not hasattr(run_monte_carlo_analytics, "_rayon_initialized"):
         try:
             tcg_engine.initialize_rayon(safe_cores)
@@ -55,9 +111,14 @@ def run_monte_carlo_analytics(
         logger.warning("empty_meta_distribution_using_uniform_field", deck_count=n_decks)
         meta_vec.fill(1.0 / n_decks)
 
-    working_matrix = win_matrix.copy()
-    if match_format == "BO3":
-        working_matrix = 3 * (working_matrix ** 2) - 2 * (working_matrix ** 3)
+    posterior_mode = matchup_details is not None
+    if posterior_mode:
+        alpha, beta, insufficient_data = build_hierarchical_beta_posteriors(
+            deck_names, win_matrix, matchup_details
+        )
+    else:
+        alpha = beta = None
+        insufficient_data = []
 
     # Init empty tracking arrays for the aggregated totals
     total_initial = np.zeros(n_decks, dtype=int)
@@ -65,21 +126,35 @@ def run_monte_carlo_analytics(
     total_topcut = np.zeros(n_decks, dtype=int)
     total_champ = np.zeros(n_decks, dtype=int)
 
-    # CHUNKING LOGIC FOR PROGRESS TRACKING
-    base_chunk_size = 10000 if iterations >= 10000 else iterations
-    chunks = max(1, iterations // base_chunk_size)
-    remainder = iterations % base_chunk_size
+    draw_count = posterior_draws if posterior_mode else 1
+    if posterior_mode:
+        draw_specs = [(iterations // draw_count, i) for i in range(draw_count)]
+    else:
+        base_chunk_size = 10000 if iterations >= 10000 else iterations
+        chunks = max(1, iterations // base_chunk_size)
+        remainder = iterations % base_chunk_size
+        draw_specs = [
+            (base_chunk_size + (remainder if i == chunks - 1 else 0), i)
+            for i in range(chunks)
+        ]
+    draw_metrics = []
+    for current_chunk, draw_index in draw_specs:
+        if posterior_mode:
+            working_matrix = np.random.default_rng(seed + draw_index).beta(alpha, beta)
+            np.fill_diagonal(working_matrix, 0.5)
+        else:
+            working_matrix = win_matrix.copy()
+        if match_format == "BO3":
+            working_matrix = 3 * (working_matrix ** 2) - 2 * (working_matrix ** 3)
 
-    for i in range(chunks):
-        current_chunk = base_chunk_size + (remainder if i == chunks - 1 else 0)
         if current_chunk == 0: continue
 
         # Ensure a unique, deterministic seed per chunk
-        base_seed = (seed + i) % (1 << 32)
+        base_seed = (seed + draw_index) % (1 << 32)
 
         with tracer.start_as_current_span("rust_tcg_engine_batch") as rust_span:
             rust_span.set_attribute("chunk.size", current_chunk)
-            rust_span.set_attribute("chunk.index", i)
+            rust_span.set_attribute("chunk.index", draw_index)
 
             res_init, res_day2, res_top, res_champ = tcg_engine.run_parallel_monte_carlo(
                 current_chunk,
@@ -95,15 +170,26 @@ def run_monte_carlo_analytics(
                 global_tie_rate,
                 use_drop_feature
             )
-        logger.debug("chunk_processed", chunk_index=i, size=current_chunk)
+        logger.debug("chunk_processed", chunk_index=draw_index, size=current_chunk)
         total_initial += np.array(res_init, dtype=int)
         total_day2 += np.array(res_day2, dtype=int)
         total_topcut += np.array(res_top, dtype=int)
         total_champ += np.array(res_champ, dtype=int)
 
         # Fire progress state back to Huey
+        with np.errstate(divide="ignore", invalid="ignore"):
+            draw_initial = np.array(res_init, dtype=float)
+            draw_day2 = np.array(res_day2, dtype=float)
+            draw_top = np.array(res_top, dtype=float)
+            draw_champ = np.array(res_champ, dtype=float)
+            draw_metrics.append({
+                "day2_share": np.divide(draw_day2, draw_day2.sum(), out=np.zeros(n_decks), where=draw_day2.sum() > 0),
+                "top_cut_share": np.divide(draw_top, draw_top.sum(), out=np.zeros(n_decks), where=draw_top.sum() > 0),
+                "win_probability": np.divide(draw_champ, draw_initial, out=np.zeros(n_decks), where=draw_initial > 0),
+            })
+
         if progress_callback:
-            progress_callback(i + 1, chunks)
+            progress_callback(draw_index + 1, draw_count if posterior_mode else chunks)
 
         time.sleep(0.1)
     results = {}
@@ -125,4 +211,22 @@ def run_monte_carlo_analytics(
                 "top_cut_share": float(topcut_share[i]),
             }
 
-    return results
+    if not report:
+        return results
+
+    draw_array = {key: np.array([draw[key] for draw in draw_metrics]) for key in ("day2_share", "top_cut_share", "win_probability")}
+    for i, deck in enumerate(deck_names):
+        if deck not in results:
+            continue
+        for metric, values in draw_array.items():
+            results[deck][f"{metric}_lower"] = float(np.quantile(values[:, i], 0.025))
+            results[deck][f"{metric}_upper"] = float(np.quantile(values[:, i], 0.975))
+    ranked_metrics = {
+        deck: metrics for deck, metrics in results.items()
+        if deck not in insufficient_data
+    }
+    return {
+        "metrics": results,
+        "ranked_metrics": ranked_metrics,
+        "insufficient_data": insufficient_data,
+    }

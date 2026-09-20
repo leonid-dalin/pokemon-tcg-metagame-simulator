@@ -59,3 +59,99 @@ def test_empty_meta_distribution_uses_a_uniform_field(monkeypatch):
     )
 
     assert distributions == [[0.5, 0.5]]
+
+
+@pytest.mark.unit
+def test_hierarchical_posterior_shrinks_a_six_match_pair_toward_field_prior():
+    alpha, beta, _ = monte_carlo.build_hierarchical_beta_posteriors(
+        ["a", "b", "c"],
+        np.full((3, 3), 0.5),
+        {
+            ("a", "a"): {"win_rate": 0.5, "match_count": 0},
+            ("b", "b"): {"win_rate": 0.5, "match_count": 0},
+            ("c", "c"): {"win_rate": 0.5, "match_count": 0},
+            ("a", "b"): {"win_rate": 1.0, "match_count": 6},
+            ("b", "a"): {"win_rate": 0.0, "match_count": 6},
+            ("a", "c"): {"win_rate": 0.5, "match_count": 1_000},
+            ("c", "a"): {"win_rate": 0.5, "match_count": 1_000},
+        },
+    )
+
+    posterior_mean = alpha[0, 1] / (alpha[0, 1] + beta[0, 1])
+    assert 0.6 < posterior_mean < 0.9
+
+
+@pytest.mark.unit
+def test_hierarchical_posterior_large_sample_barely_moves_from_observation():
+    alpha, beta, _ = monte_carlo.build_hierarchical_beta_posteriors(
+        ["a", "b"],
+        np.array([[0.5, 0.7], [0.3, 0.5]]),
+        {
+            ("a", "a"): {"win_rate": 0.5, "match_count": 0},
+            ("b", "b"): {"win_rate": 0.5, "match_count": 0},
+            ("a", "b"): {"win_rate": 0.7, "match_count": 18_000},
+            ("b", "a"): {"win_rate": 0.3, "match_count": 18_000},
+        },
+    )
+
+    posterior_mean = alpha[0, 1] / (alpha[0, 1] + beta[0, 1])
+    assert posterior_mean == pytest.approx(0.7, abs=0.001)
+
+
+@pytest.mark.unit
+def test_data_sufficiency_filter_lists_a_low_coverage_deck():
+    _, _, insufficient = monte_carlo.build_hierarchical_beta_posteriors(
+        ["a", "b", "c", "d", "e"],
+        np.full((5, 5), 0.5),
+        {
+            ("a", "a"): {"win_rate": 0.5, "match_count": 0},
+            ("b", "b"): {"win_rate": 0.5, "match_count": 0},
+            ("c", "c"): {"win_rate": 0.5, "match_count": 0},
+            ("d", "d"): {"win_rate": 0.5, "match_count": 0},
+            ("e", "e"): {"win_rate": 0.5, "match_count": 0},
+            ("a", "b"): {"win_rate": 0.6, "match_count": 400},
+            ("b", "a"): {"win_rate": 0.4, "match_count": 400},
+            ("a", "c"): {"win_rate": 0.6, "match_count": 200},
+            ("c", "a"): {"win_rate": 0.4, "match_count": 200},
+            ("a", "d"): {"win_rate": 0.6, "match_count": 200},
+            ("d", "a"): {"win_rate": 0.4, "match_count": 200},
+            ("a", "e"): {"win_rate": 0.6, "match_count": 200},
+            ("e", "a"): {"win_rate": 0.4, "match_count": 200},
+        },
+    )
+
+    assert "a" in insufficient
+
+
+@pytest.mark.unit
+def test_posterior_report_contains_intervals_and_ranked_split(monkeypatch):
+    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
+    monkeypatch.setattr(
+        monte_carlo.tcg_engine,
+        "run_parallel_monte_carlo",
+        lambda *args: ([10, 10], [5, 5], [2, 2], [1, 1]),
+    )
+    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
+
+    result = monte_carlo.run_monte_carlo_analytics(
+        deck_names=["a", "b"],
+        win_matrix=np.array([[0.5, 0.6], [0.4, 0.5]]),
+        meta_distribution={"a": 0.5, "b": 0.5},
+        matchup_details={
+            ("a", "a"): {"win_rate": 0.5, "match_count": 0},
+            ("b", "b"): {"win_rate": 0.5, "match_count": 0},
+            ("a", "b"): {"win_rate": 0.6, "match_count": 2_000},
+            ("b", "a"): {"win_rate": 0.4, "match_count": 2_000},
+        },
+        d1_rounds=1,
+        cut_points=1,
+        d2_rounds=1,
+        top_cut=1,
+        iterations=4,
+        posterior_draws=2,
+        report=True,
+    )
+
+    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data"}
+    assert not result["insufficient_data"]
+    assert result["ranked_metrics"]["a"]["day2_share_lower"] <= result["ranked_metrics"]["a"]["day2_share_upper"]

@@ -86,7 +86,9 @@ def execute_simulation_job(payload: dict):
                     global_tie_rate=request.global_tie_rate,
                     use_drop_feature=request.use_drop_feature,
                     seed=RNG_SEED,
-                    progress_callback=_progress_handler
+                    progress_callback=_progress_handler,
+                    matchup_details=matchup_details,
+                    report=True,
                 )
 
             log.info("simulation_job_complete", status="success")
