@@ -172,6 +172,12 @@ def test_daily_pipeline_removes_temp_file_when_replace_fails(monkeypatch, tmp_pa
 
 
 @pytest.mark.unit
+def test_limitless_ingestion_is_disabled_by_default(monkeypatch):
+    monkeypatch.setattr(queue, "LIMITLESS_INGESTION_ENABLED", False)
+    assert queue.ingest_limitless_results.call_local() == {"status": "disabled"}
+
+
+@pytest.mark.unit
 def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_path):
     details = {
         ("a", "a"): {"win_rate": 0.5, "match_count": 10},

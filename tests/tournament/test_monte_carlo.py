@@ -78,7 +78,9 @@ def test_hierarchical_posterior_shrinks_a_six_match_pair_toward_field_prior():
     )
 
     posterior_mean = alpha[0, 1] / (alpha[0, 1] + beta[0, 1])
-    assert 0.6 < posterior_mean < 0.9
+    reverse_mean = alpha[1, 0] / (alpha[1, 0] + beta[1, 0])
+    assert 0.45 < posterior_mean < 0.6
+    assert posterior_mean + reverse_mean == pytest.approx(1.0)
 
 
 @pytest.mark.unit

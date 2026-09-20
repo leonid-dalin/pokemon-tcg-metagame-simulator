@@ -57,16 +57,30 @@ def build_hierarchical_beta_posteriors(
     alpha = np.zeros((n_decks, n_decks), dtype=float)
     beta = np.zeros((n_decks, n_decks), dtype=float)
     for i, deck in enumerate(deck_names):
-        for j, opponent in enumerate(deck_names):
-            if i == j:
-                alpha[i, j] = beta[i, j] = 1.0
-                continue
-            details = matchup_details.get((deck, opponent), {})
-            matches = max(0, int(details.get("match_count", 0)))
-            observed_wr = float(details.get("win_rate", win_matrix[i, j]))
-            prior = float(field_wr[i])
-            alpha[i, j] = observed_wr * matches + prior_strength * prior
-            beta[i, j] = (1.0 - observed_wr) * matches + prior_strength * (1.0 - prior)
+        alpha[i, i] = beta[i, i] = 1.0
+        for j in range(i + 1, n_decks):
+            opponent = deck_names[j]
+            forward = matchup_details.get((deck, opponent), {})
+            reverse = matchup_details.get((opponent, deck), {})
+            forward_matches = max(0, int(forward.get("match_count", 0)))
+            reverse_matches = max(0, int(reverse.get("match_count", 0)))
+            forward_wr = float(forward.get("win_rate", win_matrix[i, j]))
+            reverse_wr = float(reverse.get("win_rate", 1.0 - win_matrix[i, j]))
+            observed_total = forward_matches + reverse_matches
+            if observed_total:
+                observed_wr = (
+                    forward_wr * forward_matches
+                    + (1.0 - reverse_wr) * reverse_matches
+                ) / observed_total
+                effective_matches = max(forward_matches, reverse_matches)
+            else:
+                observed_wr = float(win_matrix[i, j])
+                effective_matches = 0
+            prior = (float(field_wr[i]) + float(field_wr[j])) / 2.0
+            pair_alpha = observed_wr * effective_matches + prior_strength * prior
+            pair_beta = (1.0 - observed_wr) * effective_matches + prior_strength * (1.0 - prior)
+            alpha[i, j], beta[i, j] = pair_alpha, pair_beta
+            alpha[j, i], beta[j, i] = pair_beta, pair_alpha
     return alpha, beta, insufficient
 
 

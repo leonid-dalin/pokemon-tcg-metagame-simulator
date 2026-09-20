@@ -85,3 +85,4 @@ docker-compose.override.yml
 diagnose.py
 test_scraper.py
 data/extras
+data/limitless.db

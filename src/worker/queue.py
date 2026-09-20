@@ -7,7 +7,14 @@ from opentelemetry.instrumentation.redis import RedisInstrumentor
 from huey import RedisHuey, crontab
 
 from src.api.models import ScrapedMatrix, TIER_MAPPING, PredictionRequest
-from src.core.config import INPUT_DATA, MIN_GAMES, RNG_SEED
+from src.core.config import (
+    BDIF_USE_CARD_MODEL,
+    INPUT_DATA,
+    LIMITLESS_BACKFILL_TOURNAMENTS,
+    LIMITLESS_INGESTION_ENABLED,
+    MIN_GAMES,
+    RNG_SEED,
+)
 from src.core.data import load_matchup_data
 from src.core.scraper import (
     build_complete_matchup_matrix,
@@ -22,6 +29,15 @@ q_logger = structlog.get_logger()
 RedisInstrumentor().instrument()
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/?db=0")
 huey = RedisHuey('tcg_tasks', url=redis_url)
+
+
+def _simulation_input_path() -> str:
+    if BDIF_USE_CARD_MODEL:
+        candidate = os.path.join("data", "input", "limitless_model_input.json")
+        if os.path.exists(candidate):
+            return candidate
+        q_logger.warning("card_model_artifact_missing", path=candidate)
+    return INPUT_DATA
 
 
 @huey.task()
@@ -42,7 +58,7 @@ def execute_simulation_job(payload: dict):
         log.info("starting_simulation_job", players=request.total_players)
 
         try:
-            deck_names, win_matrix, matchup_details = load_matchup_data(INPUT_DATA, MIN_GAMES)
+            deck_names, win_matrix, matchup_details = load_matchup_data(_simulation_input_path(), MIN_GAMES)
 
             iterations = TIER_MAPPING.get(request.precision_tier, 25_000)
             players = request.total_players
@@ -101,6 +117,45 @@ def execute_simulation_job(payload: dict):
             span.record_exception(e)
             span.set_status(trace.Status(trace.StatusCode.ERROR))
             raise
+
+
+@huey.task()
+def ingest_limitless_results():
+    if not LIMITLESS_INGESTION_ENABLED:
+        return {"status": "disabled"}
+
+    from src.ingestion.aggregate import build_artifact
+    from src.ingestion.client import LimitlessClient
+    from src.ingestion.features import deck_features
+    from src.ingestion.model import fit_model, model_artifact
+    from src.ingestion.store import LimitlessStore
+
+    client = LimitlessClient.from_environment()
+    store = LimitlessStore(os.path.join("data", "limitless.db"))
+    events = client.tournaments(
+        game="PTCG",
+        format="STANDARD",
+        limit=LIMITLESS_BACKFILL_TOURNAMENTS,
+    )
+    for event in events:
+        event_id = str(event["id"])
+        details, standings, pairings = client.fetch_event_bundle(event_id)
+        store.upsert_tournament(event, details)
+        store.upsert_standings(event_id, standings)
+        store.upsert_pairings(event_id, pairings)
+
+    artifact = build_artifact(store)
+    artifact_path = os.path.join("data", "input", "limitless_input.json")
+    os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
+    with open(artifact_path, "w", encoding="utf-8") as handle:
+        json.dump(artifact, handle, indent=2)
+    observations = store.observations()
+    if len(observations) >= 4 and len({result for _, _, result in observations}) == 2:
+        inclusion = deck_features(store, artifact["archetypes"])
+        fitted = fit_model(observations, inclusion)
+        with open(os.path.join("data", "input", "limitless_model_input.json"), "w", encoding="utf-8") as handle:
+            json.dump(model_artifact(fitted), handle, indent=2)
+    return {"status": "complete", "events": len(events), "path": artifact_path}
 
 
 @huey.periodic_task(crontab(minute='0', hour='*/2'))

@@ -50,11 +50,8 @@ def inclusion_rates(cards: Iterable[str]) -> dict[str, float]:
     cards = list(cards)
     if not cards:
         return {}
-    counts: dict[str, int] = {}
-    for card in cards:
-        counts[card] = counts.get(card, 0) + 1
-    total = len(cards)
-    return {card: count / total for card, count in sorted(counts.items())}
+    unique_cards = sorted(set(cards))
+    return {card: 1.0 / len(unique_cards) for card in unique_cards}
 
 
 def store_event_snapshot(root: str | Path, event: dict[str, Any]) -> Path:
