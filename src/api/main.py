@@ -1,7 +1,8 @@
 import asyncio
 import json
-import time
 import os
+import secrets
+import time
 import numpy as np
 import redis.asyncio as aioredis
 from contextlib import asynccontextmanager
@@ -19,6 +20,39 @@ from src.api.models import PredictionRequest
 from src.api.stream_helpers import resolve_job_id
 from src.core.logger import logger
 from src.worker.queue import execute_simulation_job, automated_daily_pipeline, huey
+
+
+SSE_MAX_LIFETIME_SECONDS = 10 * 60
+sse_clock = time.monotonic
+
+
+def is_protected_request(request: Request) -> bool:
+    path = request.scope.get("path", "").rstrip("/")
+    if (request.method, path) == ("POST", "/api/v1/predict"):
+        return True
+    if request.method != "GET" or not path.startswith("/api/v1/tasks/"):
+        return False
+
+    resource = path.removeprefix("/api/v1/tasks/")
+    parts = resource.split("/")
+    return len(parts) == 1 or (len(parts) == 2 and parts[1] == "stream")
+
+
+def is_api_token_authorized(request: Request) -> bool:
+    """Return whether the request satisfies the optional API token policy."""
+    configured_token = os.environ.get("API_TOKEN", "")
+    if not configured_token:
+        return True
+
+    supplied_token = request.headers.get("X-API-Token", "")
+    return secrets.compare_digest(supplied_token, configured_token)
+
+
+class ApiTokenAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if is_protected_request(request) and not is_api_token_authorized(request):
+            return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        return await call_next(request)
 
 # ==========================================
 # 0. Useful Func(s)
@@ -84,6 +118,7 @@ app = FastAPI(
     docs_url="/docs/",
     redoc_url=None)
 app.state.limiter = limiter
+app.add_middleware(ApiTokenAuthMiddleware)
 
 # ==========================================
 # 3. Middleware & Exception Handlers
@@ -177,7 +212,6 @@ async def start_prediction(request: Request, payload: PredictionRequest):
 @limiter.limit("60/minute")
 async def get_task_status(request: Request, task_id: str):
     """Legacy polling endpoint for task status"""
-    _ = request
     result = await asyncio.to_thread(huey.result, task_id, blocking=False)
     if result is None:
         return JSONResponse(
@@ -185,9 +219,11 @@ async def get_task_status(request: Request, task_id: str):
             content={"task_id": task_id, "status": "processing"}
         )
     if isinstance(result, Exception):
+        logger.error("task_exception", task_id=task_id, error=str(result), exc_info=True)
+        error = str(result) if is_api_token_authorized(request) else "Task failed"
         return JSONResponse(
             status_code=200,
-            content={"task_id": task_id, "status": "failed", "error": str(result)}
+            content={"task_id": task_id, "status": "failed", "error": error}
         )
     return JSONResponse(
         status_code=200,
@@ -205,9 +241,10 @@ async def stream_task_progress(request: Request, task_id: str):
     async def event_generator():
         redis = request.app.state.redis
         pubsub = None
+        deadline = sse_clock() + SSE_MAX_LIFETIME_SECONDS
         try:
-            pubsub = redis.pubsub()
-            link_bytes = await asyncio.to_thread(huey.storage.peek_data, f"link_{task_id}")
+            pubsub = await redis.pubsub()
+            link_bytes = huey.storage.peek_data(f"link_{task_id}")
             job_id = resolve_job_id(
                 link_bytes,
                 request.query_params.get("job_id", "unknown_job"),
@@ -226,13 +263,18 @@ async def stream_task_progress(request: Request, task_id: str):
                 if await request.is_disconnected():
                     break
 
-                result = await asyncio.to_thread(huey.result, task_id, blocking=False)
+                result = huey.result(task_id, blocking=False)
                 if isinstance(result, Exception):
-                    yield {"event": "message", "data": json.dumps({"status": "failed", "error": str(result)})}
+                    logger.error("task_exception", task_id=task_id, error=str(result), exc_info=True)
+                    error = str(result) if is_api_token_authorized(request) else "Task failed"
+                    yield {"event": "message", "data": json.dumps({"status": "failed", "error": error})}
                     break
                 elif result is not None:
                     yield {"event": "message",
                            "data": json.dumps({"status": "complete", "data": result}, default=numpy_safe_encoder)}
+                    break
+
+                if sse_clock() >= deadline:
                     break
 
                 try:
