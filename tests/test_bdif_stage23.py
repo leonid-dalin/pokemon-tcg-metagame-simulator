@@ -1,11 +1,12 @@
-import json
 import sqlite3
 
 import pytest
 
-from src import bdif_covariates, bdif_ingestion
+from src import bdif_covariates
+from src.ingestion.client import LimitlessClient
 from src.ingestion.model import fit_model
 from src.ingestion.store import LimitlessStore
+from src.ingestion.aggregate import build_artifact
 
 
 @pytest.mark.unit
@@ -17,35 +18,21 @@ def test_limitless_client_sends_key_only_as_an_access_header(monkeypatch):
             return None
 
         def json(self):
-            return {"events": []}
+            return []
 
     def fake_get(url, **kwargs):
         seen.update(kwargs)
         return Response()
 
-    monkeypatch.setattr(bdif_ingestion.requests, "get", fake_get)
-    client = bdif_ingestion.LimitlessClient(api_key="secret-value")
-    assert client.tournaments(game="PTCG") == {"events": []}
+    monkeypatch.setattr("src.ingestion.client.requests.get", fake_get)
+    client = LimitlessClient(api_key="secret-value", min_delay=0)
+    assert client.tournaments(game="PTCG") == []
     assert seen["headers"]["X-Access-Key"] == "secret-value"
     assert "secret-value" not in seen.get("params", {})
     assert "secret-value" not in seen.get("url", "")
 
 
 @pytest.mark.unit
-def test_event_snapshot_stores_event_date_archetype_and_inclusion_rates(tmp_path):
-    destination = bdif_ingestion.store_event_snapshot(
-        tmp_path,
-        {
-            "event_id": "event-1",
-            "event_date": "2026-09-20",
-            "archetype": "Alakazam Dudunsparce",
-            "cards": ["Misty", "Misty", "Rocky Energy"],
-        },
-    )
-    record = json.loads(destination.read_text(encoding="utf-8"))
-    assert record["inclusion_rates"] == {"Misty": 1 / 2, "Rocky Energy": 1 / 2}
-    assert "secret" not in record
-
 
 @pytest.mark.unit
 def test_card_covariate_model_is_disabled_by_default(monkeypatch):
@@ -74,6 +61,7 @@ def test_store_upserts_events_and_counts_unique_card_inclusion(tmp_path):
     standings = [
         {"player": "p1", "placing": 1, "record": {"wins": 1}, "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Misty", "count": 2}]}},
         {"player": "p2", "placing": 2, "record": {"wins": 0}, "deck": {"id": "b"}, "decklist": {"pokemon": [{"name": "Rocky Energy", "count": 1}]}},
+        {"player": "p3", "placing": 3, "record": {"wins": 0}, "deck": {"id": "a"}, "decklist": None},
     ]
     store.upsert_tournament(event, {"decklists": True})
     store.upsert_standings("event-1", standings)
@@ -82,7 +70,30 @@ def test_store_upserts_events_and_counts_unique_card_inclusion(tmp_path):
     assert len(list(store.iter_events())) == 1
     assert store.card_inclusion("a") == {"Misty": 1.0}
     with sqlite3.connect(tmp_path / "limitless.db") as conn:
-        assert conn.execute("SELECT COUNT(*) FROM standings").fetchone()[0] == 2
+        assert conn.execute("SELECT COUNT(*) FROM standings").fetchone()[0] == 3
+
+
+@pytest.mark.unit
+def test_aggregate_normalises_reversed_player_slots_into_one_pair():
+    class Store:
+        def matchup_rows(self):
+            return iter([
+                ("Crustle", "N's Zoroark", "p1", "p1", "p2"),
+                ("N's Zoroark", "Crustle", "p1", "p2", "p1"),
+            ])
+
+        def card_inclusion(self, archetype):
+            return {}
+
+    artifact = build_artifact(Store())
+    assert artifact["win_rate_matrix"]["Crustle"]["N's Zoroark"] == {
+        "win_rate": 1.0,
+        "match_count": 2,
+    }
+    assert artifact["win_rate_matrix"]["N's Zoroark"]["Crustle"] == {
+        "win_rate": 0.0,
+        "match_count": 2,
+    }
 
 
 @pytest.mark.unit

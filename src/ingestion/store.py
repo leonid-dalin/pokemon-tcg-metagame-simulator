@@ -62,7 +62,10 @@ class LimitlessStore:
 
     def card_inclusion(self, archetype: str) -> dict[str, float]:
         with self.connect() as conn:
-            rows = conn.execute("SELECT decklist_json FROM standings WHERE deck_id=?", (archetype,)).fetchall()
+            rows = conn.execute(
+                "SELECT decklist_json FROM standings WHERE deck_id=? AND decklist_json IS NOT NULL AND decklist_json != 'null'",
+                (archetype,),
+            ).fetchall()
         counts: dict[str, int] = {}
         for (raw,) in rows:
             cards = json.loads(raw) if raw and raw != "null" else {}

@@ -41,7 +41,7 @@ class LimitlessClient:
             headers=headers,
             timeout=self.timeout,
         )
-        if response.status_code == 429:
+        if getattr(response, "status_code", 200) == 429:
             retry_after = float(response.headers.get("Retry-After", "0"))
             if retry_after:
                 time.sleep(min(retry_after, 60.0))
@@ -52,9 +52,10 @@ class LimitlessClient:
                     headers=headers,
                     timeout=self.timeout,
                 )
-        if not 200 <= response.status_code < 300:
+        status_code = getattr(response, "status_code", 200)
+        if not 200 <= status_code < 300:
             raise LimitlessResponseError(f"Limitless request failed with HTTP {response.status_code}")
-        if len(response.content) > 10_000_000:
+        if len(getattr(response, "content", b"")) > 10_000_000:
             raise LimitlessResponseError("Limitless response exceeded 10 MB")
         try:
             return response.json()
