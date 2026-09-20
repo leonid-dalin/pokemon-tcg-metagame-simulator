@@ -154,9 +154,69 @@ def test_posterior_report_contains_intervals_and_ranked_split(monkeypatch):
         report=True,
     )
 
-    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data"}
+    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel"}
     assert not result["insufficient_data"]
     assert result["ranked_metrics"]["a"]["day2_share_lower"] <= result["ranked_metrics"]["a"]["day2_share_upper"]
+
+
+@pytest.mark.unit
+def test_matchup_panel_marks_thin_pair_unreliable_and_keeps_unknown_decks():
+    names = ["Crustle", "N's Zoroark", "a", "b", "c", "d", "e"]
+    matrix = np.full((7, 7), 0.5)
+    details = {}
+    for i, left in enumerate(names):
+        for j, right in enumerate(names):
+            details[(left, right)] = {"win_rate": 0.5, "match_count": 0 if i == j else 3000}
+    details[("Crustle", "a")] = {"win_rate": 0.7, "match_count": 6}
+    details[("a", "Crustle")] = {"win_rate": 0.3, "match_count": 6}
+    alpha, beta, _ = monte_carlo.build_hierarchical_beta_posteriors(names, matrix, details)
+    panel = monte_carlo.build_matchup_panel(
+        names,
+        np.array([0.30, 0.20, 0.15, 0.12, 0.10, 0.08, 0.05]),
+        alpha,
+        beta,
+        details,
+        panel_decks=["Crustle", "N's Zoroark", "Unknown deck"],
+    )
+
+    crustle_a = next(row for row in panel["rows"]["Crustle"] if row["opponent"] == "a")
+    crustle_b = next(row for row in panel["rows"]["Crustle"] if row["opponent"] == "b")
+    zoroark_mirror = next(row for row in panel["rows"]["N's Zoroark"] if row["mirror"])
+    assert crustle_a["reliable"] is False
+    assert crustle_a["upper"] - crustle_a["lower"] > crustle_b["upper"] - crustle_b["lower"]
+    assert crustle_b["reliable"] is True
+    assert zoroark_mirror["mean"] == 0.5
+    assert panel["unmatched"] == ["Unknown deck"]
+
+
+@pytest.mark.unit
+def test_report_true_exposes_matchup_panel(monkeypatch):
+    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
+    monkeypatch.setattr(
+        monte_carlo.tcg_engine,
+        "run_parallel_monte_carlo",
+        lambda *args: ([10, 10], [5, 5], [2, 2], [1, 1]),
+    )
+    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
+    result = monte_carlo.run_monte_carlo_analytics(
+        deck_names=["Crustle", "a"],
+        win_matrix=np.array([[0.5, 0.6], [0.4, 0.5]]),
+        meta_distribution={"Crustle": 0.7, "a": 0.3},
+        matchup_details={
+            ("Crustle", "a"): {"win_rate": 0.6, "match_count": 3000},
+            ("a", "Crustle"): {"win_rate": 0.4, "match_count": 3000},
+        },
+        d1_rounds=1,
+        cut_points=1,
+        d2_rounds=1,
+        top_cut=1,
+        iterations=1,
+        posterior_draws=1,
+        report=True,
+        panel_decks=["Crustle"],
+    )
+    assert "matchup_panel" in result
+    assert result["matchup_panel"]["rows"]["Crustle"]
 
 
 @pytest.mark.unit

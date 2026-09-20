@@ -33,6 +33,7 @@ BDIF_POSTERIOR_DRAWS = 25
 LIMITLESS_INGESTION_ENABLED = False
 LIMITLESS_BACKFILL_TOURNAMENTS = 200
 BDIF_USE_CARD_MODEL = False
+BDIF_PANEL_DECKS = ["Crustle", "N's Zoroark"]
 
 # ----------------------------
 # Evolutionary Dynamics (Replicator Engine)

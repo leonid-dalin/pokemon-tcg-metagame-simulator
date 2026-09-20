@@ -105,6 +105,7 @@ def execute_simulation_job(payload: dict):
                     progress_callback=_progress_handler,
                     matchup_details=matchup_details,
                     report=True,
+                    panel_decks=None,
                 )
 
             log.info("simulation_job_complete", status="success")

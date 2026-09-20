@@ -6,6 +6,7 @@ import time
 import structlog
 import numpy as np
 import tcg_engine
+from scipy.stats import beta as beta_distribution
 from typing import Any, Dict, List, Optional, Callable, Tuple
 
 from src.core.runtime import get_container_cores
@@ -17,6 +18,7 @@ from src.core.config import (
     BDIF_PAIR_MIN_GAMES,
     BDIF_POSTERIOR_DRAWS,
     BDIF_PRIOR_STRENGTH,
+    BDIF_PANEL_DECKS,
 )
 
 logger = structlog.get_logger()
@@ -84,6 +86,67 @@ def build_hierarchical_beta_posteriors(
     return alpha, beta, insufficient
 
 
+def build_matchup_panel(
+        deck_names: List[str],
+        meta_vector: np.ndarray,
+        alpha: np.ndarray,
+        beta: np.ndarray,
+        matchup_details: Dict[Tuple[str, str], Dict[str, Any]],
+        panel_decks: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Build analytical posterior rows for configured decks against the field."""
+    requested = list(panel_decks if panel_decks is not None else BDIF_PANEL_DECKS)
+    index = {deck: i for i, deck in enumerate(deck_names)}
+    top_indices = np.argsort(-meta_vector, kind="stable")[:6]
+    top_decks = [deck_names[i] for i in top_indices]
+    rows: Dict[str, List[Dict[str, Any]]] = {}
+    unmatched: List[str] = []
+
+    for deck in requested:
+        if deck not in index:
+            unmatched.append(deck)
+            continue
+        deck_index = index[deck]
+        opponents = [opponent for opponent in top_decks if opponent != deck]
+        if deck in top_decks:
+            opponents = opponents[:5]
+            opponents.append(deck)
+        deck_rows = []
+        for opponent in opponents:
+            if opponent == deck:
+                deck_rows.append({
+                    "opponent": opponent,
+                    "mean": 0.5,
+                    "lower": 0.5,
+                    "upper": 0.5,
+                    "match_count": 0,
+                    "reliable": True,
+                    "mirror": True,
+                })
+                continue
+            opponent_index = index[opponent]
+            posterior_alpha = float(alpha[deck_index, opponent_index])
+            posterior_beta = float(beta[deck_index, opponent_index])
+            forward = matchup_details.get((deck, opponent), {})
+            reverse = matchup_details.get((opponent, deck), {})
+            match_count = max(
+                int(forward.get("match_count", 0)),
+                int(reverse.get("match_count", 0)),
+            )
+            deck_rows.append({
+                "opponent": opponent,
+                "mean": posterior_alpha / (posterior_alpha + posterior_beta),
+                "lower": float(beta_distribution.ppf(0.025, posterior_alpha, posterior_beta)),
+                "upper": float(beta_distribution.ppf(0.975, posterior_alpha, posterior_beta)),
+                "match_count": match_count,
+                "reliable": match_count >= BDIF_PAIR_MIN_GAMES,
+                "mirror": False,
+            })
+        rows[deck] = deck_rows
+
+    return {"rows": rows, "unmatched": unmatched, "opponents": top_decks}
+
+
 def run_monte_carlo_analytics(
         deck_names: List[str],
         win_matrix: np.ndarray,
@@ -103,6 +166,7 @@ def run_monte_carlo_analytics(
         matchup_details: Optional[Dict[Tuple[str, str], Dict[str, Any]]] = None,
         report: bool = False,
         posterior_draws: int = BDIF_POSTERIOR_DRAWS,
+        panel_decks: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     if not hasattr(run_monte_carlo_analytics, "_rayon_initialized"):
         try:
@@ -253,4 +317,16 @@ def run_monte_carlo_analytics(
         "metrics": results,
         "ranked_metrics": ranked_metrics,
         "insufficient_data": insufficient_data,
+        "matchup_panel": build_matchup_panel(
+            deck_names,
+            meta_vec,
+            alpha,
+            beta,
+            matchup_details or {},
+            panel_decks=panel_decks,
+        ) if posterior_mode else {
+            "rows": {},
+            "unmatched": list(panel_decks if panel_decks is not None else BDIF_PANEL_DECKS),
+            "opponents": [],
+        },
     }
