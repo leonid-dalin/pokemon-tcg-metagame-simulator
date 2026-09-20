@@ -74,6 +74,16 @@ def test_store_upserts_events_and_counts_unique_card_inclusion(tmp_path):
 
 
 @pytest.mark.unit
+def test_observed_skeleton_uses_high_frequency_cards(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    store.upsert_standings("event", [
+        {"player": "p1", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 2}]}},
+        {"player": "p2", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 2}]}},
+    ])
+    assert store.observed_skeleton("a") == [{"card": "Crustle", "copies": 2}]
+
+
+@pytest.mark.unit
 def test_aggregate_normalises_reversed_player_slots_into_one_pair():
     class Store:
         def matchup_rows(self):
@@ -116,9 +126,10 @@ def test_best60_ranks_positive_pooled_card_first():
         {"Positive": (1.0, 3.0), "Neutral": (0.0, 0.2)},
         {"a": {"Positive": 1.0}, "b": {"Positive": 0.0}},
         {"b": 1.0},
+        skeleton=[{"card": "Crustle", "copies": 2}],
     )
 
-    assert result["cards"][0]["card"] == "Positive"
+    assert result["cards"][-1]["card"] == "Positive"
     assert result["observational"] is True
 
 
@@ -150,6 +161,11 @@ def test_best60_puts_zero_spanning_interval_in_no_signal_bucket():
 def test_best60_rejects_five_copies():
     with pytest.raises(ValueError, match="copy limit"):
         validate_recommendation([{"card": "Too Many", "copies": 5}])
+
+
+@pytest.mark.unit
+def test_basic_energy_is_not_limited_to_four_copies():
+    validate_recommendation([{"card": "Darkness Energy", "copies": 12}])
 
 
 @pytest.mark.unit

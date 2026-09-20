@@ -31,6 +31,42 @@ redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/?db=0")
 huey = RedisHuey('tcg_tasks', url=redis_url)
 
 
+def _build_bdif_report_addons() -> tuple[dict, dict]:
+    from src.ingestion.features import deck_features
+    from src.ingestion.model import fit_h1_misty_variant, fit_model, recommend_best60
+    from src.ingestion.store import LimitlessStore
+
+    if not os.path.exists(os.path.join("data", "limitless.db")):
+        return {}, {}
+    store = LimitlessStore(os.path.join("data", "limitless.db"))
+    deck_weights = store.deck_weights()
+    if not deck_weights:
+        return {}, {}
+    top_decks = [deck for deck, _ in sorted(deck_weights.items(), key=lambda item: item[1], reverse=True)[:6]]
+    inclusion = deck_features(store, top_decks)
+    observations = store.observations()
+    if len(observations) < 4 or len({result for _, _, result in observations}) < 2:
+        return {deck: {"status": "insufficient stored observations"} for deck in top_decks}, {}
+    fitted = fit_model(observations, inclusion)
+    coefficients, intervals = fitted.coefficient_report()
+    candidates = sorted({card for values in inclusion.values() for card in values})
+    recommendations = {}
+    for deck in top_decks:
+        recommendations[deck] = recommend_best60(
+            deck,
+            candidates,
+            coefficients,
+            intervals,
+            inclusion,
+            deck_weights,
+            playable_cards=store.observed_cards(deck),
+            skeleton=store.observed_skeleton(deck),
+        )
+    h1_observations = store.h1_observations()
+    h1 = fit_h1_misty_variant(h1_observations) if h1_observations else {}
+    return recommendations, h1
+
+
 def _simulation_input_path() -> str:
     if BDIF_USE_CARD_MODEL:
         candidate = os.path.join("data", "input", "limitless_model_input.json")
@@ -84,6 +120,8 @@ def execute_simulation_job(payload: dict):
                 pipe.publish(f"channel:progress:{job_id}", msg_payload)
                 pipe.execute()
 
+            best60_recommendations, h1_report = _build_bdif_report_addons()
+
             # 4. Run Monte Carlo Brackets (Tracing Rust Engine execution)
             with tracer.start_as_current_span("monte_carlo_analytics") as mc_span:
                 mc_span.set_attribute("iterations", iterations)
@@ -106,6 +144,8 @@ def execute_simulation_job(payload: dict):
                     matchup_details=matchup_details,
                     report=True,
                     panel_decks=None,
+                    best60_recommendations=best60_recommendations,
+                    h1_report=h1_report,
                 )
 
             log.info("simulation_job_complete", status="success")

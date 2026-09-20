@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 import numpy as np
+from scipy.stats import norm
 from sklearn.linear_model import LogisticRegression
 
 ACE_SPEC_CARDS = frozenset({
@@ -17,12 +18,42 @@ ACE_SPEC_CARDS = frozenset({
 })
 
 
+def benjamini_hochberg(p_values: Mapping[str, float]) -> dict[str, float]:
+    ordered = sorted(p_values.items(), key=lambda item: item[1])
+    adjusted = {}
+    running = 1.0
+    for rank, (card, p_value) in reversed(list(enumerate(ordered, start=1))):
+        running = min(running, p_value * len(ordered) / rank)
+        adjusted[card] = min(1.0, running)
+    return adjusted
+
+
+def _card_limit(card: str, card_rules: Mapping[str, Mapping[str, Any]]) -> int | None:
+    rule = card_rules.get(card, {})
+    basic_energy_names = {"Grass Energy", "Fire Energy", "Water Energy", "Lightning Energy", "Psychic Energy", "Fighting Energy", "Darkness Energy", "Metal Energy"}
+    if rule.get("basic_energy") or rule.get("type") == "basic_energy" or card in basic_energy_names:
+        return None
+    if rule.get("ace_spec") or card in ACE_SPEC_CARDS:
+        return 1
+    return int(rule.get("max_copies", 4))
+
+
 @dataclass
 class FittedCardModel:
     decks: list[str]
     cards: list[str]
     estimator: LogisticRegression
     inclusion: Mapping[str, Mapping[str, float]]
+    standard_errors: Mapping[str, float] | None = None
+
+    def coefficient_report(self) -> tuple[dict[str, float], dict[str, tuple[float, float]]]:
+        offset = len(self.decks)
+        coefficients = {
+            card: float(self.estimator.coef_[0, offset + index])
+            for index, card in enumerate(self.cards)
+        }
+        intervals = {card: (value - 1.96 * self.standard_errors.get(card, 1.0), value + 1.96 * self.standard_errors.get(card, 1.0)) for card, value in coefficients.items()}
+        return coefficients, intervals
 
     def probability(self, deck_i: str, deck_j: str) -> float:
         row = np.zeros((1, len(self.decks) + len(self.cards)), dtype=float)
@@ -36,10 +67,7 @@ class FittedCardModel:
         return float(self.estimator.predict_proba(row)[0, 1])
 
 
-def fit_model(
-    observations: list[tuple[str, str, int]],
-    inclusion: Mapping[str, Mapping[str, float]],
-) -> FittedCardModel:
+def fit_model(observations: list[tuple[str, str, int]], inclusion: Mapping[str, Mapping[str, float]]) -> FittedCardModel:
     decks = sorted({deck for row in observations for deck in row[:2]})
     cards = sorted({card for values in inclusion.values() for card in values})
     rows = []
@@ -53,95 +81,91 @@ def fit_model(
         rows.append(row)
         labels.append(int(result))
     estimator = LogisticRegression(C=1.0, max_iter=1000, random_state=1312)
-    estimator.fit(np.asarray(rows), np.asarray(labels))
-    return FittedCardModel(decks, cards, estimator, inclusion)
+    design = np.asarray(rows)
+    target = np.asarray(labels)
+    estimator.fit(design, target)
+    probabilities = estimator.predict_proba(design)[:, 1]
+    weights = probabilities * (1.0 - probabilities)
+    covariance = np.linalg.pinv(design.T @ (weights[:, None] * design))
+    standard_errors = {card: float(np.sqrt(max(covariance[len(decks) + index, len(decks) + index], 0.0))) for index, card in enumerate(cards)}
+    return FittedCardModel(decks, cards, estimator, inclusion, standard_errors)
 
 
 def model_artifact(model: FittedCardModel) -> dict[str, Any]:
-    return {
-        "archetypes": model.decks,
-        "win_rate_matrix": {
-            deck_i: {
-                deck_j: {"win_rate": 0.5 if deck_i == deck_j else model.probability(deck_i, deck_j), "match_count": 0}
-                for deck_j in model.decks
-            }
-            for deck_i in model.decks
-        },
-    }
+    return {"archetypes": model.decks, "win_rate_matrix": {deck_i: {deck_j: {"win_rate": 0.5 if deck_i == deck_j else model.probability(deck_i, deck_j), "match_count": 0} for deck_j in model.decks} for deck_i in model.decks}}
 
 
-def validate_recommendation(cards: Sequence[Mapping[str, Any]], banned_cards: set[str] | None = None) -> None:
+def validate_recommendation(cards: Sequence[Mapping[str, Any]], banned_cards: set[str] | None = None, card_rules: Mapping[str, Mapping[str, Any]] | None = None) -> None:
     banned_cards = banned_cards or set()
+    card_rules = card_rules or {}
     ace_count = 0
     for row in cards:
         card = str(row["card"])
         copies = int(row["copies"])
         if card in banned_cards:
             raise ValueError(f"banned card in recommendation: {card}")
-        if copies < 0 or copies > 4:
+        limit = _card_limit(card, card_rules)
+        if copies < 0 or limit is not None and copies > limit:
             raise ValueError(f"card copy limit exceeded: {card}")
-        if card in ACE_SPEC_CARDS:
+        if card_rules.get(card, {}).get("ace_spec") or card in ACE_SPEC_CARDS:
             ace_count += copies
     if ace_count > 1:
         raise ValueError("recommendation may contain at most one ACE SPEC card")
 
 
-def recommend_best60(
-    archetype: str,
-    candidates: Sequence[str],
-    coefficients: Mapping[str, float],
-    coefficient_intervals: Mapping[str, tuple[float, float]],
-    inclusion: Mapping[str, Mapping[str, float]],
-    meta_weights: Mapping[str, float],
-    banned_cards: set[str] | None = None,
-) -> dict[str, Any]:
+def recommend_best60(archetype: str, candidates: Sequence[str], coefficients: Mapping[str, float], coefficient_intervals: Mapping[str, tuple[float, float]], inclusion: Mapping[str, Mapping[str, float]], meta_weights: Mapping[str, float], banned_cards: set[str] | None = None, card_rules: Mapping[str, Mapping[str, Any]] | None = None, playable_cards: set[str] | None = None, skeleton: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     banned_cards = banned_cards or set()
+    card_rules = card_rules or {}
+    playable_cards = set(playable_cards) if playable_cards is not None else set(candidates)
     scored = []
     for card in candidates:
-        if card in banned_cards:
+        if card in banned_cards or card not in playable_cards:
             continue
-        delta = sum(
-            weight * (inclusion.get(archetype, {}).get(card, 0.0) - inclusion.get(opponent, {}).get(card, 0.0))
-            for opponent, weight in meta_weights.items()
-        )
+        delta = sum(weight * (inclusion.get(archetype, {}).get(card, 0.0) - inclusion.get(opponent, {}).get(card, 0.0)) for opponent, weight in meta_weights.items())
         coefficient = coefficients.get(card, 0.0)
         lower, upper = coefficient_intervals.get(card, (coefficient, coefficient))
         score = coefficient * delta
         interval = (min(lower * delta, upper * delta), max(lower * delta, upper * delta))
-        scored.append({
-            "card": card,
-            "score": score,
-            "lower": interval[0],
-            "upper": interval[1],
-            "bucket": "signal" if interval[0] > 0 or interval[1] < 0 else "no signal",
-        })
+        scored.append({"card": card, "score": score, "lower": interval[0], "upper": interval[1], "bucket": "signal" if interval[0] > 0 or interval[1] < 0 else "no signal"})
+    p_values = {}
+    for row in scored:
+        width = max(row["upper"] - row["lower"], 1e-9)
+        p_values[row["card"]] = min(1.0, 2.0 * (1.0 - norm.cdf(abs(row["score"]) / (width / (2 * 1.96)))))
+    q_values = benjamini_hochberg(p_values)
+    for row in scored:
+        row["q_value"] = q_values[row["card"]]
+        if row["q_value"] > 0.05 or row["lower"] <= 0 <= row["upper"]:
+            row["bucket"] = "no signal"
     scored.sort(key=lambda row: row["score"], reverse=True)
     signal = [row for row in scored if row["bucket"] == "signal"]
-    ace_signal = [row for row in signal if row["card"] in ACE_SPEC_CARDS]
-    selected = [{**max(ace_signal, key=lambda row: row["score"]), "copies": 1}] if ace_signal else []
+    selected = [dict(row) for row in (skeleton or [])]
+    if not skeleton:
+        return {
+            "archetype": archetype,
+            "cards": [],
+            "no_signal": scored,
+            "observational": True,
+            "total_copies": 0,
+            "status": "missing observed skeleton",
+        }
+    ace_signal = [row for row in signal if row["card"] in ACE_SPEC_CARDS or card_rules.get(row["card"], {}).get("ace_spec")]
+    if ace_signal:
+        selected.append({**max(ace_signal, key=lambda row: row["score"]), "copies": 1})
     for row in signal:
-        if row["card"] in ACE_SPEC_CARDS:
+        if row["card"] in ACE_SPEC_CARDS or card_rules.get(row["card"], {}).get("ace_spec"):
             continue
-        if sum(item["copies"] for item in selected) >= 60:
+        remaining = 60 - sum(item["copies"] for item in selected)
+        if remaining <= 0:
             break
-        selected.append({**row, "copies": min(4, 60 - sum(item["copies"] for item in selected))})
-    validate_recommendation(selected, banned_cards)
-    return {
-        "archetype": archetype,
-        "cards": selected,
-        "no_signal": [row for row in scored if row["bucket"] == "no signal"],
-        "observational": True,
-        "total_copies": sum(item["copies"] for item in selected),
-    }
+        limit = _card_limit(row["card"], card_rules)
+        selected.append({**row, "copies": remaining if limit is None else min(limit, remaining)})
+    validate_recommendation(selected, banned_cards, card_rules)
+    return {"archetype": archetype, "cards": selected, "no_signal": [row for row in scored if row["bucket"] == "no signal"], "observational": True, "total_copies": sum(item["copies"] for item in selected)}
 
 
-def fit_h1_misty_variant(
-    observations: Sequence[Mapping[str, Any]],
-) -> dict[str, Any]:
-    """Report the Misty association with and without the Hammer variant control."""
+def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     def fit(include_variant: bool) -> tuple[float, tuple[float, float]]:
-        rows = []
-        labels = []
+        rows, labels = [], []
         for observation in observations:
             row = [float(observation.get("misty", 0.0))]
             if include_variant:
@@ -154,15 +178,6 @@ def fit_h1_misty_variant(
         information = np.asarray(rows).T @ np.asarray(rows)
         standard_error = float(np.sqrt(1.0 / max(np.linalg.pinv(information)[0, 0], 1e-9)))
         return coefficient, (coefficient - 1.96 * standard_error, coefficient + 1.96 * standard_error)
-
     without_variant = fit(False)
     with_variant = fit(True)
-    return {
-        "hypothesis": "H1",
-        "card": "Misty Energy",
-        "target": "Alakazam Dudunsparce",
-        "without_variant": {"beta": without_variant[0], "interval": without_variant[1]},
-        "with_variant": {"beta": with_variant[0], "interval": with_variant[1]},
-        "status": "supported" if without_variant[0] > 0 and with_variant[0] > 0 else "rejected",
-        "interpretation": "observational association, not a causal effect",
-    }
+    return {"hypothesis": "H1", "card": "Misty Energy", "target": "Alakazam Dudunsparce", "without_variant": {"beta": without_variant[0], "interval": without_variant[1]}, "with_variant": {"beta": with_variant[0], "interval": with_variant[1]}, "status": "supported" if without_variant[0] > 0 and with_variant[0] > 0 else "rejected", "interpretation": "observational association, not a causal effect"}
