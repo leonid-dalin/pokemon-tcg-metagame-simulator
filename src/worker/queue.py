@@ -42,7 +42,7 @@ def execute_simulation_job(payload: dict):
         log.info("starting_simulation_job", players=request.total_players)
 
         try:
-            deck_names, win_matrix, _ = load_matchup_data(INPUT_DATA, MIN_GAMES)
+            deck_names, win_matrix, matchup_details = load_matchup_data(INPUT_DATA, MIN_GAMES)
 
             iterations = TIER_MAPPING.get(request.precision_tier, 25_000)
             players = request.total_players

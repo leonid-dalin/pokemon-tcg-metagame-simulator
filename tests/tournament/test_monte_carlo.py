@@ -155,3 +155,62 @@ def test_posterior_report_contains_intervals_and_ranked_split(monkeypatch):
     assert set(result) == {"metrics", "ranked_metrics", "insufficient_data"}
     assert not result["insufficient_data"]
     assert result["ranked_metrics"]["a"]["day2_share_lower"] <= result["ranked_metrics"]["a"]["day2_share_upper"]
+
+
+@pytest.mark.unit
+def test_posterior_draws_keep_matchup_matrix_complementary(monkeypatch):
+    matrices = []
+    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
+
+    def run_parallel(iterations, players, meta, matrix, *args):
+        matrices.append(np.asarray(matrix))
+        return [1, 1], [1, 1], [1, 1], [1, 1]
+
+    monkeypatch.setattr(monte_carlo.tcg_engine, "run_parallel_monte_carlo", run_parallel)
+    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
+
+    monte_carlo.run_monte_carlo_analytics(
+        deck_names=["a", "b"],
+        win_matrix=np.array([[0.5, 0.7], [0.3, 0.5]]),
+        meta_distribution={"a": 0.5, "b": 0.5},
+        matchup_details={
+            ("a", "b"): {"win_rate": 0.7, "match_count": 100},
+            ("b", "a"): {"win_rate": 0.3, "match_count": 100},
+        },
+        d1_rounds=1,
+        cut_points=1,
+        d2_rounds=1,
+        top_cut=1,
+        iterations=2,
+        posterior_draws=2,
+    )
+
+    assert matrices
+    assert all(np.allclose(matrix + matrix.T, 1.0) for matrix in matrices)
+
+
+@pytest.mark.unit
+def test_posterior_draws_preserve_requested_iterations(monkeypatch):
+    iterations_seen = []
+    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
+    monkeypatch.setattr(
+        monte_carlo.tcg_engine,
+        "run_parallel_monte_carlo",
+        lambda iterations, *args: (iterations_seen.append(iterations) or ([1], [1], [1], [1])),
+    )
+    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
+
+    monte_carlo.run_monte_carlo_analytics(
+        deck_names=["a"],
+        win_matrix=np.array([[0.5]]),
+        meta_distribution={"a": 1.0},
+        matchup_details={("a", "a"): {"win_rate": 0.5, "match_count": 0}},
+        d1_rounds=1,
+        cut_points=1,
+        d2_rounds=1,
+        top_cut=1,
+        iterations=999,
+        posterior_draws=25,
+    )
+
+    assert sum(iterations_seen) == 999

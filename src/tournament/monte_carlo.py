@@ -128,7 +128,11 @@ def run_monte_carlo_analytics(
 
     draw_count = posterior_draws if posterior_mode else 1
     if posterior_mode:
-        draw_specs = [(iterations // draw_count, i) for i in range(draw_count)]
+        base_iterations, remainder = divmod(iterations, draw_count)
+        draw_specs = [
+            (base_iterations + (1 if i < remainder else 0), i)
+            for i in range(draw_count)
+        ]
     else:
         base_chunk_size = 10000 if iterations >= 10000 else iterations
         chunks = max(1, iterations // base_chunk_size)
@@ -140,8 +144,14 @@ def run_monte_carlo_analytics(
     draw_metrics = []
     for current_chunk, draw_index in draw_specs:
         if posterior_mode:
-            working_matrix = np.random.default_rng(seed + draw_index).beta(alpha, beta)
-            np.fill_diagonal(working_matrix, 0.5)
+            rng = np.random.default_rng(seed + draw_index)
+            working_matrix = np.zeros((n_decks, n_decks), dtype=float)
+            for i in range(n_decks):
+                working_matrix[i, i] = 0.5
+                for j in range(i + 1, n_decks):
+                    sample = float(rng.beta(alpha[i, j], beta[i, j]))
+                    working_matrix[i, j] = sample
+                    working_matrix[j, i] = 1.0 - sample
         else:
             working_matrix = win_matrix.copy()
         if match_format == "BO3":
