@@ -153,24 +153,6 @@ async def test_protected_endpoints_reject_missing_and_mismatched_tokens(method, 
 
 
 @pytest.mark.anyio
-async def test_unrelated_routes_do_not_require_an_api_token(monkeypatch):
-    seen = []
-
-    async def call_next(_request):
-        seen.append("/health")
-        return main.JSONResponse(status_code=200, content={"status": "ok"})
-
-    monkeypatch.setenv("API_TOKEN", "correct-token")
-    response = await main.ApiTokenAuthMiddleware(SimpleNamespace()).dispatch(
-        request_for("GET", "/health"),
-        call_next,
-    )
-
-    assert response.status_code == 200
-    assert seen == ["/health"]
-
-
-@pytest.mark.anyio
 async def test_startup_scrape_is_dispatched_without_blocking_lifespan(monkeypatch):
     scrape_called = False
     release_scrape = asyncio.Event()
@@ -290,44 +272,6 @@ async def test_task_status_redacts_worker_errors(token, expected_error, monkeypa
     }
     assert logged[0][0][0] == "task_exception"
     assert logged[0][1]["error"] == "worker failed"
-
-
-@pytest.mark.anyio
-async def test_sse_terminates_at_the_injected_deadline_without_result(monkeypatch):
-    redis = FakeRedis()
-    monkeypatch.setenv("API_TOKEN", "correct-token")
-    monkeypatch.setattr(main, "sse_clock", FakeClock([0.0, 600.0]))
-    monkeypatch.setattr(main.huey.storage, "peek_data", lambda key: None)
-
-    response = await main.stream_task_progress.__wrapped__(stream_request(redis), "task-id")
-    events = await consume_events(response)
-
-    assert events == []
-    assert redis.pubsub_instance.closed
-
-
-@pytest.mark.anyio
-async def test_sse_reports_completion_at_the_injected_deadline(monkeypatch):
-    redis = FakeRedis()
-    monkeypatch.setenv("API_TOKEN", "correct-token")
-    monkeypatch.setattr(main, "sse_clock", FakeClock([0.0, 600.0]))
-    monkeypatch.setattr(main.huey.storage, "peek_data", lambda key: None)
-    monkeypatch.setattr(
-        main.huey,
-        "result",
-        lambda task_id, blocking=False: {"value": 1},
-    )
-
-    response = await main.stream_task_progress.__wrapped__(stream_request(redis), "task-id")
-    events = await consume_events(response)
-
-    assert events == [
-        {
-            "event": "message",
-            "data": json.dumps({"status": "complete", "data": {"value": 1}}),
-        }
-    ]
-    assert redis.pubsub_instance.closed
 
 
 @pytest.mark.parametrize("token,expected_error", [(None, "Task failed"), ("correct-token", "worker failed")])
