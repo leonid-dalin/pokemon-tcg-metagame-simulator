@@ -145,6 +145,25 @@ def test_best60_ranks_positive_pooled_card_first():
     assert result["observational"] is True
 
 
+@pytest.mark.parametrize("skeleton_size", range(0, 61, 4))
+@pytest.mark.parametrize("signal_count", [0, 1, 2, 10])
+def test_best60_legality_matrix_returns_deck_or_status(skeleton_size, signal_count):
+    signal_cards = [f"Signal {index}" for index in range(signal_count)]
+    result = recommend_best60(
+        "a",
+        signal_cards,
+        {card: float(signal_count - index) for index, card in enumerate(signal_cards)},
+        {card: (0.1, 0.2) for card in signal_cards},
+        {"a": {card: 1.0 for card in signal_cards}, "b": {}},
+        {"b": 1.0},
+        playable_cards=set(signal_cards) | {"Darkness Energy"},
+        skeleton=[{"card": "Darkness Energy", "copies": skeleton_size}],
+    )
+    assert "status" in result or result["total_copies"] == 60
+    if "status" not in result:
+        validate_recommendation(result["cards"])
+
+
 @pytest.mark.unit
 def test_best60_rejects_two_ace_specs():
     with pytest.raises(ValueError, match="one ACE SPEC"):

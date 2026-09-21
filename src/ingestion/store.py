@@ -5,6 +5,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
+from src.ingestion.model import ACE_SPEC_CARDS, _card_limit
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tournaments (id TEXT PRIMARY KEY, game TEXT, format TEXT, name TEXT, date TEXT, players INTEGER, details_json TEXT);
 CREATE TABLE IF NOT EXISTS standings (tournament_id TEXT, player_id TEXT, placing INTEGER, wins INTEGER, losses INTEGER, ties INTEGER, deck_id TEXT, decklist_json TEXT, dropped_round INTEGER, PRIMARY KEY (tournament_id, player_id));
@@ -100,11 +102,21 @@ class LimitlessStore:
                     if isinstance(card, dict) and card.get("name"):
                         counts[str(card["name"])] = counts.get(str(card["name"]), 0) + int(card.get("count", 0))
         decks = len(rows)
-        return [
-            {"card": card, "copies": round(total / decks)}
-            for card, total in sorted(counts.items(), key=lambda item: item[1], reverse=True)
-            if total / decks >= 0.75
-        ]
+        skeleton = []
+        ace_cards = []
+        for card, total in sorted(counts.items(), key=lambda item: item[1], reverse=True):
+            if total / decks < 0.75:
+                continue
+            limit = _card_limit(card, {})
+            copies = round(total / decks) if limit is None else min(limit, round(total / decks))
+            if card in ACE_SPEC_CARDS:
+                ace_cards.append({"card": card, "copies": min(copies, 1)})
+                continue
+            if copies:
+                skeleton.append({"card": card, "copies": copies})
+        if ace_cards:
+            skeleton.append(ace_cards[0])
+        return skeleton
 
     def deck_weights(self, archetypes: Iterable[str] | None = None) -> dict[str, float]:
         names = list(archetypes or [])

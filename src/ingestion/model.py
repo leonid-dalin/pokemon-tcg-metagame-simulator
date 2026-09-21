@@ -46,6 +46,10 @@ def _card_limit(card: str, card_rules: Mapping[str, Mapping[str, Any]]) -> int |
     return int(rule.get("max_copies", 4))
 
 
+def _is_ace_spec(card: str, card_rules: Mapping[str, Mapping[str, Any]]) -> bool:
+    return bool(card_rules.get(card, {}).get("ace_spec") or card in ACE_SPEC_CARDS)
+
+
 @dataclass
 class FittedCardModel:
     decks: list[str]
@@ -148,7 +152,6 @@ def recommend_best60(archetype: str, candidates: Sequence[str], coefficients: Ma
             row["bucket"] = "no signal"
     scored.sort(key=lambda row: row["score"], reverse=True)
     signal = [row for row in scored if row["bucket"] == "signal"]
-    selected = [dict(row) for row in (skeleton or [])]
     if not skeleton:
         return {
             "archetype": archetype,
@@ -158,19 +161,84 @@ def recommend_best60(archetype: str, candidates: Sequence[str], coefficients: Ma
             "total_copies": 0,
             "status": "missing observed skeleton",
         }
-    ace_signal = [row for row in signal if row["card"] in ACE_SPEC_CARDS or card_rules.get(row["card"], {}).get("ace_spec")]
-    if ace_signal:
-        selected.append({**max(ace_signal, key=lambda row: row["score"]), "copies": 1})
-    for row in signal:
-        if row["card"] in ACE_SPEC_CARDS or card_rules.get(row["card"], {}).get("ace_spec"):
+
+    selected: list[dict[str, Any]] = []
+    selected_by_card: dict[str, dict[str, Any]] = {}
+    ace_selected = False
+    for item in skeleton:
+        card = str(item["card"])
+        copies = int(item["copies"])
+        if copies <= 0 or card in banned_cards:
             continue
-        remaining = 60 - sum(item["copies"] for item in selected)
-        if remaining <= 0:
+        if _is_ace_spec(card, card_rules):
+            if ace_selected:
+                continue
+            copies = 1
+            ace_selected = True
+        else:
+            limit = _card_limit(card, card_rules)
+            if limit is not None:
+                copies = min(copies, limit)
+        if copies:
+            selected_by_card[card] = {"card": card, "copies": copies}
+    selected = list(selected_by_card.values())
+
+    def add_cards(card: str, copies: int) -> int:
+        if copies <= 0 or card in banned_cards or card not in playable_cards:
+            return 0
+        if _is_ace_spec(card, card_rules) and ace_selected:
+            return 0
+        existing = selected_by_card.get(card, {"card": card, "copies": 0})
+        limit = _card_limit(card, card_rules)
+        available = copies if limit is None else min(copies, max(0, limit - int(existing["copies"])))
+        available = min(available, 60 - sum(int(item["copies"]) for item in selected_by_card.values()))
+        if available <= 0:
+            return 0
+        existing["copies"] = int(existing["copies"]) + available
+        selected_by_card[card] = existing
+        return available
+
+    for row in signal:
+        if _is_ace_spec(row["card"], card_rules):
+            continue
+        if sum(int(item["copies"]) for item in selected_by_card.values()) >= 60:
             break
-        limit = _card_limit(row["card"], card_rules)
-        selected.append({**row, "copies": remaining if limit is None else min(limit, remaining)})
+        add_cards(row["card"], 60)
+
+    fallback_cards = sorted(
+        (card for card in playable_cards if card not in banned_cards),
+        key=lambda card: inclusion.get(archetype, {}).get(card, 0.0),
+        reverse=True,
+    )
+    for card in fallback_cards:
+        if card in {row["card"] for row in signal} or _is_ace_spec(card, card_rules):
+            continue
+        if sum(int(item["copies"]) for item in selected_by_card.values()) >= 60:
+            break
+        add_cards(card, 60)
+
+    total_copies = sum(int(item["copies"]) for item in selected_by_card.values())
+    if total_copies < 60:
+        basic_energy = next(
+            (card for card in fallback_cards if _card_limit(card, card_rules) is None),
+            next((item["card"] for item in selected if _card_limit(item["card"], card_rules) is None), None),
+        )
+        if basic_energy:
+            add_cards(basic_energy, 60 - total_copies)
+
+    selected = list(selected_by_card.values())
+    total_copies = sum(int(item["copies"]) for item in selected)
+    if total_copies != 60:
+        return {
+            "archetype": archetype,
+            "cards": selected,
+            "no_signal": [row for row in scored if row["bucket"] == "no signal"],
+            "observational": True,
+            "total_copies": total_copies,
+            "status": "insufficient legal observed cards to complete 60",
+        }
     validate_recommendation(selected, banned_cards, card_rules)
-    return {"archetype": archetype, "cards": selected, "no_signal": [row for row in scored if row["bucket"] == "no signal"], "observational": True, "total_copies": sum(item["copies"] for item in selected)}
+    return {"archetype": archetype, "cards": selected, "no_signal": [row for row in scored if row["bucket"] == "no signal"], "observational": True, "total_copies": total_copies}
 
 
 def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
