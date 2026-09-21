@@ -178,6 +178,12 @@ def test_limitless_ingestion_is_disabled_by_default(monkeypatch):
 
 
 @pytest.mark.unit
+def test_bdif_builder_is_not_invoked_when_card_model_is_disabled(monkeypatch):
+    monkeypatch.setattr(queue, "BDIF_USE_CARD_MODEL", False)
+    assert queue._build_bdif_report_addons() == ({}, {})
+
+
+@pytest.mark.unit
 def test_simulation_job_continues_when_bdif_report_builder_raises(monkeypatch, tmp_path):
     received = []
     monkeypatch.setattr(queue, "INPUT_DATA", str(tmp_path / "input.json"))

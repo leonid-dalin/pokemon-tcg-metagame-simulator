@@ -4,7 +4,7 @@ import pytest
 
 from src import bdif_covariates
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import fit_h1_misty_variant, fit_model, recommend_best60, validate_recommendation
+from src.ingestion.model import fit_h1_misty_variant, fit_model, model_artifact, recommend_best60, validate_recommendation
 from src.ingestion.store import LimitlessStore
 from src.ingestion.aggregate import build_artifact
 
@@ -93,6 +93,25 @@ def test_observed_skeleton_uses_high_frequency_cards(tmp_path):
         {"player": "p2", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 2}]}},
     ])
     assert store.observed_skeleton("a") == [{"card": "Crustle", "copies": 2}]
+
+
+def test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    standings = []
+    for index in range(4):
+        standings.append({
+            "player": f"p{index}",
+            "deck": {"id": "a"},
+            "decklist": {"trainer": [
+                {"name": "Weird Card", "count": 9},
+                {"name": "Prime Catcher", "count": 1},
+                {"name": "Master Ball", "count": 1},
+            ]},
+        })
+    store.upsert_standings("event", standings)
+    skeleton = store.observed_skeleton("a")
+    assert {row["card"]: row["copies"] for row in skeleton}["Weird Card"] == 4
+    assert sum(row["card"] in {"Prime Catcher", "Master Ball"} for row in skeleton) == 1
 
 
 @pytest.mark.unit
@@ -231,6 +250,24 @@ def test_h1_misty_report_changes_when_hammer_variant_is_controlled():
     report = fit_h1_misty_variant(observations)
     assert report["without_variant"]["beta"] > 0
     assert report["with_variant"]["beta"] <= 0
-    assert report["without_variant"]["interval"][0] < report["without_variant"]["beta"] < report["without_variant"]["interval"][1]
-    assert report["with_variant"]["interval"][0] < report["with_variant"]["beta"] < report["with_variant"]["interval"][1]
+    assert report["without_variant"]["interval"] == pytest.approx((-0.4266468, 0.9916069), abs=1e-6)
+    assert report["with_variant"]["interval"] == pytest.approx((-0.9108607, 0.7331841), abs=1e-6)
     assert report["interpretation"] == "observational association, not a causal effect"
+
+def test_h1_standard_error_uses_weighted_fisher_information():
+    observations = [{"misty": 1, "hammer_variant": 0, "result": 1}] * 30
+    observations.extend([{"misty": 0, "hammer_variant": 0, "result": 0}] * 5)
+    observations.extend([{"misty": 1, "hammer_variant": 1, "result": 0}] * 10)
+    observations.extend([{"misty": 0, "hammer_variant": 1, "result": 1}] * 10)
+    report = fit_h1_misty_variant(observations)
+    assert report["without_variant"]["interval"][1] - report["without_variant"]["interval"][0] < 2.0
+
+
+def test_card_model_artifact_carries_observation_counts():
+    model = fit_model(
+        [("a", "b", 1)] * 5 + [("b", "a", 0)] * 5,
+        {"a": {"Misty": 1.0}, "b": {"Misty": 0.0}},
+    )
+    artifact = model_artifact(model)
+    assert artifact["win_rate_matrix"]["a"]["b"]["match_count"] == 10
+    assert artifact["win_rate_matrix"]["b"]["a"]["match_count"] == 10
