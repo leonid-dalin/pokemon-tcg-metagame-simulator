@@ -1,5 +1,6 @@
 import json
 import os
+from copy import deepcopy
 import requests
 import structlog
 from opentelemetry import trace
@@ -15,7 +16,6 @@ from src.core.config import (
     MIN_GAMES,
     RNG_SEED,
 )
-from src.ingestion.model import MIST_ENERGY_NAME
 from src.core.data import load_matchup_data
 from src.core.scraper import (
     build_complete_matchup_matrix,
@@ -27,7 +27,7 @@ from src.tournament.monte_carlo import run_monte_carlo_analytics
 from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
 
 q_logger = structlog.get_logger()
-_BDIF_MODEL_CACHE: dict[tuple[str, int], tuple[dict, dict]] = {}
+_BDIF_MODEL_CACHE: dict[tuple[str, float], tuple[dict, dict]] = {}
 RedisInstrumentor().instrument()
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/?db=0")
 huey = RedisHuey('tcg_tasks', url=redis_url)
@@ -44,9 +44,11 @@ def _build_bdif_report_addons() -> tuple[dict, dict]:
     db_path = os.path.join("data", "limitless.db")
     if not os.path.exists(db_path):
         return {}, {}
-    cache_key = (os.path.abspath(db_path), os.path.getmtime(db_path))
+    cache_key = (os.path.abspath(db_path), float(os.path.getmtime(db_path)))
     if cache_key in _BDIF_MODEL_CACHE:
-        return _BDIF_MODEL_CACHE[cache_key]
+        recommendations, h1 = _BDIF_MODEL_CACHE[cache_key]
+        return deepcopy(recommendations), deepcopy(h1)
+    _BDIF_MODEL_CACHE.clear()
     store = LimitlessStore(db_path)
     deck_weights = store.deck_weights()
     if not deck_weights:
@@ -74,8 +76,8 @@ def _build_bdif_report_addons() -> tuple[dict, dict]:
     h1_observations = store.h1_observations()
     h1 = fit_h1_misty_variant(h1_observations) if h1_observations else {}
     result = (recommendations, h1)
-    _BDIF_MODEL_CACHE[cache_key] = result
-    return result
+    _BDIF_MODEL_CACHE[cache_key] = deepcopy(result)
+    return deepcopy(result[0]), deepcopy(result[1])
 
 
 def _simulation_input_path() -> str:

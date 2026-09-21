@@ -221,6 +221,7 @@ def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_p
     )
     monkeypatch.setattr(queue, "predict_best_decks", lambda request: {"full_meta": {"a": 0.5, "b": 0.5}})
     monkeypatch.setattr(queue, "run_monte_carlo_analytics", lambda **kwargs: received.append(kwargs) or {})
+    monkeypatch.setattr(queue, "_build_bdif_report_addons", lambda: ({}, {}))
     monkeypatch.setattr(queue, "swiss_rounds_from_players", lambda players: 1)
 
     queue.execute_simulation_job.call_local({
@@ -230,4 +231,5 @@ def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_p
         "total_players": 4,
     })
 
-    assert received[0]["matchup_details"] is details
+    assert received[0]["matchup_details"] == details
+    assert received[0]["matchup_details"][("a", "b")]["match_count"] == 10

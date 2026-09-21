@@ -33,8 +33,6 @@ def test_limitless_client_sends_key_only_as_an_access_header(monkeypatch):
 
 
 @pytest.mark.unit
-
-@pytest.mark.unit
 def test_card_covariate_model_is_disabled_by_default(monkeypatch):
     monkeypatch.delenv("BDIF_CARD_COVARIATES_ENABLED", raising=False)
     model = bdif_covariates.CardCovariateModel({}, {})

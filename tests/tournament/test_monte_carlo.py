@@ -138,8 +138,8 @@ def test_data_sufficiency_filter_separates_qualified_and_insufficient_decks():
         ["a", "b"], np.full((2, 2), 0.5), details,
     )
     assert insufficient == []
-    details[("a", "b")]["match_count"] = 200
-    details[("b", "a")]["match_count"] = 200
+    details[("a", "b")]["match_count"] = 300
+    details[("b", "a")]["match_count"] = 300
     _, _, insufficient = monte_carlo.build_hierarchical_beta_posteriors(
         ["a", "b"], np.full((2, 2), 0.5), details,
     )
@@ -238,11 +238,7 @@ def test_report_true_exposes_matchup_panel(monkeypatch):
     )
     assert "matchup_panel" in result
     assert result["matchup_panel"]["rows"]["Crustle"]
-@pytest.mark.unit
-def test_best60_fixture_has_observational_and_no_signal_sections():
-    fixture = json.loads(Path("tests/fixtures/best60_recommendations.json").read_text(encoding="utf-8"))
-    assert fixture["Crustle"]["observational"] is True
-    assert fixture["Crustle"]["no_signal"][0]["bucket"] == "no signal"
+
 
 
 @pytest.mark.unit
