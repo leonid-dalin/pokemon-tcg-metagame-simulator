@@ -24,6 +24,7 @@ from src.core.scraper import (
 )
 from src.core.telemetry import tracer
 from src.tournament.monte_carlo import run_monte_carlo_analytics
+from src.tournament.reporting import build_bdif_report
 from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
 
 q_logger = structlog.get_logger()
@@ -159,16 +160,13 @@ def execute_simulation_job(payload: dict):
                     seed=RNG_SEED,
                     progress_callback=_progress_handler,
                     matchup_details=matchup_details,
-                    report=True,
                     panel_decks=None,
-                    best60_recommendations=best60_recommendations,
-                    h1_report=h1_report,
                 )
 
             log.info("simulation_job_complete", status="success")
             return {
                 "solver_results": solver_res,
-                "mc_results": mc_res
+                "mc_results": build_bdif_report(mc_res, best60_recommendations, h1_report)
             }
         except Exception as e:
             log.error("simulation_job_failed", error=str(e), exc_info=True)
