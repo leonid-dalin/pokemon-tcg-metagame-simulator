@@ -255,7 +255,7 @@ async def stream_task_progress(request: Request, task_id: str):
         pubsub = None
         deadline = sse_clock() + SSE_MAX_LIFETIME_SECONDS
         try:
-            pubsub = await redis.pubsub()
+            pubsub = redis.pubsub()
             link_bytes = await asyncio.to_thread(
                 huey.storage.peek_data, f"link_{task_id}"
             )

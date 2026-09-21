@@ -82,7 +82,7 @@ class FakeRedis:
         self.initial_state = initial_state
         self.pubsub_instance = FakePubSub()
 
-    async def pubsub(self):
+    def pubsub(self):
         return self.pubsub_instance
 
     async def get(self, key):
