@@ -86,6 +86,51 @@ def test_hierarchical_posterior_shrinks_a_six_match_pair_toward_field_prior():
 
 
 @pytest.mark.unit
+def test_winless_deck_pair_gets_positive_posterior_pseudocounts(monkeypatch):
+    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
+    monkeypatch.setattr(
+        monte_carlo.tcg_engine,
+        "run_parallel_monte_carlo",
+        lambda *args: ([1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]),
+    )
+    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
+
+    deck_names = ["winless-a", "winless-b", "winner"]
+    win_matrix = np.array([
+        [0.5, 0.0, 0.0],
+        [1.0, 0.5, 0.0],
+        [1.0, 1.0, 0.5],
+    ])
+    matchup_details = {
+        ("winless-a", "winner"): {"win_rate": 0.0, "match_count": 100},
+        ("winless-b", "winner"): {"win_rate": 0.0, "match_count": 100},
+        ("winner", "winless-a"): {"win_rate": 1.0, "match_count": 100},
+        ("winner", "winless-b"): {"win_rate": 1.0, "match_count": 100},
+    }
+    alpha, beta, _ = monte_carlo.build_hierarchical_beta_posteriors(
+        deck_names, win_matrix, matchup_details,
+    )
+    pair_indices = np.triu_indices(len(deck_names), k=1)
+    assert np.all(alpha[pair_indices] > 0)
+    assert np.all(beta[pair_indices] > 0)
+
+    result = monte_carlo.run_monte_carlo_analytics(
+        deck_names=deck_names,
+        win_matrix=win_matrix,
+        meta_distribution={"winless-a": 0.4, "winless-b": 0.4, "winner": 0.2},
+        matchup_details=matchup_details,
+        d1_rounds=1,
+        cut_points=1,
+        d2_rounds=1,
+        top_cut=1,
+        iterations=1,
+        posterior_draws=1,
+    )
+
+    assert set(result) == {"winless-a", "winless-b", "winner"}
+
+
+@pytest.mark.unit
 def test_hierarchical_posterior_large_sample_barely_moves_from_observation():
     alpha, beta, _ = monte_carlo.build_hierarchical_beta_posteriors(
         ["a", "b"],

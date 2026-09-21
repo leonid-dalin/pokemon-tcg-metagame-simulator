@@ -81,6 +81,8 @@ def build_hierarchical_beta_posteriors(
             prior = (float(field_wr[i]) + float(field_wr[j])) / 2.0
             pair_alpha = observed_wr * effective_matches + prior_strength * prior
             pair_beta = (1.0 - observed_wr) * effective_matches + prior_strength * (1.0 - prior)
+            pair_alpha = max(pair_alpha, np.finfo(float).eps)
+            pair_beta = max(pair_beta, np.finfo(float).eps)
             alpha[i, j], beta[i, j] = pair_alpha, pair_beta
             alpha[j, i], beta[j, i] = pair_beta, pair_alpha
     return alpha, beta, insufficient
