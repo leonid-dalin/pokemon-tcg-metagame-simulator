@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
-from src.ingestion.model import ACE_SPEC_CARDS, _card_limit
+from src.ingestion.model import ACE_SPEC_CARDS, MIST_ENERGY_NAME, _card_limit
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tournaments (id TEXT PRIMARY KEY, game TEXT, format TEXT, name TEXT, date TEXT, players INTEGER, details_json TEXT);
@@ -168,8 +168,8 @@ class LimitlessStore:
                 continue
             target_player = player1 if target_is_first else player2
             result.append({
-                "misty": int("mist energy" in " ".join(opponent_names)),
-                "hammer_variant": int("dedenne" in " ".join(names) and "enhanced hammer" in " ".join(names)),
+                "misty": int(MIST_ENERGY_NAME.lower() in opponent_names),
+                "hammer_variant": int("dedenne" in names and "enhanced hammer" in names),
                 "result": int(str(winner) == str(target_player)),
             })
         return result

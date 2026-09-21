@@ -7,6 +7,8 @@ import numpy as np
 from scipy.stats import norm
 from sklearn.linear_model import LogisticRegression
 
+MIST_ENERGY_NAME = "Mist Energy"
+
 ACE_SPEC_CARDS = frozenset({
     "Amulet of Hope", "Awakening Drum", "Brilliant Blender", "Dangerous Laser",
     "Deluxe Bomb", "Energy Search Pro", "Enriching Energy", "Grand Tree",
@@ -258,4 +260,4 @@ def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str,
         return coefficient, (coefficient - 1.96 * standard_error, coefficient + 1.96 * standard_error)
     without_variant = fit(False)
     with_variant = fit(True)
-    return {"hypothesis": "H1", "card": "Misty Energy", "target": "Alakazam Dudunsparce", "without_variant": {"beta": without_variant[0], "interval": without_variant[1]}, "with_variant": {"beta": with_variant[0], "interval": with_variant[1]}, "status": "supported" if without_variant[0] > 0 and with_variant[0] > 0 else "rejected", "interpretation": "observational association, not a causal effect"}
+    return {"hypothesis": "H1", "card": MIST_ENERGY_NAME, "target": "Alakazam Dudunsparce", "without_variant": {"beta": without_variant[0], "interval": without_variant[1]}, "with_variant": {"beta": with_variant[0], "interval": with_variant[1]}, "status": "supported" if without_variant[0] > 0 and with_variant[0] > 0 else "rejected", "interpretation": "observational association, not a causal effect"}
