@@ -1,0 +1,74 @@
+[
+  {
+    "name": "task3: target 59 cards instead of 60",
+    "file": "src/ingestion/model.py",
+    "find": "available = min(available, 60 - sum(int(item[\"copies\"]) for item in selected_by_card.values()))",
+    "replace": "available = min(available, 59 - sum(int(item[\"copies\"]) for item in selected_by_card.values()))"
+  },
+  {
+    "name": "task3: drop the skeleton ACE SPEC guard",
+    "file": "src/ingestion/model.py",
+    "find": "        if _is_ace_spec(card, card_rules):\n            if ace_selected:\n                continue\n            copies = 1\n            ace_selected = True",
+    "replace": "        if _is_ace_spec(card, card_rules):\n            copies = 1"
+  },
+  {
+    "name": "task3: stop clamping skeleton copies to the limit",
+    "file": "src/ingestion/model.py",
+    "find": "            limit = _card_limit(card, card_rules)\n            if limit is not None:\n                copies = min(copies, limit)",
+    "replace": "            limit = _card_limit(card, card_rules)"
+  },
+  {
+    "name": "task3: let add_cards ignore the per-card limit",
+    "file": "src/ingestion/model.py",
+    "find": "        available = copies if limit is None else min(copies, max(0, limit - int(existing[\"copies\"])))",
+    "replace": "        available = copies"
+  },
+  {
+    "name": "task1: revert to the unweighted Gram matrix",
+    "file": "src/ingestion/model.py",
+    "find": "    information = design.T @ (weights[:, None] * design)",
+    "replace": "    information = design.T @ design"
+  },
+  {
+    "name": "task1: re-invert the variance",
+    "file": "src/ingestion/model.py",
+    "find": "    return np.sqrt(np.maximum(np.diag(covariance), 0.0))",
+    "replace": "    return np.sqrt(1.0 / np.maximum(np.diag(covariance), 1e-9))"
+  },
+  {
+    "name": "task2: misspell the H1 card constant",
+    "file": "src/ingestion/model.py",
+    "find": "MIST_ENERGY_NAME = \"Mist Energy\"",
+    "replace": "MIST_ENERGY_NAME = \"Misty Energy\""
+  },
+  {
+    "name": "task4: remove the feature-flag gate",
+    "file": "src/worker/queue.py",
+    "find": "    if not BDIF_USE_CARD_MODEL:\n        return {}, {}\n\n",
+    "replace": ""
+  },
+  {
+    "name": "task4: let addon failures kill the job again",
+    "file": "src/worker/queue.py",
+    "find": "            try:\n                best60_recommendations, h1_report = _build_bdif_report_addons()\n            except Exception as exc:\n                log.warning(\"bdif_report_addons_failed\", error=str(exc), exc_info=True)\n                best60_recommendations, h1_report = {}, {}",
+    "replace": "            best60_recommendations, h1_report = _build_bdif_report_addons()"
+  },
+  {
+    "name": "task5: zero the carried match counts again",
+    "file": "src/ingestion/model.py",
+    "find": "\"match_count\": 0 if deck_i == deck_j else model.match_counts.get(pair, 0),",
+    "replace": "\"match_count\": 0,"
+  },
+  {
+    "name": "old survivor: invert the ranking order",
+    "file": "src/ingestion/model.py",
+    "find": "scored.sort(key=lambda row: row[\"score\"], reverse=True)",
+    "replace": "scored.sort(key=lambda row: row[\"score\"])"
+  },
+  {
+    "name": "old survivor: delete the Benjamini-Hochberg gate",
+    "file": "src/ingestion/model.py",
+    "find": "        if row[\"q_value\"] > 0.05 or row[\"lower\"] <= 0 <= row[\"upper\"]:\n            row[\"bucket\"] = \"no signal\"",
+    "replace": "        pass"
+  }
+]
