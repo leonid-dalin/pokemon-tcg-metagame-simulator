@@ -18,6 +18,14 @@ ACE_SPEC_CARDS = frozenset({
 })
 
 
+def _logistic_standard_errors(estimator: LogisticRegression, design: np.ndarray) -> np.ndarray:
+    probabilities = estimator.predict_proba(design)[:, 1]
+    weights = probabilities * (1.0 - probabilities)
+    information = design.T @ (weights[:, None] * design)
+    covariance = np.linalg.pinv(information)
+    return np.sqrt(np.maximum(np.diag(covariance), 0.0))
+
+
 def benjamini_hochberg(p_values: Mapping[str, float]) -> dict[str, float]:
     ordered = sorted(p_values.items(), key=lambda item: item[1])
     adjusted = {}
@@ -84,10 +92,8 @@ def fit_model(observations: list[tuple[str, str, int]], inclusion: Mapping[str, 
     design = np.asarray(rows)
     target = np.asarray(labels)
     estimator.fit(design, target)
-    probabilities = estimator.predict_proba(design)[:, 1]
-    weights = probabilities * (1.0 - probabilities)
-    covariance = np.linalg.pinv(design.T @ (weights[:, None] * design))
-    standard_errors = {card: float(np.sqrt(max(covariance[len(decks) + index, len(decks) + index], 0.0))) for index, card in enumerate(cards)}
+    standard_errors_array = _logistic_standard_errors(estimator, design)
+    standard_errors = {card: float(standard_errors_array[len(decks) + index]) for index, card in enumerate(cards)}
     return FittedCardModel(decks, cards, estimator, inclusion, standard_errors)
 
 
@@ -179,8 +185,8 @@ def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str,
         estimator = LogisticRegression(C=1.0, max_iter=1000, random_state=1312)
         estimator.fit(np.asarray(rows), np.asarray(labels))
         coefficient = float(estimator.coef_[0, 0])
-        information = np.asarray(rows).T @ np.asarray(rows)
-        standard_error = float(np.sqrt(1.0 / max(np.linalg.pinv(information)[0, 0], 1e-9)))
+        design = np.asarray(rows)
+        standard_error = float(_logistic_standard_errors(estimator, design)[0])
         return coefficient, (coefficient - 1.96 * standard_error, coefficient + 1.96 * standard_error)
     without_variant = fit(False)
     with_variant = fit(True)
