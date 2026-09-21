@@ -220,6 +220,64 @@ def get_tier(expected_wr: float) -> str:
     return "T5"
 
 
+def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
+    matchup_panel = mc_res["matchup_panel"]
+    recommendations = mc_res["best60_recommendations"]
+    h1_report = mc_res["h1_report"]
+    matchup_tab, best60_tab, h1_tab = st.tabs(
+        ["BDIF matchup panel", "Best-60 card recommendations", "H1 report"]
+    )
+    with matchup_tab:
+        panel_rows = []
+        for panel_deck, rows in matchup_panel.get("rows", {}).items():
+            for row in rows:
+                panel_rows.append({
+                    "Deck": panel_deck,
+                    "Opponent": row["opponent"],
+                    "Posterior mean %": round(float(row["mean"]) * 100, 2),
+                    "95% lower %": round(float(row["lower"]) * 100, 2),
+                    "95% upper %": round(float(row["upper"]) * 100, 2),
+                    "Matches": int(row["match_count"]),
+                    "Reliable": "Yes" if row["reliable"] else "Thin sample",
+                    "Mirror": "Yes" if row["mirror"] else "",
+                })
+        if panel_rows:
+            st.caption("Posterior matchup estimates against the six most-played decks in this simulation.")
+            st.dataframe(pd.DataFrame(panel_rows), width="stretch", hide_index=True)
+        if matchup_panel.get("unmatched"):
+            st.warning("Unmatched panel decks: " + ", ".join(matchup_panel["unmatched"]))
+    with best60_tab:
+        if recommendations:
+            for archetype, recommendation in recommendations.items():
+                st.markdown(f"#### {archetype}")
+                st.caption("Observational associations, not causal effects. Cards whose interval spans zero are no signal.")
+                st.dataframe(pd.DataFrame(recommendation.get("cards", [])), width="stretch", hide_index=True)
+        else:
+            st.info("Best-60 recommendations require an enabled card model and populated Limitless fixtures.")
+    with h1_tab:
+        if h1_report:
+            st.markdown(f"#### H1: {MIST_ENERGY_NAME} vs Alakazam Dudunsparce")
+            st.caption("Flat-Elo observational association. The report is not a causal claim.")
+            interpretation = h1_report.get("interpretation")
+            if interpretation:
+                st.write(interpretation)
+            summary = []
+            for label, result in (
+                ("Without variant control", h1_report.get("without_variant", {})),
+                ("With variant control", h1_report.get("with_variant", {})),
+            ):
+                if result:
+                    summary.append({
+                        "Model": label,
+                        "Beta": float(result.get("beta", 0.0)),
+                        "95% interval": str(result.get("interval", "")),
+                    })
+            if summary:
+                st.dataframe(pd.DataFrame(summary), width="stretch", hide_index=True)
+        else:
+            st.info("The H1 report requires populated Limitless fixtures.")
+
+
 # --- State Management ---
 if 'expander_import_open' not in st.session_state:
     st.session_state.expander_import_open = True
@@ -706,8 +764,8 @@ def main():
     if st.session_state.prediction_result is not None and st.session_state.mc_result is not None:
         res = st.session_state.prediction_result
         mc_res = st.session_state.mc_result
-        mc_metrics_by_deck = mc_res.get("metrics", mc_res) if isinstance(mc_res, dict) else {}
-        mc_insufficient_data = mc_res.get("insufficient_data", []) if isinstance(mc_res, dict) else []
+        mc_metrics_by_deck = mc_res["metrics"]
+        mc_insufficient_data = mc_res["insufficient_data"]
 
         full_deck_names, full_win_matrix, _ = load_full_win_matrix()
         deck_to_idx = {name: i for i, name in enumerate(full_deck_names)}
@@ -742,7 +800,8 @@ def main():
         # Calculate Day 2 Expected Win Rates dynamically
         day2_share_vec = np.zeros(len(full_deck_names))
         for i, d_name in enumerate(full_deck_names):
-            day2_share_vec[i] = mc_metrics_by_deck.get(str(d_name), {}).get("day2_share", 0)
+            if str(d_name) in active_decks:
+                day2_share_vec[i] = mc_metrics_by_deck.get(str(d_name), {}).get("day2_share", 0)
 
         if np.sum(day2_share_vec) > 0:
             day2_share_vec /= np.sum(day2_share_vec)
@@ -831,41 +890,7 @@ def main():
         st.caption("Click any column header to sort. Hover over headers for detailed metric definitions.")
         st.dataframe(df[final_column_order], width="stretch", hide_index=True, column_config=col_config)
 
-        matchup_tab, best60_tab = st.tabs(["BDIF matchup panel", "Best-60 card recommendations"])
-        with matchup_tab:
-            matchup_panel = mc_res.get("matchup_panel", {}) if isinstance(mc_res, dict) else {}
-            panel_rows = []
-            for panel_deck, rows in matchup_panel.get("rows", {}).items():
-                for row in rows:
-                    panel_rows.append({
-                        "Deck": panel_deck,
-                        "Opponent": row["opponent"],
-                        "Posterior mean %": round(float(row["mean"]) * 100, 2),
-                        "95% lower %": round(float(row["lower"]) * 100, 2),
-                        "95% upper %": round(float(row["upper"]) * 100, 2),
-                        "Matches": int(row["match_count"]),
-                        "Reliable": "Yes" if row["reliable"] else "Thin sample",
-                        "Mirror": "Yes" if row["mirror"] else "",
-                    })
-            if panel_rows:
-                st.caption("Posterior matchup estimates against the six most-played decks in this simulation.")
-                st.dataframe(pd.DataFrame(panel_rows), width="stretch", hide_index=True)
-            if matchup_panel.get("unmatched"):
-                st.warning("Unmatched panel decks: " + ", ".join(matchup_panel["unmatched"]))
-        with best60_tab:
-            recommendations = mc_res.get("best60_recommendations", {}) if isinstance(mc_res, dict) else {}
-            if recommendations:
-                for archetype, recommendation in recommendations.items():
-                    st.markdown(f"#### {archetype}")
-                    st.caption("Observational associations, not causal effects. Cards whose interval spans zero are no signal.")
-                    st.dataframe(pd.DataFrame(recommendation.get("cards", [])), width="stretch", hide_index=True)
-            else:
-                st.info("Best-60 recommendations require an enabled card model and populated Limitless fixtures.")
-            h1_report = mc_res.get("h1_report", {}) if isinstance(mc_res, dict) else {}
-            if h1_report:
-                st.markdown(f"#### H1: {MIST_ENERGY_NAME} vs Alakazam Dudunsparce")
-                st.caption("Flat-Elo observational association. The report is not a causal claim.")
-                st.json(h1_report)
+        render_bdif_tabs(mc_res)
         st.divider()
 
         # --- Metagame Scatter Plot ---
@@ -915,9 +940,15 @@ def main():
             # --- Interactive Spider/Radar Chart ---
             st.markdown("#### 🕸️ Head-to-Head Stat Radar")
 
-            global_max_meta = float(max(float(m["base_meta_score"]) for m in res["metrics_per_deck"].values()))
-            global_max_power = float(max(float(m["power_score"]) for m in res["metrics_per_deck"].values()))
-            global_max_pr1 = float(max(float(m["expected_win_rate"]) for m in res["metrics_per_deck"].values())) * 100.0
+            global_max_meta = float(max(
+                (float(m["base_meta_score"]) for m in res["metrics_per_deck"].values()), default=0.0
+            ))
+            global_max_power = float(max(
+                (float(m["power_score"]) for m in res["metrics_per_deck"].values()), default=0.0
+            ))
+            global_max_pr1 = float(max(
+                (float(m["expected_win_rate"]) for m in res["metrics_per_deck"].values()), default=0.0
+            )) * 100.0
 
             def safe_norm(v: float, max_val: float) -> float:
                 return max(0.0, (v / max_val * 100.0)) if max_val > 0 else 0.0
@@ -955,7 +986,9 @@ def main():
                 db_texts.append(f"Power Rank D2: {day2_wr_dict.get(deck_b, 0.0):.2%}")
 
             if d2_rounds > 0:
-                global_max_d2 = float(max(float(m.get("day2_conversion", 0)) for m in mc_metrics_by_deck.values()) * 100.0)
+                global_max_d2 = float(max(
+                    (float(m.get("day2_conversion", 0)) for m in mc_metrics_by_deck.values()), default=0.0
+                ) * 100.0)
                 categories.append('Day 2 Odds')
                 da_vals_norm.append(safe_norm(float(da_mc.get('day2_conversion', 0)) * 100, global_max_d2))
                 db_vals_norm.append(safe_norm(float(db_mc.get('day2_conversion', 0)) * 100, global_max_d2))
@@ -963,8 +996,12 @@ def main():
                 db_texts.append(f"D2 Odds: {float(db_mc.get('day2_conversion', 0)):.2%}")
 
             if top_cut > 0:
-                global_max_t8 = float(max(float(m.get("top_cut_conversion", 0)) for m in mc_metrics_by_deck.values()) * 100.0)
-                global_max_win = float(max(float(m.get("win_probability", 0)) for m in mc_metrics_by_deck.values()) * 100.0)
+                global_max_t8 = float(max(
+                    (float(m.get("top_cut_conversion", 0)) for m in mc_metrics_by_deck.values()), default=0.0
+                ) * 100.0)
+                global_max_win = float(max(
+                    (float(m.get("win_probability", 0)) for m in mc_metrics_by_deck.values()), default=0.0
+                ) * 100.0)
                 categories.append(f'Top {top_cut} Odds')
                 da_vals_norm.append(safe_norm(float(da_mc.get('top_cut_conversion', 0)) * 100, global_max_t8))
                 db_vals_norm.append(safe_norm(float(db_mc.get('top_cut_conversion', 0)) * 100, global_max_t8))
