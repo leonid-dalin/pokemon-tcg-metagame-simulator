@@ -166,11 +166,8 @@ def run_monte_carlo_analytics(
         use_drop_feature: bool = False,
         seed: int = 0,
         matchup_details: Optional[Dict[Tuple[str, str], Dict[str, Any]]] = None,
-        report: bool = False,
         posterior_draws: int = BDIF_POSTERIOR_DRAWS,
         panel_decks: Optional[List[str]] = None,
-        best60_recommendations: Optional[Dict[str, Any]] = None,
-        h1_report: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     if not hasattr(run_monte_carlo_analytics, "_rayon_initialized"):
         try:
@@ -180,7 +177,17 @@ def run_monte_carlo_analytics(
             pass
 
     n_decks = len(deck_names)
-    if n_decks == 0: return {}
+    if n_decks == 0:
+        return {
+            "metrics": {},
+            "ranked_metrics": {},
+            "insufficient_data": [],
+            "matchup_panel": {
+                "rows": {},
+                "unmatched": list(panel_decks if panel_decks is not None else BDIF_PANEL_DECKS),
+                "opponents": [],
+            },
+        }
 
     meta_vec = np.zeros(n_decks)
     for i, name in enumerate(deck_names):
@@ -303,16 +310,14 @@ def run_monte_carlo_analytics(
                 "top_cut_share": float(topcut_share[i]),
             }
 
-    if not report:
-        return results
-
     draw_array = {key: np.array([draw[key] for draw in draw_metrics]) for key in ("day2_share", "top_cut_share", "win_probability")}
-    for i, deck in enumerate(deck_names):
-        if deck not in results:
-            continue
-        for metric, values in draw_array.items():
-            results[deck][f"{metric}_lower"] = float(np.quantile(values[:, i], 0.025))
-            results[deck][f"{metric}_upper"] = float(np.quantile(values[:, i], 0.975))
+    if draw_metrics:
+        for i, deck in enumerate(deck_names):
+            if deck not in results:
+                continue
+            for metric, values in draw_array.items():
+                results[deck][f"{metric}_lower"] = float(np.quantile(values[:, i], 0.025))
+                results[deck][f"{metric}_upper"] = float(np.quantile(values[:, i], 0.975))
     ranked_metrics = {
         deck: metrics for deck, metrics in results.items()
         if deck not in insufficient_data
@@ -333,6 +338,4 @@ def run_monte_carlo_analytics(
             "unmatched": list(panel_decks if panel_decks is not None else BDIF_PANEL_DECKS),
             "opponents": [],
         },
-        "best60_recommendations": best60_recommendations or {},
-        "h1_report": h1_report or {},
     }

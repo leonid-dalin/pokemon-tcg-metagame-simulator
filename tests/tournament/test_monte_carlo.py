@@ -64,6 +64,31 @@ def test_empty_meta_distribution_uses_a_uniform_field(monkeypatch):
 
 
 @pytest.mark.unit
+def test_empty_deck_result_keeps_the_engine_report_shape():
+    result = monte_carlo.run_monte_carlo_analytics(
+        deck_names=[],
+        win_matrix=np.empty((0, 0)),
+        meta_distribution={},
+        d1_rounds=1,
+        cut_points=1,
+        d2_rounds=1,
+        top_cut=1,
+        panel_decks=["Unknown deck"],
+    )
+
+    assert result == {
+        "metrics": {},
+        "ranked_metrics": {},
+        "insufficient_data": [],
+        "matchup_panel": {
+            "rows": {},
+            "unmatched": ["Unknown deck"],
+            "opponents": [],
+        },
+    }
+
+
+@pytest.mark.unit
 def test_hierarchical_posterior_shrinks_a_six_match_pair_toward_field_prior():
     alpha, beta, _ = monte_carlo.build_hierarchical_beta_posteriors(
         ["a", "b", "c"],
@@ -127,7 +152,7 @@ def test_winless_deck_pair_gets_positive_posterior_pseudocounts(monkeypatch):
         posterior_draws=1,
     )
 
-    assert set(result) == {"winless-a", "winless-b", "winner"}
+    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel"}
 
 
 @pytest.mark.unit
@@ -217,10 +242,9 @@ def test_posterior_report_contains_intervals_and_ranked_split(monkeypatch):
         top_cut=1,
         iterations=4,
         posterior_draws=2,
-        report=True,
     )
 
-    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel", "best60_recommendations", "h1_report"}
+    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel"}
     assert not result["insufficient_data"]
     assert result["ranked_metrics"]["a"]["day2_share_lower"] <= result["ranked_metrics"]["a"]["day2_share_upper"]
 
@@ -256,7 +280,7 @@ def test_matchup_panel_marks_thin_pair_unreliable_and_keeps_unknown_decks():
 
 
 @pytest.mark.unit
-def test_report_true_exposes_matchup_panel(monkeypatch):
+def test_exposes_matchup_panel(monkeypatch):
     monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
     monkeypatch.setattr(
         monte_carlo.tcg_engine,
@@ -278,7 +302,6 @@ def test_report_true_exposes_matchup_panel(monkeypatch):
         top_cut=1,
         iterations=1,
         posterior_draws=1,
-        report=True,
         panel_decks=["Crustle"],
     )
     assert "matchup_panel" in result

@@ -180,6 +180,7 @@ def test_limitless_ingestion_is_disabled_by_default(monkeypatch):
 @pytest.mark.unit
 def test_bdif_builder_is_not_invoked_when_card_model_is_disabled(monkeypatch):
     monkeypatch.setattr(queue, "BDIF_USE_CARD_MODEL", False)
+    monkeypatch.setattr(queue.os.path, "exists", lambda path: (_ for _ in ()).throw(AssertionError(path)))
     assert queue._build_bdif_report_addons() == ({}, {})
 
 
@@ -191,7 +192,12 @@ def test_simulation_job_continues_when_bdif_report_builder_raises(monkeypatch, t
     monkeypatch.setattr(queue, "predict_best_decks", lambda request: {"full_meta": {"a": 0.5, "b": 0.5}})
     monkeypatch.setattr(queue, "swiss_rounds_from_players", lambda players: 1)
     monkeypatch.setattr(queue, "_build_bdif_report_addons", lambda: (_ for _ in ()).throw(RuntimeError("addon failed")))
-    monkeypatch.setattr(queue, "run_monte_carlo_analytics", lambda **kwargs: received.append(kwargs) or {})
+    monkeypatch.setattr(queue, "run_monte_carlo_analytics", lambda **kwargs: received.append(kwargs) or {
+        "metrics": {},
+        "ranked_metrics": {},
+        "insufficient_data": [],
+        "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
+    })
 
     queue.execute_simulation_job.call_local({
         "job_id": "job",
@@ -200,8 +206,8 @@ def test_simulation_job_continues_when_bdif_report_builder_raises(monkeypatch, t
         "total_players": 4,
     })
 
-    assert received[0]["best60_recommendations"] == {}
-    assert received[0]["h1_report"] == {}
+    assert "best60_recommendations" not in received[0]
+    assert "h1_report" not in received[0]
 
 
 @pytest.mark.unit
@@ -220,7 +226,12 @@ def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_p
         lambda *args: (["a", "b"], np.array([[0.5, 0.6], [0.4, 0.5]]), details),
     )
     monkeypatch.setattr(queue, "predict_best_decks", lambda request: {"full_meta": {"a": 0.5, "b": 0.5}})
-    monkeypatch.setattr(queue, "run_monte_carlo_analytics", lambda **kwargs: received.append(kwargs) or {})
+    monkeypatch.setattr(queue, "run_monte_carlo_analytics", lambda **kwargs: received.append(kwargs) or {
+        "metrics": {},
+        "ranked_metrics": {},
+        "insufficient_data": [],
+        "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
+    })
     monkeypatch.setattr(queue, "_build_bdif_report_addons", lambda: ({}, {}))
     monkeypatch.setattr(queue, "swiss_rounds_from_players", lambda players: 1)
 
