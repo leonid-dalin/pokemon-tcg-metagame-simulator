@@ -163,6 +163,27 @@ def test_best60_ranks_positive_pooled_cards_in_score_order():
     assert cards == ["High", "Middle", "Low"]
 
 
+def test_best60_normalizes_skeleton_copy_and_ace_spec_rules():
+    result = recommend_best60(
+        "a",
+        [],
+        {},
+        {},
+        {"a": {}, "b": {}},
+        {"b": 1.0},
+        playable_cards={"Darkness Energy"},
+        skeleton=[
+            {"card": "Weird Card", "copies": 9},
+            {"card": "Prime Catcher", "copies": 1},
+            {"card": "Master Ball", "copies": 1},
+            {"card": "Darkness Energy", "copies": 50},
+        ],
+    )
+    assert result["total_copies"] == 60
+    validate_recommendation(result["cards"])
+    assert sum(row["card"] in {"Prime Catcher", "Master Ball"} for row in result["cards"]) <= 1
+
+
 def test_best60_benjamini_hochberg_gate_filters_weak_candidates():
     cards = [f"Card {index}" for index in range(20)]
     result = recommend_best60(
