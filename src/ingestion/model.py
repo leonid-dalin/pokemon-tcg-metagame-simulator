@@ -99,9 +99,11 @@ def validate_recommendation(cards: Sequence[Mapping[str, Any]], banned_cards: se
     banned_cards = banned_cards or set()
     card_rules = card_rules or {}
     ace_count = 0
+    total_copies = 0
     for row in cards:
         card = str(row["card"])
         copies = int(row["copies"])
+        total_copies += copies
         if card in banned_cards:
             raise ValueError(f"banned card in recommendation: {card}")
         limit = _card_limit(card, card_rules)
@@ -111,6 +113,8 @@ def validate_recommendation(cards: Sequence[Mapping[str, Any]], banned_cards: se
             ace_count += copies
     if ace_count > 1:
         raise ValueError("recommendation may contain at most one ACE SPEC card")
+    if total_copies != 60:
+        raise ValueError("recommendation must contain exactly 60 cards")
 
 
 def recommend_best60(archetype: str, candidates: Sequence[str], coefficients: Mapping[str, float], coefficient_intervals: Mapping[str, tuple[float, float]], inclusion: Mapping[str, Mapping[str, float]], meta_weights: Mapping[str, float], banned_cards: set[str] | None = None, card_rules: Mapping[str, Mapping[str, Any]] | None = None, playable_cards: set[str] | None = None, skeleton: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:

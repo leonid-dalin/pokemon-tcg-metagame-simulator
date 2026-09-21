@@ -74,6 +74,18 @@ def test_store_upserts_events_and_counts_unique_card_inclusion(tmp_path):
 
 
 @pytest.mark.unit
+def test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    store.upsert_standings("event", [
+        {"player": "p1", "deck": {"id": "alakazam"}, "decklist": {"pokemon": [{"name": "Alakazam"}, {"name": "Dedenne"}], "trainer": [{"name": "Enhanced Hammer"}]}},
+        {"player": "p2", "deck": {"id": "crustle"}, "decklist": {"energy": [{"name": "Mist Energy"}]}},
+    ])
+    store.upsert_pairings("event", [{"round": 1, "phase": 1, "player1": "p1", "player2": "p2", "winner": "p2"}])
+
+    assert store.h1_observations() == [{"misty": 1, "hammer_variant": 1, "result": 0}]
+
+
+@pytest.mark.unit
 def test_observed_skeleton_uses_high_frequency_cards(tmp_path):
     store = LimitlessStore(tmp_path / "limitless.db")
     store.upsert_standings("event", [
@@ -126,7 +138,7 @@ def test_best60_ranks_positive_pooled_card_first():
         {"Positive": (1.0, 3.0), "Neutral": (0.0, 0.2)},
         {"a": {"Positive": 1.0}, "b": {"Positive": 0.0}},
         {"b": 1.0},
-        skeleton=[{"card": "Crustle", "copies": 2}],
+        skeleton=[{"card": "Darkness Energy", "copies": 56}],
     )
 
     assert result["cards"][-1]["card"] == "Positive"
@@ -136,10 +148,9 @@ def test_best60_ranks_positive_pooled_card_first():
 @pytest.mark.unit
 def test_best60_rejects_two_ace_specs():
     with pytest.raises(ValueError, match="one ACE SPEC"):
-        validate_recommendation([
-            {"card": "Prime Catcher", "copies": 1},
-            {"card": "Master Ball", "copies": 1},
-        ])
+        validate_recommendation(
+            [{"card": "Prime Catcher", "copies": 1}, {"card": "Master Ball", "copies": 1}, {"card": "Darkness Energy", "copies": 58}]
+        )
 
 
 @pytest.mark.unit
@@ -164,8 +175,14 @@ def test_best60_rejects_five_copies():
 
 
 @pytest.mark.unit
+def test_recommendation_requires_exactly_sixty_cards():
+    with pytest.raises(ValueError, match="exactly 60"):
+        validate_recommendation([{"card": "Crustle", "copies": 4}])
+
+
+@pytest.mark.unit
 def test_basic_energy_is_not_limited_to_four_copies():
-    validate_recommendation([{"card": "Darkness Energy", "copies": 12}])
+    validate_recommendation([{"card": "Darkness Energy", "copies": 60}])
 
 
 @pytest.mark.unit
