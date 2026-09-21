@@ -32,6 +32,9 @@ huey = RedisHuey('tcg_tasks', url=redis_url)
 
 
 def _build_bdif_report_addons() -> tuple[dict, dict]:
+    if not BDIF_USE_CARD_MODEL:
+        return {}, {}
+
     from src.ingestion.features import deck_features
     from src.ingestion.model import fit_h1_misty_variant, fit_model, recommend_best60
     from src.ingestion.store import LimitlessStore
@@ -120,7 +123,11 @@ def execute_simulation_job(payload: dict):
                 pipe.publish(f"channel:progress:{job_id}", msg_payload)
                 pipe.execute()
 
-            best60_recommendations, h1_report = _build_bdif_report_addons()
+            try:
+                best60_recommendations, h1_report = _build_bdif_report_addons()
+            except Exception as exc:
+                log.warning("bdif_report_addons_failed", error=str(exc), exc_info=True)
+                best60_recommendations, h1_report = {}, {}
 
             # 4. Run Monte Carlo Brackets (Tracing Rust Engine execution)
             with tracer.start_as_current_span("monte_carlo_analytics") as mc_span:
