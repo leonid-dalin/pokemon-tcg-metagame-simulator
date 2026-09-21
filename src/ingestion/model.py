@@ -58,7 +58,8 @@ class FittedCardModel:
     cards: list[str]
     estimator: LogisticRegression
     inclusion: Mapping[str, Mapping[str, float]]
-    standard_errors: Mapping[str, float] | None = None
+    standard_errors: Mapping[str, float]
+    match_counts: Mapping[tuple[str, str], int]
 
     def coefficient_report(self) -> tuple[dict[str, float], dict[str, tuple[float, float]]]:
         offset = len(self.decks)
@@ -100,11 +101,24 @@ def fit_model(observations: list[tuple[str, str, int]], inclusion: Mapping[str, 
     estimator.fit(design, target)
     standard_errors_array = _logistic_standard_errors(estimator, design)
     standard_errors = {card: float(standard_errors_array[len(decks) + index]) for index, card in enumerate(cards)}
-    return FittedCardModel(decks, cards, estimator, inclusion, standard_errors)
+    match_counts: dict[tuple[str, str], int] = {}
+    for deck_i, deck_j, _ in observations:
+        pair = tuple(sorted((deck_i, deck_j)))
+        match_counts[pair] = match_counts.get(pair, 0) + 1
+    return FittedCardModel(decks, cards, estimator, inclusion, standard_errors, match_counts)
 
 
 def model_artifact(model: FittedCardModel) -> dict[str, Any]:
-    return {"archetypes": model.decks, "win_rate_matrix": {deck_i: {deck_j: {"win_rate": 0.5 if deck_i == deck_j else model.probability(deck_i, deck_j), "match_count": 0} for deck_j in model.decks} for deck_i in model.decks}}
+    matrix = {}
+    for deck_i in model.decks:
+        matrix[deck_i] = {}
+        for deck_j in model.decks:
+            pair = tuple(sorted((deck_i, deck_j)))
+            matrix[deck_i][deck_j] = {
+                "win_rate": 0.5 if deck_i == deck_j else model.probability(deck_i, deck_j),
+                "match_count": 0 if deck_i == deck_j else model.match_counts.get(pair, 0),
+            }
+    return {"archetypes": model.decks, "win_rate_matrix": matrix}
 
 
 def validate_recommendation(cards: Sequence[Mapping[str, Any]], banned_cards: set[str] | None = None, card_rules: Mapping[str, Mapping[str, Any]] | None = None) -> None:
