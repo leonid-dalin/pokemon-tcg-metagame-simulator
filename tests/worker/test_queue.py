@@ -1,5 +1,7 @@
 import os
 
+import numpy as np
+
 import pytest
 
 from src.worker import queue
@@ -167,3 +169,67 @@ def test_daily_pipeline_removes_temp_file_when_replace_fails(monkeypatch, tmp_pa
 
     assert target.read_text() == "old data"
     assert not os.path.exists(str(tmp_path / "ea_input.json.tmp"))
+
+
+@pytest.mark.unit
+def test_limitless_ingestion_is_disabled_by_default(monkeypatch):
+    monkeypatch.setattr(queue, "LIMITLESS_INGESTION_ENABLED", False)
+    assert queue.ingest_limitless_results.call_local() == {"status": "disabled"}
+
+
+@pytest.mark.unit
+def test_bdif_builder_is_not_invoked_when_card_model_is_disabled(monkeypatch):
+    monkeypatch.setattr(queue, "BDIF_USE_CARD_MODEL", False)
+    assert queue._build_bdif_report_addons() == ({}, {})
+
+
+@pytest.mark.unit
+def test_simulation_job_continues_when_bdif_report_builder_raises(monkeypatch, tmp_path):
+    received = []
+    monkeypatch.setattr(queue, "INPUT_DATA", str(tmp_path / "input.json"))
+    monkeypatch.setattr(queue, "load_matchup_data", lambda *args: (["a", "b"], np.array([[0.5, 0.5], [0.5, 0.5]]), {}))
+    monkeypatch.setattr(queue, "predict_best_decks", lambda request: {"full_meta": {"a": 0.5, "b": 0.5}})
+    monkeypatch.setattr(queue, "swiss_rounds_from_players", lambda players: 1)
+    monkeypatch.setattr(queue, "_build_bdif_report_addons", lambda: (_ for _ in ()).throw(RuntimeError("addon failed")))
+    monkeypatch.setattr(queue, "run_monte_carlo_analytics", lambda **kwargs: received.append(kwargs) or {})
+
+    queue.execute_simulation_job.call_local({
+        "job_id": "job",
+        "deck_names": ["a", "b"],
+        "matchup_matrix": [[0.5, 0.5], [0.5, 0.5]],
+        "total_players": 4,
+    })
+
+    assert received[0]["best60_recommendations"] == {}
+    assert received[0]["h1_report"] == {}
+
+
+@pytest.mark.unit
+def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_path):
+    details = {
+        ("a", "a"): {"win_rate": 0.5, "match_count": 10},
+        ("a", "b"): {"win_rate": 0.6, "match_count": 10},
+        ("b", "a"): {"win_rate": 0.4, "match_count": 10},
+        ("b", "b"): {"win_rate": 0.5, "match_count": 10},
+    }
+    received = []
+    monkeypatch.setattr(queue, "INPUT_DATA", str(tmp_path / "input.json"))
+    monkeypatch.setattr(
+        queue,
+        "load_matchup_data",
+        lambda *args: (["a", "b"], np.array([[0.5, 0.6], [0.4, 0.5]]), details),
+    )
+    monkeypatch.setattr(queue, "predict_best_decks", lambda request: {"full_meta": {"a": 0.5, "b": 0.5}})
+    monkeypatch.setattr(queue, "run_monte_carlo_analytics", lambda **kwargs: received.append(kwargs) or {})
+    monkeypatch.setattr(queue, "_build_bdif_report_addons", lambda: ({}, {}))
+    monkeypatch.setattr(queue, "swiss_rounds_from_players", lambda players: 1)
+
+    queue.execute_simulation_job.call_local({
+        "job_id": "job",
+        "deck_names": ["a", "b"],
+        "matchup_matrix": [[0.5, 0.6], [0.4, 0.5]],
+        "total_players": 4,
+    })
+
+    assert received[0]["matchup_details"] == details
+    assert received[0]["matchup_details"][("a", "b")]["match_count"] == 10

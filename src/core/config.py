@@ -24,6 +24,17 @@ RNG_SEED = 1312
 MIN_GAMES = 100
 MIN_OPPONENT_MATCHES = 50
 
+# BDIF posterior analytics
+BDIF_MIN_MATCHES = 1_000
+BDIF_COVERAGE_RATIO = 0.6
+BDIF_PAIR_MIN_GAMES = 250
+BDIF_PRIOR_STRENGTH = 10.0
+BDIF_POSTERIOR_DRAWS = 25
+LIMITLESS_INGESTION_ENABLED = False
+LIMITLESS_BACKFILL_TOURNAMENTS = 200
+BDIF_USE_CARD_MODEL = False
+BDIF_PANEL_DECKS = ["Crustle", "N's Zoroark"]
+
 # ----------------------------
 # Evolutionary Dynamics (Replicator Engine)
 # ----------------------------

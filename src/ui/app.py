@@ -35,6 +35,7 @@ from src.tournament.solver import swiss_rounds_from_players, get_variant_5_struc
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
 from src.core.logger import setup_structured_logging
 from src.core.telemetry import setup_telemetry, tracer
+from src.ingestion.model import MIST_ENERGY_NAME
 
 if "temp_input_mode" not in st.session_state:
     st.session_state.temp_input_mode = "Exact"
@@ -705,6 +706,8 @@ def main():
     if st.session_state.prediction_result is not None and st.session_state.mc_result is not None:
         res = st.session_state.prediction_result
         mc_res = st.session_state.mc_result
+        mc_metrics_by_deck = mc_res.get("metrics", mc_res) if isinstance(mc_res, dict) else {}
+        mc_insufficient_data = mc_res.get("insufficient_data", []) if isinstance(mc_res, dict) else []
 
         full_deck_names, full_win_matrix, _ = load_full_win_matrix()
         deck_to_idx = {name: i for i, name in enumerate(full_deck_names)}
@@ -729,13 +732,17 @@ def main():
 
         sort_key = "base_meta_score"
 
-        active_decks = [str(d) for d in full_deck_names if res["metrics_per_deck"][d]["meta_share"] >= 0.001]
+        active_decks = [
+            str(d) for d in full_deck_names
+            if res["metrics_per_deck"][d]["meta_share"] >= 0.001
+            and str(d) not in mc_insufficient_data
+        ]
         all_decks_sorted = sorted(active_decks, key=lambda d: float(res["metrics_per_deck"][d][sort_key]), reverse=True)
 
         # Calculate Day 2 Expected Win Rates dynamically
         day2_share_vec = np.zeros(len(full_deck_names))
         for i, d_name in enumerate(full_deck_names):
-            day2_share_vec[i] = mc_res.get(str(d_name), {}).get("day2_share", 0)
+            day2_share_vec[i] = mc_metrics_by_deck.get(str(d_name), {}).get("day2_share", 0)
 
         if np.sum(day2_share_vec) > 0:
             day2_share_vec /= np.sum(day2_share_vec)
@@ -746,7 +753,7 @@ def main():
         data = []
         for i, deck in enumerate(all_decks_sorted, 1):
             metrics = res["metrics_per_deck"][deck]
-            mc_metrics = mc_res.get(deck, {"day2_conversion": 0, "top_cut_conversion": 0, "win_probability": 0,
+            mc_metrics = mc_metrics_by_deck.get(deck, {"day2_conversion": 0, "top_cut_conversion": 0, "win_probability": 0,
                                            "day2_share": 0, "top_cut_share": 0})
 
             meta_share = float(metrics["meta_share"])
@@ -823,6 +830,42 @@ def main():
 
         st.caption("Click any column header to sort. Hover over headers for detailed metric definitions.")
         st.dataframe(df[final_column_order], width="stretch", hide_index=True, column_config=col_config)
+
+        matchup_tab, best60_tab = st.tabs(["BDIF matchup panel", "Best-60 card recommendations"])
+        with matchup_tab:
+            matchup_panel = mc_res.get("matchup_panel", {}) if isinstance(mc_res, dict) else {}
+            panel_rows = []
+            for panel_deck, rows in matchup_panel.get("rows", {}).items():
+                for row in rows:
+                    panel_rows.append({
+                        "Deck": panel_deck,
+                        "Opponent": row["opponent"],
+                        "Posterior mean %": round(float(row["mean"]) * 100, 2),
+                        "95% lower %": round(float(row["lower"]) * 100, 2),
+                        "95% upper %": round(float(row["upper"]) * 100, 2),
+                        "Matches": int(row["match_count"]),
+                        "Reliable": "Yes" if row["reliable"] else "Thin sample",
+                        "Mirror": "Yes" if row["mirror"] else "",
+                    })
+            if panel_rows:
+                st.caption("Posterior matchup estimates against the six most-played decks in this simulation.")
+                st.dataframe(pd.DataFrame(panel_rows), width="stretch", hide_index=True)
+            if matchup_panel.get("unmatched"):
+                st.warning("Unmatched panel decks: " + ", ".join(matchup_panel["unmatched"]))
+        with best60_tab:
+            recommendations = mc_res.get("best60_recommendations", {}) if isinstance(mc_res, dict) else {}
+            if recommendations:
+                for archetype, recommendation in recommendations.items():
+                    st.markdown(f"#### {archetype}")
+                    st.caption("Observational associations, not causal effects. Cards whose interval spans zero are no signal.")
+                    st.dataframe(pd.DataFrame(recommendation.get("cards", [])), width="stretch", hide_index=True)
+            else:
+                st.info("Best-60 recommendations require an enabled card model and populated Limitless fixtures.")
+            h1_report = mc_res.get("h1_report", {}) if isinstance(mc_res, dict) else {}
+            if h1_report:
+                st.markdown(f"#### H1: {MIST_ENERGY_NAME} vs Alakazam Dudunsparce")
+                st.caption("Flat-Elo observational association. The report is not a causal claim.")
+                st.json(h1_report)
         st.divider()
 
         # --- Metagame Scatter Plot ---
@@ -847,7 +890,7 @@ def main():
             deck_b = str(deck_b_raw)
             da_idx, db_idx = deck_to_idx[deck_a], deck_to_idx[deck_b]
             da_metrics, db_metrics = res["metrics_per_deck"][deck_a], res["metrics_per_deck"][deck_b]
-            da_mc, db_mc = mc_res.get(deck_a, {}), mc_res.get(deck_b, {})
+            da_mc, db_mc = mc_metrics_by_deck.get(deck_a, {}), mc_metrics_by_deck.get(deck_b, {})
 
             m_row1 = st.columns(4)
             m_row1[0].metric("Meta Score", f"{float(da_metrics['base_meta_score']):.2f}",
@@ -912,7 +955,7 @@ def main():
                 db_texts.append(f"Power Rank D2: {day2_wr_dict.get(deck_b, 0.0):.2%}")
 
             if d2_rounds > 0:
-                global_max_d2 = float(max(float(m.get("day2_conversion", 0)) for m in mc_res.values()) * 100.0)
+                global_max_d2 = float(max(float(m.get("day2_conversion", 0)) for m in mc_metrics_by_deck.values()) * 100.0)
                 categories.append('Day 2 Odds')
                 da_vals_norm.append(safe_norm(float(da_mc.get('day2_conversion', 0)) * 100, global_max_d2))
                 db_vals_norm.append(safe_norm(float(db_mc.get('day2_conversion', 0)) * 100, global_max_d2))
@@ -920,8 +963,8 @@ def main():
                 db_texts.append(f"D2 Odds: {float(db_mc.get('day2_conversion', 0)):.2%}")
 
             if top_cut > 0:
-                global_max_t8 = float(max(float(m.get("top_cut_conversion", 0)) for m in mc_res.values()) * 100.0)
-                global_max_win = float(max(float(m.get("win_probability", 0)) for m in mc_res.values()) * 100.0)
+                global_max_t8 = float(max(float(m.get("top_cut_conversion", 0)) for m in mc_metrics_by_deck.values()) * 100.0)
+                global_max_win = float(max(float(m.get("win_probability", 0)) for m in mc_metrics_by_deck.values()) * 100.0)
                 categories.append(f'Top {top_cut} Odds')
                 da_vals_norm.append(safe_norm(float(da_mc.get('top_cut_conversion', 0)) * 100, global_max_t8))
                 db_vals_norm.append(safe_norm(float(db_mc.get('top_cut_conversion', 0)) * 100, global_max_t8))
@@ -1001,7 +1044,7 @@ def main():
         recs_sorted_by_ev = sorted(
             active_decks,
             key=lambda d: (
-                float(mc_res.get(str(d), {}).get(ev_key, 0)) if ev_key != "power_score" else float(
+                float(mc_metrics_by_deck.get(str(d), {}).get(ev_key, 0)) if ev_key != "power_score" else float(
                     res["metrics_per_deck"][str(d)]["power_score"]),
                 float(res["metrics_per_deck"][str(d)]["power_score"])
             ),
@@ -1010,19 +1053,19 @@ def main():
         recommendations = [{"deck": str(d), **res["metrics_per_deck"][str(d)]} for d in recs_sorted_by_ev]
         avoids = [{"deck": str(d), **res["metrics_per_deck"][str(d)]} for d in recs_sorted_by_ev[::-1]]
 
-        best_day2 = str(max(active_decks, key=lambda d: float(mc_res.get(str(d), {}).get("day2_conversion", 0)))) if (
+        best_day2 = str(max(active_decks, key=lambda d: float(mc_metrics_by_deck.get(str(d), {}).get("day2_conversion", 0)))) if (
                 d2_rounds > 0 and active_decks) else None
         best_top8 = str(
-            max(active_decks, key=lambda d: float(mc_res.get(str(d), {}).get("top_cut_conversion", 0)))) if (
+            max(active_decks, key=lambda d: float(mc_metrics_by_deck.get(str(d), {}).get("top_cut_conversion", 0)))) if (
                 top_cut > 0 and active_decks) else None
-        best_win = str(max(active_decks, key=lambda d: float(mc_res.get(str(d), {}).get("win_probability", 0)))) if (
+        best_win = str(max(active_decks, key=lambda d: float(mc_metrics_by_deck.get(str(d), {}).get("win_probability", 0)))) if (
                 top_cut > 0 and active_decks) else None
         best_wr = str(max(active_decks, key=lambda d: float(
             res["metrics_per_deck"][str(d)]["power_score"]))) if active_decks else None
         best_day2_predator = str(max(day2_wr_dict.keys(), key=lambda k: float(day2_wr_dict[str(k)]))) if (
                 d2_rounds > 0 and np.sum(day2_share_vec) > 0 and day2_wr_dict) else None
 
-        best_ev_val = float(mc_res.get(str(recs_sorted_by_ev[0]), {}).get(ev_key, 0) if ev_key != "power_score" else
+        best_ev_val = float(mc_metrics_by_deck.get(str(recs_sorted_by_ev[0]), {}).get(ev_key, 0) if ev_key != "power_score" else
                             res["metrics_per_deck"][str(recs_sorted_by_ev[0])][
                                 "power_score"]) if recs_sorted_by_ev else 0.0
         tab_rec, tab_threat, tab_avoid = st.tabs(["🔥 Top Recommendations", "🚨 Top Threats", "🚫 Decks to Avoid"])
@@ -1036,7 +1079,7 @@ def main():
             for i, r in enumerate(visible_recs, 1):
                 deck = str(r["deck"])
                 metrics = res["metrics_per_deck"][deck]
-                mc_metrics = mc_res.get(deck, {})
+                mc_metrics = mc_metrics_by_deck.get(deck, {})
 
                 tags = []
                 if deck == best_win:

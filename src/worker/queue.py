@@ -1,5 +1,6 @@
 import json
 import os
+from copy import deepcopy
 import requests
 import structlog
 from opentelemetry import trace
@@ -7,7 +8,14 @@ from opentelemetry.instrumentation.redis import RedisInstrumentor
 from huey import RedisHuey, crontab
 
 from src.api.models import ScrapedMatrix, TIER_MAPPING, PredictionRequest
-from src.core.config import INPUT_DATA, MIN_GAMES, RNG_SEED
+from src.core.config import (
+    BDIF_USE_CARD_MODEL,
+    INPUT_DATA,
+    LIMITLESS_BACKFILL_TOURNAMENTS,
+    LIMITLESS_INGESTION_ENABLED,
+    MIN_GAMES,
+    RNG_SEED,
+)
 from src.core.data import load_matchup_data
 from src.core.scraper import (
     build_complete_matchup_matrix,
@@ -19,9 +27,66 @@ from src.tournament.monte_carlo import run_monte_carlo_analytics
 from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
 
 q_logger = structlog.get_logger()
+_BDIF_MODEL_CACHE: dict[tuple[str, float], tuple[dict, dict]] = {}
 RedisInstrumentor().instrument()
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/?db=0")
 huey = RedisHuey('tcg_tasks', url=redis_url)
+
+
+def _build_bdif_report_addons() -> tuple[dict, dict]:
+    if not BDIF_USE_CARD_MODEL:
+        return {}, {}
+
+    from src.ingestion.features import deck_features
+    from src.ingestion.model import fit_h1_misty_variant, fit_model, recommend_best60
+    from src.ingestion.store import LimitlessStore
+
+    db_path = os.path.join("data", "limitless.db")
+    if not os.path.exists(db_path):
+        return {}, {}
+    cache_key = (os.path.abspath(db_path), float(os.path.getmtime(db_path)))
+    if cache_key in _BDIF_MODEL_CACHE:
+        recommendations, h1 = _BDIF_MODEL_CACHE[cache_key]
+        return deepcopy(recommendations), deepcopy(h1)
+    _BDIF_MODEL_CACHE.clear()
+    store = LimitlessStore(db_path)
+    deck_weights = store.deck_weights()
+    if not deck_weights:
+        return {}, {}
+    top_decks = [deck for deck, _ in sorted(deck_weights.items(), key=lambda item: item[1], reverse=True)[:6]]
+    inclusion = deck_features(store, top_decks)
+    observations = store.observations()
+    if len(observations) < 4 or len({result for _, _, result in observations}) < 2:
+        return {deck: {"status": "insufficient stored observations"} for deck in top_decks}, {}
+    fitted = fit_model(observations, inclusion)
+    coefficients, intervals = fitted.coefficient_report()
+    candidates = sorted({card for values in inclusion.values() for card in values})
+    recommendations = {}
+    for deck in top_decks:
+        recommendations[deck] = recommend_best60(
+            deck,
+            candidates,
+            coefficients,
+            intervals,
+            inclusion,
+            deck_weights,
+            playable_cards=store.observed_cards(deck),
+            skeleton=store.observed_skeleton(deck),
+        )
+    h1_observations = store.h1_observations()
+    h1 = fit_h1_misty_variant(h1_observations) if h1_observations else {}
+    result = (recommendations, h1)
+    _BDIF_MODEL_CACHE[cache_key] = deepcopy(result)
+    return deepcopy(result[0]), deepcopy(result[1])
+
+
+def _simulation_input_path() -> str:
+    if BDIF_USE_CARD_MODEL:
+        candidate = os.path.join("data", "input", "limitless_model_input.json")
+        if os.path.exists(candidate):
+            return candidate
+        q_logger.warning("card_model_artifact_missing", path=candidate)
+    return INPUT_DATA
 
 
 @huey.task()
@@ -42,7 +107,7 @@ def execute_simulation_job(payload: dict):
         log.info("starting_simulation_job", players=request.total_players)
 
         try:
-            deck_names, win_matrix, _ = load_matchup_data(INPUT_DATA, MIN_GAMES)
+            deck_names, win_matrix, matchup_details = load_matchup_data(_simulation_input_path(), MIN_GAMES)
 
             iterations = TIER_MAPPING.get(request.precision_tier, 25_000)
             players = request.total_players
@@ -68,6 +133,12 @@ def execute_simulation_job(payload: dict):
                 pipe.publish(f"channel:progress:{job_id}", msg_payload)
                 pipe.execute()
 
+            try:
+                best60_recommendations, h1_report = _build_bdif_report_addons()
+            except Exception as exc:
+                log.warning("bdif_report_addons_failed", error=str(exc), exc_info=True)
+                best60_recommendations, h1_report = {}, {}
+
             # 4. Run Monte Carlo Brackets (Tracing Rust Engine execution)
             with tracer.start_as_current_span("monte_carlo_analytics") as mc_span:
                 mc_span.set_attribute("iterations", iterations)
@@ -86,7 +157,12 @@ def execute_simulation_job(payload: dict):
                     global_tie_rate=request.global_tie_rate,
                     use_drop_feature=request.use_drop_feature,
                     seed=RNG_SEED,
-                    progress_callback=_progress_handler
+                    progress_callback=_progress_handler,
+                    matchup_details=matchup_details,
+                    report=True,
+                    panel_decks=None,
+                    best60_recommendations=best60_recommendations,
+                    h1_report=h1_report,
                 )
 
             log.info("simulation_job_complete", status="success")
@@ -99,6 +175,45 @@ def execute_simulation_job(payload: dict):
             span.record_exception(e)
             span.set_status(trace.Status(trace.StatusCode.ERROR))
             raise
+
+
+@huey.task()
+def ingest_limitless_results():
+    if not LIMITLESS_INGESTION_ENABLED:
+        return {"status": "disabled"}
+
+    from src.ingestion.aggregate import build_artifact
+    from src.ingestion.client import LimitlessClient
+    from src.ingestion.features import deck_features
+    from src.ingestion.model import fit_model, model_artifact
+    from src.ingestion.store import LimitlessStore
+
+    client = LimitlessClient.from_environment()
+    store = LimitlessStore(os.path.join("data", "limitless.db"))
+    events = client.tournaments(
+        game="PTCG",
+        format="STANDARD",
+        limit=LIMITLESS_BACKFILL_TOURNAMENTS,
+    )
+    for event in events:
+        event_id = str(event["id"])
+        details, standings, pairings = client.fetch_event_bundle(event_id)
+        store.upsert_tournament(event, details)
+        store.upsert_standings(event_id, standings)
+        store.upsert_pairings(event_id, pairings)
+
+    artifact = build_artifact(store)
+    artifact_path = os.path.join("data", "input", "limitless_input.json")
+    os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
+    with open(artifact_path, "w", encoding="utf-8") as handle:
+        json.dump(artifact, handle, indent=2)
+    observations = store.observations()
+    if len(observations) >= 4 and len({result for _, _, result in observations}) == 2:
+        inclusion = deck_features(store, artifact["archetypes"])
+        fitted = fit_model(observations, inclusion)
+        with open(os.path.join("data", "input", "limitless_model_input.json"), "w", encoding="utf-8") as handle:
+            json.dump(model_artifact(fitted), handle, indent=2)
+    return {"status": "complete", "events": len(events), "path": artifact_path}
 
 
 @huey.periodic_task(crontab(minute='0', hour='*/2'))
