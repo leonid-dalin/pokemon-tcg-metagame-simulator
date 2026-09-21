@@ -28,3 +28,11 @@ jobs:
         run: python -m maturin build --release --manifest-path src/tournament/tcg_engine/Cargo.toml && python -m pip install src/tournament/tcg_engine/target/wheels/*.whl
       - name: Run tests
         run: python -m pytest -q
+      - name: Audit test quality
+        run: python tools/qa-harness/test_quality_audit.py --tests tests --package src
+      - name: Check reported intervals
+        run: PYTHONPATH=. python tools/qa-harness/interval_sanity.py --spec tools/qa-harness/interval_spec_h1.py
+      - name: Run minimum-match mutation sweep
+        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.minmatches.json --pythonpath .
+      - name: Run remediated mutation sweep
+        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.pr5-remediated.json --pythonpath .

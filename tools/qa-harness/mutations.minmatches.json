@@ -1,0 +1,8 @@
+[
+  {
+    "name": "original survivor 1: drop the BDIF_MIN_MATCHES half",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "if totals[i] < BDIF_MIN_MATCHES or coverage[i] < BDIF_COVERAGE_RATIO",
+    "replace": "if coverage[i] < BDIF_COVERAGE_RATIO"
+  }
+]
