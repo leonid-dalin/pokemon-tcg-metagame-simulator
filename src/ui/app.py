@@ -135,6 +135,25 @@ def parse_limitless_html(html_str: str, valid_decks: List[str]) -> Tuple[Dict[st
     return parsed_meta, total_players, wildcard_players
 
 
+def submit_prediction(api_url: str, request_model: PredictionRequest) -> str:
+    response = requests.post(
+        f"{api_url}/predict", json=request_model.model_dump(mode="json"), timeout=45
+    )
+    response.raise_for_status()
+    return response.json()["task_id"]
+
+
+def resolve_auto_fill(
+    baseline: np.ndarray,
+    spec: Dict[str, float | ExactSpec | RangeSpec],
+    deck_to_idx: Dict[str, int],
+) -> Tuple[np.ndarray | None, str | None]:
+    try:
+        return resolve_meta_constraints(baseline, spec, deck_to_idx), None
+    except ValueError as exc:
+        return None, str(exc)
+
+
 def init_session_state():
     defaults = {
         "meta_rows": [], "prediction_result": None, "mc_result": None,
@@ -484,10 +503,9 @@ def main():
                     st.session_state.meta_rows, players, st.session_state.internal_input_mode
                 )
                 baseline = calculate_empirical_baseline(d_names, matchup_details)
-                try:
-                    filled = resolve_meta_constraints(baseline, spec, deck_to_idx)
-                except ValueError as exc:
-                    st.error(f"Cannot auto-fill the remaining field: {exc}")
+                filled, error = resolve_auto_fill(baseline, spec, deck_to_idx)
+                if error:
+                    st.error(f"Cannot auto-fill the remaining field: {error}")
                     st.stop()
 
                 added = 0
@@ -676,11 +694,7 @@ def main():
                     request_model = PredictionRequest(**payload)
                     api_url = os.environ.get("API_URL", "http://localhost:8000/api/v1")
                     app_logger.info("dispatching_prediction_request", job_id=job_id, api_url=api_url)
-                    response = requests.post(
-                        f"{api_url}/predict", json=request_model.model_dump(mode="json"), timeout=45
-                    )
-                    response.raise_for_status()
-                    task_id = response.json()["task_id"]
+                    task_id = submit_prediction(api_url, request_model)
 
                     # 3. Connect to the SSE Stream
                     status.update(label="Establishing SSE Connection...", state="running", expanded=True)
