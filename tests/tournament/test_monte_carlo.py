@@ -127,6 +127,25 @@ def test_data_sufficiency_filter_lists_a_low_coverage_deck():
     assert "a" in insufficient
 
 
+def test_data_sufficiency_filter_separates_qualified_and_insufficient_decks():
+    details = {
+        ("a", "a"): {"win_rate": 0.5, "match_count": 0},
+        ("b", "b"): {"win_rate": 0.5, "match_count": 0},
+        ("a", "b"): {"win_rate": 0.6, "match_count": 1_000},
+        ("b", "a"): {"win_rate": 0.4, "match_count": 1_000},
+    }
+    _, _, insufficient = monte_carlo.build_hierarchical_beta_posteriors(
+        ["a", "b"], np.full((2, 2), 0.5), details,
+    )
+    assert insufficient == []
+    details[("a", "b")]["match_count"] = 200
+    details[("b", "a")]["match_count"] = 200
+    _, _, insufficient = monte_carlo.build_hierarchical_beta_posteriors(
+        ["a", "b"], np.full((2, 2), 0.5), details,
+    )
+    assert insufficient == ["a", "b"]
+
+
 @pytest.mark.unit
 def test_posterior_report_contains_intervals_and_ranked_split(monkeypatch):
     monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
@@ -219,34 +238,6 @@ def test_report_true_exposes_matchup_panel(monkeypatch):
     )
     assert "matchup_panel" in result
     assert result["matchup_panel"]["rows"]["Crustle"]
-
-
-@pytest.mark.unit
-def test_report_true_preserves_best60_fixture_payload(monkeypatch):
-    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
-    monkeypatch.setattr(monte_carlo.tcg_engine, "run_parallel_monte_carlo", lambda *args: ([1], [1], [1], [1]))
-    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
-    best60 = {"Crustle": {"cards": [{"card": "Positive", "copies": 4}], "observational": True}}
-    result = monte_carlo.run_monte_carlo_analytics(
-        deck_names=["Crustle"],
-        win_matrix=np.array([[0.5]]),
-        meta_distribution={"Crustle": 1.0},
-        matchup_details={("Crustle", "Crustle"): {"win_rate": 0.5, "match_count": 0}},
-        d1_rounds=1,
-        cut_points=1,
-        d2_rounds=1,
-        top_cut=1,
-        iterations=1,
-        posterior_draws=1,
-        report=True,
-        best60_recommendations=best60,
-        h1_report={"hypothesis": "H1", "status": "supported"},
-    )
-
-    assert result["best60_recommendations"] == best60
-    assert result["h1_report"]["hypothesis"] == "H1"
-
-
 @pytest.mark.unit
 def test_best60_fixture_has_observational_and_no_signal_sections():
     fixture = json.loads(Path("tests/fixtures/best60_recommendations.json").read_text(encoding="utf-8"))

@@ -35,6 +35,7 @@ from src.tournament.solver import swiss_rounds_from_players, get_variant_5_struc
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
 from src.core.logger import setup_structured_logging
 from src.core.telemetry import setup_telemetry, tracer
+from src.ingestion.model import MIST_ENERGY_NAME
 
 if "temp_input_mode" not in st.session_state:
     st.session_state.temp_input_mode = "Exact"
@@ -862,7 +863,7 @@ def main():
                 st.info("Best-60 recommendations require an enabled card model and populated Limitless fixtures.")
             h1_report = mc_res.get("h1_report", {}) if isinstance(mc_res, dict) else {}
             if h1_report:
-                st.markdown("#### H1: Misty Energy vs Alakazam Dudunsparce")
+                st.markdown(f"#### H1: {MIST_ENERGY_NAME} vs Alakazam Dudunsparce")
                 st.caption("Flat-Elo observational association. The report is not a causal claim.")
                 st.json(h1_report)
         st.divider()

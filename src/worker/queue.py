@@ -15,6 +15,7 @@ from src.core.config import (
     MIN_GAMES,
     RNG_SEED,
 )
+from src.ingestion.model import MIST_ENERGY_NAME
 from src.core.data import load_matchup_data
 from src.core.scraper import (
     build_complete_matchup_matrix,
@@ -26,6 +27,7 @@ from src.tournament.monte_carlo import run_monte_carlo_analytics
 from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
 
 q_logger = structlog.get_logger()
+_BDIF_MODEL_CACHE: dict[tuple[str, int], tuple[dict, dict]] = {}
 RedisInstrumentor().instrument()
 redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/?db=0")
 huey = RedisHuey('tcg_tasks', url=redis_url)
@@ -39,9 +41,13 @@ def _build_bdif_report_addons() -> tuple[dict, dict]:
     from src.ingestion.model import fit_h1_misty_variant, fit_model, recommend_best60
     from src.ingestion.store import LimitlessStore
 
-    if not os.path.exists(os.path.join("data", "limitless.db")):
+    db_path = os.path.join("data", "limitless.db")
+    if not os.path.exists(db_path):
         return {}, {}
-    store = LimitlessStore(os.path.join("data", "limitless.db"))
+    cache_key = (os.path.abspath(db_path), os.path.getmtime(db_path))
+    if cache_key in _BDIF_MODEL_CACHE:
+        return _BDIF_MODEL_CACHE[cache_key]
+    store = LimitlessStore(db_path)
     deck_weights = store.deck_weights()
     if not deck_weights:
         return {}, {}
@@ -67,7 +73,9 @@ def _build_bdif_report_addons() -> tuple[dict, dict]:
         )
     h1_observations = store.h1_observations()
     h1 = fit_h1_misty_variant(h1_observations) if h1_observations else {}
-    return recommendations, h1
+    result = (recommendations, h1)
+    _BDIF_MODEL_CACHE[cache_key] = result
+    return result
 
 
 def _simulation_input_path() -> str:

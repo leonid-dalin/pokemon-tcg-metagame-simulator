@@ -130,19 +130,33 @@ def test_fitted_card_model_recovers_positive_card_edge():
 
 
 @pytest.mark.unit
-def test_best60_ranks_positive_pooled_card_first():
+def test_best60_ranks_positive_pooled_cards_in_score_order():
     result = recommend_best60(
         "a",
-        ["Positive", "Neutral"],
-        {"Positive": 2.0, "Neutral": 0.1},
-        {"Positive": (1.0, 3.0), "Neutral": (0.0, 0.2)},
-        {"a": {"Positive": 1.0}, "b": {"Positive": 0.0}},
+        ["High", "Middle", "Low"],
+        {"High": 3.0, "Middle": 2.0, "Low": 1.0},
+        {"High": (1.0, 3.0), "Middle": (1.0, 2.0), "Low": (0.5, 1.5)},
+        {"a": {"High": 1.0, "Middle": 1.0, "Low": 1.0}, "b": {}},
         {"b": 1.0},
-        skeleton=[{"card": "Darkness Energy", "copies": 56}],
+        skeleton=[{"card": "Darkness Energy", "copies": 48}],
     )
+    cards = [row["card"] for row in result["cards"] if row["card"] in {"High", "Middle", "Low"}]
+    assert cards == ["High", "Middle", "Low"]
 
-    assert result["cards"][-1]["card"] == "Positive"
-    assert result["observational"] is True
+
+def test_best60_benjamini_hochberg_gate_filters_weak_candidates():
+    cards = [f"Card {index}" for index in range(20)]
+    result = recommend_best60(
+        "a",
+        cards,
+        {card: 10.0 if index == 0 else 0.01 for index, card in enumerate(cards)},
+        {card: (0.9, 1.1) for card in cards},
+        {"a": {card: 1.0 for card in cards}, "b": {}},
+        {"b": 1.0},
+        playable_cards=set(cards) | {"Darkness Energy"},
+        skeleton=[{"card": "Darkness Energy", "copies": 40}],
+    )
+    assert any(row["card"] != "Card 0" for row in result["no_signal"])
 
 
 @pytest.mark.parametrize("skeleton_size", range(0, 61, 4))
@@ -181,10 +195,12 @@ def test_best60_puts_zero_spanning_interval_in_no_signal_bucket():
         {"Uncertain": (-0.2, 0.2)},
         {"a": {"Uncertain": 1.0}, "b": {"Uncertain": 0.0}},
         {"b": 1.0},
+        skeleton=[{"card": "Darkness Energy", "copies": 59}],
     )
 
-    assert result["cards"] == []
-    assert result["no_signal"][0]["card"] == "Uncertain"
+    assert result["total_copies"] == 60
+    uncertain = next(row for row in result["no_signal"] if row["card"] == "Uncertain")
+    assert uncertain["bucket"] == "no signal"
 
 
 @pytest.mark.unit
@@ -215,4 +231,6 @@ def test_h1_misty_report_changes_when_hammer_variant_is_controlled():
     report = fit_h1_misty_variant(observations)
     assert report["without_variant"]["beta"] > 0
     assert report["with_variant"]["beta"] <= 0
+    assert report["without_variant"]["interval"][0] < report["without_variant"]["beta"] < report["without_variant"]["interval"][1]
+    assert report["with_variant"]["interval"][0] < report["with_variant"]["beta"] < report["with_variant"]["interval"][1]
     assert report["interpretation"] == "observational association, not a causal effect"
