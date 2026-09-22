@@ -1,132 +1,99 @@
-# Codebase Reference Dictionary
+# Code reference
 
-This reference document maps out the specific files, modules, classes, and functions within the Pokémon TCG Metagame Simulator. Use this as a technical dictionary to locate machinery within the codebase.
+This page lists the current entry points for the simulator. Read it with the source files named here; it is a navigation aid, not a generated API schema
 
-> ⚠️ **Caution:** This project is undergoing active refactoring. Expect frequent changes to the architecture, and verify information with the latest source code. I'll do my best to keep it updated or have it updated ASAP, but bear in mind this is a 1-person passion project.
+## API and worker
 
----
+### `src/api/main.py`
 
-## Gateway & Orchestration
+- `lifespan`: starts Redis access and triggers one guarded daily pipeline task
+- `start_prediction`: validates and queues `PredictionRequest` payloads
+- `get_task_status`: returns `processing`, `complete`, or `failed`
+- `stream_task_progress`: streams progress and completion events over SSE
+- `ApiTokenAuthMiddleware`: checks `X-API-Token` for protected requests when `API_TOKEN` is set
 
-### `main.py`
-**Purpose:** Acts as the primary RESTful API gateway.
-* `lifespan`: Asynchronous context manager triggering the scraper on container boot.
-* `log_requests`: Middleware recording HTTP response codes and duration using `structlog`.
-* `start_prediction`: Enqueues a heavy Monte Carlo simulation via `execute_simulation_job` and returns a task ID.
-* `stream_task_progress`: Server-Sent Events endpoint yielding real-time job percentages from Redis.
+### `src/api/models.py`
 
----
+- `PredictionRequest`: validates deck names, matchup matrix shape, field constraints, tournament settings, and feature flags
+- `PrecisionTier`: maps `BULLET`, `BLITZ`, `STANDARD`, `EXHAUSTIVE`, and `MAXIMUM` to iteration counts
+- `DeckRecommendation`: defines static solver recommendation fields
+- `ScrapedMatrix`: validates scraped matchup data before it reaches the input file
 
-## Data Contracts and Background Task Management
+### `src/worker/queue.py`
 
-### `models.py`
-**Purpose:** Pydantic schemas enforcing data validation.
-* `PredictionRequest`: Validates incoming API payloads. Includes `validate_matrix_integrity` to block asymmetric or invalid win-rate matrices.
-* `ScrapedMatrix`: Acts as a firewall for live data. Includes `enforce_thermodynamic_purity` to ensure mirror matches are exactly 0.5.
-* `DeckRecommendation`: Formats the final output schema.
+- `execute_simulation_job`: runs the solver, tournament structure selection, Monte Carlo engine, and optional BDIF reports
+- `automated_daily_pipeline`: fetches and validates the live matchup matrix
+- `ingest_limitless_results`: stores Limitless tournaments and builds optional model artefacts
+- `_build_bdif_report_addons`: builds Best-60 and H1 reports when the card model flag is enabled
 
-### `queue.py`
-**Purpose:** The Redis-backed Huey task broker.
-* `execute_simulation_job(...)`: A background task that loads data, runs the water-filling logic, determines tournament structure, and triggers the parallelised Monte Carlo analytics.
-* `automated_daily_pipeline()`: A periodic background task (`crontab`) that automatically triggers the Limitless TCG scraper, validates the incoming thermodynamic matrix using Pydantic, and updates the local JSON data store.
+## Core modules
 
----
+### `src/core/config.py`
 
-## Core Domain (`src/core/`)
+Holds input and output paths, simulation defaults, tournament structure thresholds, tier cutoffs, and BDIF evidence thresholds
 
-### `config.py`
-**Purpose:** Defines default configuration values, tournament structures, and mathematical constants.
-* `MAX_GENERATIONS`, `STABILITY_THRESHOLD`, `NASH_EQUILIBRIUM`, `EXTINCTION_THRESHOLD`: Evolutionary halting conditions.
-* `_STRUCTURE_THRESHOLDS` & `_STRUCTURE_RESULTS`: Implements official TPCi Variant #5 logic, mapping player counts to round lengths and cut points.
-* `TIER_THRESHOLDS`: Delineates the strict mathematical cutoffs for Tiers (e.g., T0 is $\ge$ 0.525, T4 is $\ge$ 0.0).
+### `src/core/data.py`
 
-### `data.py`
-**Purpose:** Core matrix manipulation, data ingestion, and archetype clustering algorithms.
-* `load_matchup_data(...)`: Parses JSON matrices into NumPy arrays, substituting unrecorded matchups with Bayesian beta distribution fallbacks.
-* `cluster_decks_by_matchup_profile(...)`: Groups decks by strategic vector similarity using K-Means and dynamically optimises the final cluster count via Silhouette Scores.
-* `compute_deck_dominance(...)`: Identifies the optimal archetype against a uniform field baseline using direct matrix-vector multiplication.
+Loads matchup JSON, fills missing matchup evidence, clusters matchup profiles, and computes deck dominance
 
-### `logger.py`
-**Purpose:** Global structured logging configuration.
-* `setup_structured_logging()`: Configures `structlog` to format application output as machine-readable JSON strings (`JSONRenderer`) with ISO 8601 timestamps for ELK/Loki ingestion.
+### `src/core/scraper.py`
 
-### `scraper.py`
-**Purpose:** Autonomous data ingestion pipeline targeting live Limitless TCG endpoints.
-* `fetch_live_matchup_data(...)`: Utilises `concurrent.futures.ThreadPoolExecutor` to perform parallel HTTP requests.
-* `scrape_matchup_soup(...)`: Parses raw HTML responses using `BeautifulSoup` to calculate strictly zero-sum adjusted win rates.
-* `build_complete_matchup_matrix(...)`: Aggregates scraped payloads into a multidimensional JSON matrix ready for Pydantic validation.
+Discovers live matchup URLs, fetches HTML, normalises archetype labels, parses matchup pages, and assembles the validated matrix
 
-### `telemetry.py`
-**Purpose:** OpenTelemetry (OTel) distributed tracing pipeline.
-* `setup_telemetry(...)`: Instantiates the `TracerProvider` and binds the `OTLPSpanExporter` via gRPC to stream execution spans using a `BatchSpanProcessor`.
+### `src/core/runtime.py`
 
-### `types.py`
-**Purpose:** Houses typed data classes bridging configuration into the engines.
-* `SimulationConfig`: A dataclass containing core properties like extinction thresholds, noise scales, and tournament styles.
+Reports the core limit available to the current host or container. `MAX_CORES` can override that value
 
----
+### `src/core/telemetry.py`
 
-## Evolution Engine (`src/evolution/`)
+Creates the OpenTelemetry provider and sends spans to `OTEL_EXPORTER_OTLP_ENDPOINT`
 
-### `engine.py`
-**Purpose:** Replicator dynamics and tournament generation workers.
-* `_championship_series_worker(...)` & `_pure_swiss_worker(...)`: Multiprocessing worker functions executing array-sliced bracket simulations.
-* `update_replicator_dynamics(...)`: Executes the Multiplicative Weights Update (MWU). It extrapolates gradients using previous payoffs to dampen zero-sum limit cycles, centers dynamics, and applies uniform mutation as entropy regularisation.
-* `find_evolutionary_stable_state(...)`: The core loop that iterates until kinetic stability and G Game-Theoretic stability (Nash Equilibrium) is reached.
+## Engines
 
-### `analysis.py`
-**Purpose:** Post-simulation diagnostics.
-* `compute_convergence_metrics(...)`: Determines the exact generation of stability and the oscillation index.
-* `generate_final_state_tier_list(...)`: Sorts decks into Tiers utilising a blended Meta Score.
-* `compute_matchup_cycles(...)`: Extracts unique Rock-Paper-Scissors (RPS) 3-cycles from the active matchup graph.
-* `compute_deck_similarity(...)`: Uses Pearson Correlation to find decks with strong strategic overlap (correlation > 0.70).
+### `src/evolution/engine.py`
 
----
+Runs replicator dynamics, applies selection and mutation, and writes generation history
 
-## Tournament Engine (`src/tournament/`)
+### `src/evolution/analysis.py`
 
-### `monte_carlo.py` and `lib.rs`
-**Purpose:** The computational core simulating thousands of tournament brackets.
-* `run_monte_carlo_analytics`: Manages the Rayon thread pool to aggregate Top Cut appearances and win probabilities.
-* `tcg_engine`: The Rust module bypassing the Python GIL.
-* `play_rounds`: Native Rust implementation of Swiss pairing logic.
+Calculates convergence, final tiers, matchup cycles, and deck similarity
 
-### `solver.py`
-**Purpose:** The static evaluation engine establishing baseline predictive scoring and metagame limits.
-* `get_variant_5_structure(...)`: Maps player counts to official TPCi Day 1/Day 2 Swiss round configurations via binary search.
-* `swiss_rounds_from_players(...)`: Calculates standard logarithmic Swiss rounds for non-Championship events.
-* `predict_best_decks(...)`: Resolves user-defined field constraints using a pure NumPy water-filling algorithm to generate normalised 0–100 `power_scores` and `base_meta_scores`.
-* `calculate_empirical_baseline(...)`: Derives live metagame share using Laplace smoothing.
-* `resolve_meta_constraints(...)`: A vectorised water-filling algorithm strictly enforcing exact, minimum, and maximum boundaries.
+### `src/tournament/solver.py`
 
----
+Resolves field constraints, calculates Swiss rounds, chooses Championship Series structure, and produces static recommendations
 
-## Analytics and Visualisation
+### `src/tournament/monte_carlo.py`
 
-### `plotting.py`
-**Purpose:** Interactive Plotly figure generation.
-* `plot_metagame_evolution_interactive(...)`: Renders a line chart tracking metagame share over time.
-* `plot_matchup_network(...)`: Renders `networkx` directed graphs for cycle visualisations.
-* `plot_metagame_scatter(...)` & `plot_head_to_head_radar(...)`: Powers the Streamlit dashboard visuals, comparing Meta Scores, Power Scores, and Frequency metrics.
+Builds posterior matchup matrices, marks insufficient evidence, constructs the matchup panel, and calls the Rust engine
 
----
+### `src/tournament/tcg_engine/lib.rs`
 
-## User Interfaces (`src/ui/`)
+Implements the compiled tournament loops and Swiss pairing logic through PyO3 and Rayon
 
-### `app.py`
-**Purpose:** The interactive Streamlit dashboard.
-* `parse_limitless_html(...)`: Native HTML parsing utility for Limitless Labs exports.
-* `RequestsInstrumentor`: Propagates distributed trace headers from the UI directly into the FastAPI backend.
-* **SSE Polling:** Dispatches simulation jobs and polls task states using Server-Sent Events via `urllib3` streams.
-* **Dual-Perspective Dashboard:** Renders analytics using interactive Plotly scatter and radar graphs, filtering statistical noise via a strict 1% field share cutoff.
+## Data and card model
 
-### `cli.py`
-**Purpose:** The main CLI entry point for local execution, parsing command-line arguments, orchestrating the simulation pipeline, and managing batch experiments.
-* `run_single_experiment(...)`: Orchestrates a single simulation run. It sets up timestamped logging, loads matchup data, constructs a `SimulationConfig`, runs `find_evolutionary_stable_state`, performs tier analysis, and plots the results.
-* `run_batch_experiments(...)`: Iterates over multiple simulation configurations defined in a JSON file to automate parameter sweeping.
-* `main()`: Delegates to either the static predictor solver, the batch runner, or the single experiment runner based on parsed arguments.
+### `src/ingestion/store.py`
 
-### `cli_args.py`
-**Purpose:** Defines the argparse configuration for CLI tools // Terminal argument parser.
-* `Args`: A `NamedTuple` strongly typing the returned namespace.
-* `parse_args()`: Validates arguments to ensure parameters stay within acceptable mathematical bounds.
+Stores tournaments, standings, pairings, decklists, canonical deck names, and card evidence in SQLite. Read preparation handles legacy database schemas
+
+### `src/ingestion/client.py`
+
+Calls the Limitless API with `LIMITLESS_API_KEY` in the `X-Access-Key` header
+
+### `src/ingestion/model.py`
+
+Fits card covariates, computes H1 reports, selects empirical panel decks, and builds legality-aware Best-60 recommendations
+
+### `src/ingestion/aggregate.py`
+
+Aggregates stored matchup rows into the JSON artefact consumed by the standard loader
+
+## User interfaces
+
+### `src/ui/cli.py`
+
+Runs replicator, tournament, prediction, and batch workflows and writes local output artefacts
+
+### `src/ui/app.py`
+
+Renders the Streamlit dashboard, builds `PredictionRequest` payloads, sends them to the API, and reads the SSE task stream
