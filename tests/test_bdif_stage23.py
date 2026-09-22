@@ -6,6 +6,7 @@ from src.ingestion.client import LimitlessClient
 from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, select_panel_decks, validate_recommendation
 from src.ingestion.store import LimitlessStore
 from src.ingestion.aggregate import build_artifact
+from src.core.scraper import normalize_archetype
 
 
 @pytest.mark.unit
@@ -60,6 +61,17 @@ def test_store_writes_missing_decklists_as_sql_null(tmp_path):
 
     with sqlite3.connect(tmp_path / "limitless.db") as conn:
         assert conn.execute("SELECT decklist_json FROM standings").fetchone()[0] is None
+
+
+def test_store_persists_and_backfills_canonical_deck_names(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    store.upsert_standings("event", [{"player": "p1", "deck": {"id": "n-zoroark"}}])
+    assert store.backfill_deck_names({"n-zoroark": "N's Zoroark"}) == 1
+    assert store.deck_weights() == {"N's Zoroark": 1.0}
+
+
+def test_normalize_archetype_treats_n_possessive_as_canonical_name():
+    assert normalize_archetype("N's Zoroark") == normalize_archetype("n zoroark")
 
 
 @pytest.mark.unit

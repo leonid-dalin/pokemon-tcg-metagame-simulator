@@ -10,7 +10,7 @@ from src.ingestion.model import ACE_SPEC_CARDS, _card_limit
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tournaments (id TEXT PRIMARY KEY, game TEXT, format TEXT, name TEXT, date TEXT, players INTEGER, details_json TEXT);
-CREATE TABLE IF NOT EXISTS standings (tournament_id TEXT, player_id TEXT, placing INTEGER, wins INTEGER, losses INTEGER, ties INTEGER, deck_id TEXT, decklist_json TEXT, dropped_round INTEGER, PRIMARY KEY (tournament_id, player_id));
+CREATE TABLE IF NOT EXISTS standings (tournament_id TEXT, player_id TEXT, placing INTEGER, wins INTEGER, losses INTEGER, ties INTEGER, deck_id TEXT, deck_name TEXT, decklist_json TEXT, dropped_round INTEGER, PRIMARY KEY (tournament_id, player_id));
 CREATE TABLE IF NOT EXISTS pairings (tournament_id TEXT, round INTEGER, phase INTEGER, player1 TEXT, player2 TEXT, winner TEXT, PRIMARY KEY (tournament_id, round, phase, player1, player2));
 """
 
@@ -21,6 +21,10 @@ class LimitlessStore:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(standings)")}
+            if "deck_name" not in columns:
+                conn.execute("ALTER TABLE standings ADD COLUMN deck_name TEXT")
+            conn.execute("UPDATE standings SET deck_name=deck_id WHERE deck_name IS NULL")
 
     def connect(self):
         return sqlite3.connect(self.path)
@@ -28,7 +32,7 @@ class LimitlessStore:
     def _decklists(self, archetype: str):
         with closing(self.connect()) as conn:
             rows = conn.execute(
-                "SELECT decklist_json FROM standings WHERE deck_id=? AND decklist_json IS NOT NULL",
+                "SELECT decklist_json FROM standings WHERE COALESCE(deck_name, deck_id)=? AND decklist_json IS NOT NULL",
                 (archetype,),
             )
             for (raw,) in rows:
@@ -41,15 +45,34 @@ class LimitlessStore:
                 row["id"], row.get("game"), row.get("format"), row.get("name"), row.get("date"), row.get("players"), json.dumps(details)
             ))
 
-    def upsert_standings(self, tournament_id: str, rows: Iterable[dict[str, Any]]) -> None:
+    def upsert_standings(
+        self,
+        tournament_id: str,
+        rows: Iterable[dict[str, Any]],
+        deck_names: dict[str, str] | None = None,
+    ) -> None:
         with self.connect() as conn:
             for row in rows:
                 record = row.get("record", {})
                 deck = row.get("deck") or {}
-                conn.execute("INSERT OR REPLACE INTO standings (tournament_id, player_id, placing, wins, losses, ties, deck_id, decklist_json, dropped_round) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (
+                deck_id = str(deck.get("id") or "")
+                deck_name = str(deck.get("name") or (deck_names or {}).get(deck_id) or deck_id)
+                conn.execute("INSERT OR REPLACE INTO standings (tournament_id, player_id, placing, wins, losses, ties, deck_id, deck_name, decklist_json, dropped_round) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (
                     tournament_id, str(row.get("player", row.get("name", ""))), row.get("placing"), record.get("wins", 0),
-                    record.get("losses", 0), record.get("ties", 0), deck.get("id"), json.dumps(row.get("decklist")) if row.get("decklist") is not None else None, row.get("drop")
+                    record.get("losses", 0), record.get("ties", 0), deck_id, deck_name,
+                    json.dumps(row.get("decklist")) if row.get("decklist") is not None else None, row.get("drop")
                 ))
+
+    def backfill_deck_names(self, deck_names: dict[str, str]) -> int:
+        updated = 0
+        with self.connect() as conn:
+            for deck_id, deck_name in deck_names.items():
+                cursor = conn.execute(
+                    "UPDATE standings SET deck_name=? WHERE deck_id=? AND (deck_name IS NULL OR deck_name=deck_id)",
+                    (deck_name, deck_id),
+                )
+                updated += cursor.rowcount
+        return updated
 
     def upsert_pairings(self, tournament_id: str, rows: Iterable[dict[str, Any]]) -> None:
         with self.connect() as conn:
@@ -65,7 +88,7 @@ class LimitlessStore:
 
     def matchup_rows(self):
         query = """
-        SELECT s1.deck_id, s2.deck_id, p.winner, p.player1, p.player2
+        SELECT COALESCE(s1.deck_name, s1.deck_id), COALESCE(s2.deck_name, s2.deck_id), p.winner, p.player1, p.player2
         FROM pairings p JOIN standings s1 ON s1.tournament_id=p.tournament_id AND s1.player_id=p.player1
         JOIN standings s2 ON s2.tournament_id=p.tournament_id AND s2.player_id=p.player2
         WHERE p.player1 != '' AND p.player2 != '' AND p.winner NOT IN ('0', '-1', '')
@@ -124,9 +147,9 @@ class LimitlessStore:
         with self.connect() as conn:
             if names:
                 placeholders = ",".join("?" for _ in names)
-                rows = conn.execute(f"SELECT deck_id, COUNT(*) FROM standings WHERE deck_id IN ({placeholders}) GROUP BY deck_id", names).fetchall()
+                rows = conn.execute(f"SELECT COALESCE(deck_name, deck_id), COUNT(*) FROM standings WHERE COALESCE(deck_name, deck_id) IN ({placeholders}) GROUP BY COALESCE(deck_name, deck_id)", names).fetchall()
             else:
-                rows = conn.execute("SELECT deck_id, COUNT(*) FROM standings WHERE deck_id IS NOT NULL GROUP BY deck_id").fetchall()
+                rows = conn.execute("SELECT COALESCE(deck_name, deck_id), COUNT(*) FROM standings WHERE deck_id IS NOT NULL GROUP BY COALESCE(deck_name, deck_id)").fetchall()
         total = sum(count for _, count in rows)
         return {str(deck): count / total for deck, count in rows} if total else {}
 
@@ -139,7 +162,7 @@ class LimitlessStore:
         FROM pairings p
         JOIN standings s1 ON s1.tournament_id=p.tournament_id AND s1.player_id=p.player1
         JOIN standings s2 ON s2.tournament_id=p.tournament_id AND s2.player_id=p.player2
-        WHERE (lower(s1.deck_id) LIKE lower(?) OR lower(s2.deck_id) LIKE lower(?))
+        WHERE (lower(COALESCE(s1.deck_name, s1.deck_id)) LIKE lower(?) OR lower(COALESCE(s2.deck_name, s2.deck_id)) LIKE lower(?))
           AND p.player1 != '' AND p.player2 != '' AND p.winner NOT IN ('0', '-1', '')
         """
         with self.connect() as conn:
