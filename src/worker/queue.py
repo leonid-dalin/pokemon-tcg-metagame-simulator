@@ -85,19 +85,24 @@ def _map_panel_decks_to_matrix(panel_decks: list[str], deck_names: list[str]) ->
     return mapped
 
 
-def _panel_decks_for_report(deck_names: list[str] | None = None) -> list[str]:
+def _panel_decks_for_report(deck_names: list[str] | None = None, store=None) -> list[str]:
     if not BDIF_USE_CARD_MODEL:
         return list(BDIF_PANEL_DECKS)
     db_path = os.path.join("data", "limitless.db")
     if not os.path.exists(db_path):
         return list(BDIF_PANEL_DECKS)
-    from src.ingestion.store import LimitlessStore
     from src.ingestion.model import select_panel_decks
-    selected = select_panel_decks(LimitlessStore(db_path).deck_weights(), threshold=BDIF_PANEL_SHARE_THRESHOLD)
+    if store is None:
+        from src.ingestion.store import LimitlessStore
+        store = LimitlessStore(db_path)
+    selected = select_panel_decks(
+        store.deck_weights(),
+        threshold=BDIF_PANEL_SHARE_THRESHOLD,
+    )
     return _map_panel_decks_to_matrix(selected, deck_names or [])
 
 
-def _build_bdif_report_addons() -> tuple[dict, dict]:
+def _build_bdif_report_addons(store=None) -> tuple[dict, dict]:
     if not BDIF_USE_CARD_MODEL:
         return {}, {}
 
@@ -113,7 +118,8 @@ def _build_bdif_report_addons() -> tuple[dict, dict]:
         recommendations, h1 = _BDIF_MODEL_CACHE[cache_key]
         return deepcopy(recommendations), deepcopy(h1)
     _BDIF_MODEL_CACHE.clear()
-    store = LimitlessStore(db_path)
+    if store is None:
+        store = LimitlessStore(db_path)
     deck_weights = store.deck_weights()
     if not deck_weights:
         return {}, {}
@@ -198,14 +204,19 @@ def execute_simulation_job(payload: dict):
                 pipe.publish(f"channel:progress:{job_id}", msg_payload)
                 pipe.execute()
 
+            bdif_store = None
+            if BDIF_USE_CARD_MODEL and os.path.exists(os.path.join("data", "limitless.db")):
+                from src.ingestion.store import LimitlessStore
+                bdif_store = LimitlessStore(os.path.join("data", "limitless.db"))
+
             try:
-                panel_decks = _panel_decks_for_report(deck_names)
+                panel_decks = _panel_decks_for_report(deck_names, bdif_store)
             except Exception as exc:
                 log.warning("bdif_panel_selection_failed", error=str(exc), exc_info=True)
                 panel_decks = list(BDIF_PANEL_DECKS)
 
             try:
-                best60_recommendations, h1_report = _build_bdif_report_addons()
+                best60_recommendations, h1_report = _build_bdif_report_addons(bdif_store)
             except Exception as exc:
                 log.warning("bdif_report_addons_failed", error=str(exc), exc_info=True)
                 best60_recommendations, h1_report = {}, {}
@@ -258,15 +269,13 @@ def ingest_limitless_results():
 
     client = LimitlessClient.from_environment()
     store = LimitlessStore(os.path.join("data", "limitless.db"))
-    deck_names = {}
-    game_decks = getattr(client, "game_decks", None)
-    if game_decks is not None:
-        deck_names = {
-            str(deck.get("identifier") or deck.get("id")): str(deck["name"])
-            for deck in game_decks()
-            if deck.get("name") and (deck.get("identifier") or deck.get("id"))
-        }
-        store.backfill_deck_names(deck_names)
+    store.ensure_schema()
+    deck_names = {
+        str(deck.get("identifier") or deck.get("id")): str(deck["name"])
+        for deck in client.game_decks()
+        if deck.get("name") and (deck.get("identifier") or deck.get("id"))
+    }
+    store.backfill_deck_names(deck_names)
     events = client.tournaments(
         game="PTCG",
         format="STANDARD",

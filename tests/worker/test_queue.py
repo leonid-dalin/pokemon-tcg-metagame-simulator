@@ -238,6 +238,9 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
         def tournaments(self, **params):
             return [{"id": "good"}, {"id": "bad"}]
 
+        def game_decks(self):
+            return []
+
         def fetch_event_bundle(self, event_id):
             if event_id == "bad":
                 raise RuntimeError("event unavailable")
@@ -246,6 +249,12 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
     class Store:
         def __init__(self, path):
             self.path = path
+
+        def ensure_schema(self):
+            pass
+
+        def backfill_deck_names(self, deck_names):
+            pass
 
         def upsert_tournament(self, event, details):
             pass
@@ -276,6 +285,46 @@ def test_bdif_builder_is_not_invoked_when_card_model_is_disabled(monkeypatch):
     monkeypatch.setattr(queue, "BDIF_USE_CARD_MODEL", False)
     monkeypatch.setattr(queue.os.path, "exists", lambda path: (_ for _ in ()).throw(AssertionError(path)))
     assert queue._build_bdif_report_addons() == ({}, {})
+
+
+@pytest.mark.unit
+def test_simulation_job_reuses_one_bdif_store(monkeypatch, tmp_path):
+    stores = []
+    panel_stores = []
+    addon_stores = []
+    received = []
+
+    class Store:
+        def __init__(self, path):
+            stores.append(self)
+
+    monkeypatch.setattr(queue, "BDIF_USE_CARD_MODEL", True)
+    monkeypatch.setattr(queue.os.path, "exists", lambda path: True)
+    monkeypatch.setattr(queue, "LimitlessStore", Store, raising=False)
+    monkeypatch.setattr("src.ingestion.store.LimitlessStore", Store)
+    monkeypatch.setattr(queue, "_panel_decks_for_report", lambda deck_names, store=None: panel_stores.append(store) or [])
+    monkeypatch.setattr(queue, "_build_bdif_report_addons", lambda store=None: addon_stores.append(store) or ({}, {}))
+    monkeypatch.setattr(queue, "INPUT_DATA", str(tmp_path / "input.json"))
+    monkeypatch.setattr(queue, "load_matchup_data", lambda *args: (["a", "b"], np.array([[0.5, 0.5], [0.5, 0.5]]), {}))
+    monkeypatch.setattr(queue, "predict_best_decks", lambda request: {"full_meta": {"a": 0.5, "b": 0.5}})
+    monkeypatch.setattr(queue, "swiss_rounds_from_players", lambda players: 1)
+    monkeypatch.setattr(queue, "run_monte_carlo_analytics", lambda **kwargs: received.append(kwargs) or {
+        "metrics": {},
+        "ranked_metrics": {},
+        "insufficient_data": [],
+        "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
+    })
+
+    queue.execute_simulation_job.call_local({
+        "job_id": "job",
+        "deck_names": ["a", "b"],
+        "matchup_matrix": [[0.5, 0.5], [0.5, 0.5]],
+        "total_players": 4,
+    })
+
+    assert len(stores) == 1
+    assert panel_stores == [stores[0]]
+    assert addon_stores == [stores[0]]
 
 
 @pytest.mark.unit

@@ -1,7 +1,7 @@
 import pytest
 from bs4 import BeautifulSoup
 
-from src.core.scraper import build_complete_matchup_matrix, discover_live_matchup_urls, scrape_matchup_soup
+from src.core.scraper import build_complete_matchup_matrix, discover_live_matchup_urls, normalize_archetype, scrape_matchup_soup
 
 
 INDEX_URL = "https://play.limitlesstcg.com/decks?game=PTCG"
@@ -16,6 +16,11 @@ INDEX_HTML = f"""
 <a href="/decks/charizard/matchups?format=standard&rotation={TEST_ROTATION}&set=SV">Charizard</a>
 <a href="/decks/charizard?format=standard&rotation={TEST_ROTATION}&set={TEST_SET}">Not a matchup</a>
 """
+
+
+@pytest.mark.unit
+def test_normalize_archetype_removes_possessive_suffix_for_canonical_matching():
+    assert normalize_archetype("N's Zoroark") == "n zoroark"
 
 
 class FakeResponse:

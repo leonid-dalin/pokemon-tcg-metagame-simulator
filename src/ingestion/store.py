@@ -21,13 +21,18 @@ class LimitlessStore:
     def __init__(self, path: str | Path, canonical_names: Iterable[str] | None = None):
         self.path = str(path)
         self.canonical_names = list(canonical_names) if canonical_names is not None else self._load_canonical_names()
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self._schema_ready = False
+
+    def ensure_schema(self) -> None:
+        if self._schema_ready:
+            return
+        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as conn:
             conn.executescript(SCHEMA)
             columns = {row[1] for row in conn.execute("PRAGMA table_info(standings)")}
             if "deck_name" not in columns:
                 conn.execute("ALTER TABLE standings ADD COLUMN deck_name TEXT")
-        self.backfill_deck_names()
+        self._schema_ready = True
 
     @staticmethod
     def _load_canonical_names() -> list[str]:
@@ -60,13 +65,6 @@ class LimitlessStore:
             return display_name or deck_id
         return None
 
-    def backfill_deck_names(self) -> None:
-        with self.connect() as conn:
-            rows = conn.execute("SELECT tournament_id, player_id, deck_id FROM standings WHERE deck_id IS NOT NULL").fetchall()
-            conn.executemany(
-                "UPDATE standings SET deck_name=? WHERE tournament_id=? AND player_id=?",
-                [(self._resolve_deck_name(deck_id), tournament_id, player_id) for tournament_id, player_id, deck_id in rows],
-            )
 
     def connect(self):
         return sqlite3.connect(self.path)
@@ -82,6 +80,7 @@ class LimitlessStore:
                     yield json.loads(raw)
 
     def upsert_tournament(self, row: dict[str, Any], details: dict[str, Any]) -> None:
+        self.ensure_schema()
         with self.connect() as conn:
             conn.execute("INSERT OR REPLACE INTO tournaments (id, game, format, name, date, players, details_json) VALUES (?, ?, ?, ?, ?, ?, ?)", (
                 row["id"], row.get("game"), row.get("format"), row.get("name"), row.get("date"), row.get("players"), json.dumps(details)
@@ -93,6 +92,7 @@ class LimitlessStore:
         rows: Iterable[dict[str, Any]],
         deck_names: dict[str, str] | None = None,
     ) -> None:
+        self.ensure_schema()
         with self.connect() as conn:
             for row in rows:
                 record = row.get("record", {})
@@ -108,6 +108,7 @@ class LimitlessStore:
                 ))
 
     def backfill_deck_names(self, deck_names: dict[str, str] | None = None) -> int:
+        self.ensure_schema()
         if deck_names is None:
             with self.connect() as conn:
                 rows = conn.execute("SELECT tournament_id, player_id, deck_id FROM standings WHERE deck_id IS NOT NULL").fetchall()

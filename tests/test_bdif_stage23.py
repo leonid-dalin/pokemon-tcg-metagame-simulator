@@ -64,6 +64,18 @@ def test_store_writes_missing_decklists_as_sql_null(tmp_path):
 
 
 @pytest.mark.unit
+def test_store_construction_does_not_modify_existing_database(tmp_path):
+    path = tmp_path / "limitless.db"
+    store = LimitlessStore(path, canonical_names=["N's Zoroark"])
+    store.upsert_standings("event", [{"player": "p1", "deck": {"id": "n-zoroark"}}])
+    before = path.read_bytes()
+
+    LimitlessStore(path, canonical_names=["N's Zoroark"])
+
+    assert path.read_bytes() == before
+
+
+@pytest.mark.unit
 def test_store_persists_and_backfills_canonical_deck_names(tmp_path):
     store = LimitlessStore(tmp_path / "limitless.db", canonical_names=["N's Zoroark"])
     store.upsert_standings("event", [
@@ -287,6 +299,12 @@ def test_recommendation_requires_exactly_sixty_cards():
 @pytest.mark.unit
 def test_panel_decks_include_every_empirical_share_above_threshold():
     assert select_panel_decks({"a": 0.031, "b": 0.03, "c": 0.029}, threshold=0.03) == ["a", "b"]
+
+
+@pytest.mark.unit
+def test_panel_decks_cap_at_ten_after_share_threshold():
+    shares = {f"deck-{index}": 0.04 - index / 1000 for index in range(12)}
+    assert len(select_panel_decks(shares, threshold=0.03)) == 10
 
 
 @pytest.mark.unit
