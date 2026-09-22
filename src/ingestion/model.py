@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -275,3 +276,36 @@ def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str,
     without_variant = fit(False)
     with_variant = fit(True)
     return {"hypothesis": "H1", "card": MIST_ENERGY_NAME, "target": "Alakazam Dudunsparce", "without_variant": {"beta": without_variant[0], "interval": without_variant[1]}, "with_variant": {"beta": with_variant[0], "interval": with_variant[1]}, "status": "supported" if without_variant[0] > 0 and with_variant[0] > 0 else "rejected", "interpretation": "observational association, not a causal effect"}
+
+
+def h1_observations(rows: Iterable[tuple[Any, ...]]) -> list[dict[str, int]]:
+    result = []
+    for deck1_id, deck2_id, deck1_raw, deck2_raw, winner, player1, player2 in rows:
+        deck1 = json.loads(deck1_raw) if deck1_raw else {}
+        deck2 = json.loads(deck2_raw) if deck2_raw else {}
+        target_is_first = "alakazam" in str(deck1_id).lower()
+        target_cards = deck1 if target_is_first else deck2
+        opponent_cards = deck2 if target_is_first else deck1
+        names = {
+            str(card["name"]).lower()
+            for group in target_cards.values()
+            if isinstance(group, list)
+            for card in group
+            if isinstance(card, dict) and card.get("name")
+        }
+        opponent_names = {
+            str(card["name"]).lower()
+            for group in opponent_cards.values()
+            if isinstance(group, list)
+            for card in group
+            if isinstance(card, dict) and card.get("name")
+        }
+        if not names:
+            continue
+        target_player = player1 if target_is_first else player2
+        result.append({
+            "misty": int(MIST_ENERGY_NAME.lower() in opponent_names),
+            "hammer_variant": int("dedenne" in names and "enhanced hammer" in names),
+            "result": int(str(winner) == str(target_player)),
+        })
+    return result

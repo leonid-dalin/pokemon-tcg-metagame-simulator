@@ -3,7 +3,7 @@ import sqlite3
 import pytest
 
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import fit_h1_misty_variant, fit_model, model_artifact, recommend_best60, validate_recommendation
+from src.ingestion.model import fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, validate_recommendation
 from src.ingestion.store import LimitlessStore
 from src.ingestion.aggregate import build_artifact
 
@@ -59,7 +59,7 @@ def test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag(tmp_path):
     ])
     store.upsert_pairings("event", [{"round": 1, "phase": 1, "player1": "p1", "player2": "p2", "winner": "p2"}])
 
-    assert store.h1_observations() == [{"misty": 1, "hammer_variant": 1, "result": 0}]
+    assert h1_observations(store.pairings_with_decklists("%alakazam%")) == [{"misty": 1, "hammer_variant": 1, "result": 0}]
 
 
 @pytest.mark.unit

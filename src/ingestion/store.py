@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
 
-from src.ingestion.model import ACE_SPEC_CARDS, MIST_ENERGY_NAME, _card_limit
+from src.ingestion.model import ACE_SPEC_CARDS, _card_limit
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tournaments (id TEXT PRIMARY KEY, game TEXT, format TEXT, name TEXT, date TEXT, players INTEGER, details_json TEXT);
@@ -132,44 +132,14 @@ class LimitlessStore:
     def observed_cards(self, archetype: str) -> set[str]:
         return {row["card"] for row in self.observed_skeleton(archetype)}
 
-    def h1_observations(self) -> list[dict[str, int]]:
+    def pairings_with_decklists(self, archetype_pattern: str) -> list[tuple[Any, ...]]:
         query = """
         SELECT s1.deck_id, s2.deck_id, s1.decklist_json, s2.decklist_json, p.winner, p.player1, p.player2
         FROM pairings p
         JOIN standings s1 ON s1.tournament_id=p.tournament_id AND s1.player_id=p.player1
         JOIN standings s2 ON s2.tournament_id=p.tournament_id AND s2.player_id=p.player2
-        WHERE (lower(s1.deck_id) LIKE '%alakazam%' OR lower(s2.deck_id) LIKE '%alakazam%')
+        WHERE (lower(s1.deck_id) LIKE lower(?) OR lower(s2.deck_id) LIKE lower(?))
           AND p.player1 != '' AND p.player2 != '' AND p.winner NOT IN ('0', '-1', '')
         """
         with self.connect() as conn:
-            rows = conn.execute(query).fetchall()
-        result = []
-        for deck1_id, deck2_id, deck1_raw, deck2_raw, winner, player1, player2 in rows:
-            deck1 = json.loads(deck1_raw) if deck1_raw and deck1_raw != "null" else {}
-            deck2 = json.loads(deck2_raw) if deck2_raw and deck2_raw != "null" else {}
-            target_is_first = "alakazam" in str(deck1_id).lower()
-            target_cards = deck1 if target_is_first else deck2 if "alakazam" in str(deck2_id).lower() else {}
-            opponent_cards = deck2 if target_is_first else deck1
-            names = {
-                str(card["name"]).lower()
-                for group in target_cards.values()
-                if isinstance(group, list)
-                for card in group
-                if isinstance(card, dict) and card.get("name")
-            }
-            opponent_names = {
-                str(card["name"]).lower()
-                for group in opponent_cards.values()
-                if isinstance(group, list)
-                for card in group
-                if isinstance(card, dict) and card.get("name")
-            }
-            if not names:
-                continue
-            target_player = player1 if target_is_first else player2
-            result.append({
-                "misty": int(MIST_ENERGY_NAME.lower() in opponent_names),
-                "hammer_variant": int("dedenne" in names and "enhanced hammer" in names),
-                "result": int(str(winner) == str(target_player)),
-            })
-        return result
+            return conn.execute(query, (archetype_pattern, archetype_pattern)).fetchall()
