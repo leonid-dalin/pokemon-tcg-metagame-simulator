@@ -258,6 +258,15 @@ def ingest_limitless_results():
 
     client = LimitlessClient.from_environment()
     store = LimitlessStore(os.path.join("data", "limitless.db"))
+    deck_names = {}
+    game_decks = getattr(client, "game_decks", None)
+    if game_decks is not None:
+        deck_names = {
+            str(deck.get("identifier") or deck.get("id")): str(deck["name"])
+            for deck in game_decks()
+            if deck.get("name") and (deck.get("identifier") or deck.get("id"))
+        }
+        store.backfill_deck_names(deck_names)
     events = client.tournaments(
         game="PTCG",
         format="STANDARD",
@@ -269,7 +278,10 @@ def ingest_limitless_results():
         try:
             details, standings, pairings = client.fetch_event_bundle(event_id)
             store.upsert_tournament(event, details)
-            store.upsert_standings(event_id, standings)
+            if deck_names:
+                store.upsert_standings(event_id, standings, deck_names)
+            else:
+                store.upsert_standings(event_id, standings)
             store.upsert_pairings(event_id, pairings)
         except Exception as exc:
             failed_events.append({"id": event_id, "error": str(exc)})

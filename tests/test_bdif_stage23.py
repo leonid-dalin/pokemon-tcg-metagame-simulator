@@ -6,6 +6,7 @@ from src.ingestion.client import LimitlessClient
 from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, select_panel_decks, validate_recommendation
 from src.ingestion.store import LimitlessStore
 from src.ingestion.aggregate import build_artifact
+from src.core.scraper import normalize_archetype
 
 
 @pytest.mark.unit

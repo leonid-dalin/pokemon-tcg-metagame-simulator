@@ -87,17 +87,45 @@ class LimitlessStore:
                 row["id"], row.get("game"), row.get("format"), row.get("name"), row.get("date"), row.get("players"), json.dumps(details)
             ))
 
-    def upsert_standings(self, tournament_id: str, rows: Iterable[dict[str, Any]]) -> None:
+    def upsert_standings(
+        self,
+        tournament_id: str,
+        rows: Iterable[dict[str, Any]],
+        deck_names: dict[str, str] | None = None,
+    ) -> None:
         with self.connect() as conn:
             for row in rows:
                 record = row.get("record", {})
                 deck = row.get("deck") or {}
                 deck_id = deck.get("id")
-                deck_name = self._resolve_deck_name(deck_id, deck.get("name"))
+                deck_name = self._resolve_deck_name(
+                    deck_id,
+                    deck.get("name") or (deck_names or {}).get(deck_id),
+                )
                 conn.execute("INSERT OR REPLACE INTO standings (tournament_id, player_id, placing, wins, losses, ties, deck_id, deck_name, decklist_json, dropped_round) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (
                     tournament_id, str(row.get("player", row.get("name", ""))), row.get("placing"), record.get("wins", 0),
                     record.get("losses", 0), record.get("ties", 0), deck_id, deck_name, json.dumps(row.get("decklist")) if row.get("decklist") is not None else None, row.get("drop")
                 ))
+
+    def backfill_deck_names(self, deck_names: dict[str, str] | None = None) -> int:
+        if deck_names is None:
+            with self.connect() as conn:
+                rows = conn.execute("SELECT tournament_id, player_id, deck_id FROM standings WHERE deck_id IS NOT NULL").fetchall()
+            with self.connect() as conn:
+                conn.executemany(
+                    "UPDATE standings SET deck_name=? WHERE tournament_id=? AND player_id=?",
+                    [(self._resolve_deck_name(deck_id), tournament_id, player_id) for tournament_id, player_id, deck_id in rows],
+                )
+            return len(rows)
+        updated = 0
+        with self.connect() as conn:
+            for deck_id, deck_name in deck_names.items():
+                cursor = conn.execute(
+                    "UPDATE standings SET deck_name=? WHERE deck_id=? AND (deck_name IS NULL OR deck_name=deck_id)",
+                    (deck_name, deck_id),
+                )
+                updated += cursor.rowcount
+        return updated
 
     def upsert_pairings(self, tournament_id: str, rows: Iterable[dict[str, Any]]) -> None:
         with self.connect() as conn:
