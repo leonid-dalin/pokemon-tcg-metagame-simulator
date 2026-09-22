@@ -251,6 +251,21 @@ def test_best60_normalizes_skeleton_copy_and_ace_spec_rules():
     assert sum(row["card"] in {"Prime Catcher", "Master Ball"} for row in result["cards"]) <= 1
 
 
+def test_best60_fill_target_preserves_exact_sixty_card_contract():
+    result = recommend_best60(Best60Request(
+        archetype="a",
+        candidates=[],
+        coefficients={},
+        coefficient_intervals={},
+        inclusion={"a": {}, "b": {}},
+        meta_weights={"b": 1.0},
+        playable_cards={"Darkness Energy"},
+        skeleton=[{"card": "Darkness Energy", "copies": 1}],
+    ))
+    assert result["total_copies"] == 60
+    validate_recommendation(result["cards"])
+
+
 def test_best60_benjamini_hochberg_gate_filters_weak_candidates():
     cards = [f"Card {index}" for index in range(20)]
     result = recommend_best60(Best60Request(
