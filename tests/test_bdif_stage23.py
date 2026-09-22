@@ -63,6 +63,26 @@ def test_store_writes_missing_decklists_as_sql_null(tmp_path):
 
 
 @pytest.mark.unit
+def test_store_persists_and_backfills_canonical_deck_names(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db", canonical_names=["N's Zoroark"])
+    store.upsert_standings("event", [
+        {"player": "p1", "deck": {"id": "n-zoroark", "name": "N's Zoroark"}},
+        {"player": "p2", "deck": {"id": "other", "name": "Other"}},
+    ])
+
+    with sqlite3.connect(tmp_path / "limitless.db") as conn:
+        assert conn.execute("SELECT deck_name FROM standings").fetchone()[0] == "N's Zoroark"
+        conn.execute("UPDATE standings SET deck_name=NULL")
+        conn.commit()
+
+    store.backfill_deck_names()
+    assert store.deck_weights() == {"N's Zoroark": 1.0}
+
+    with sqlite3.connect(tmp_path / "limitless.db") as conn:
+        assert conn.execute("SELECT deck_name FROM standings").fetchone()[0] == "N's Zoroark"
+
+
+@pytest.mark.unit
 def test_limitless_client_retries_rate_limit_with_response_contract(monkeypatch):
     responses = iter([
         type("Response", (), {"status_code": 429, "headers": {"Retry-After": "0"}, "content": b"", "json": lambda self: []})(),

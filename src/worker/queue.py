@@ -61,22 +61,27 @@ def _has_complete_observations(observations: list[tuple[str, str, int]]) -> bool
 
 
 def _map_panel_decks_to_matrix(panel_decks: list[str], deck_names: list[str]) -> list[str]:
-    aliases = {
-        "n zoroark": "N's Zoroark",
-        "slowking scr": "Slowking",
-        "dhelmise pbl": "Dhelmise",
-        "basic box m": "Basic Box",
-        "crustle dri": "Crustle",
-        "dragapult ex": "Dragapult",
-        "mega excadrill ex": "Mega Excadrill",
-    }
-    by_normalised_name = {normalize_archetype(name): name for name in deck_names}
+    by_normalised_name: dict[str, list[str]] = {}
+    for name in deck_names:
+        by_normalised_name.setdefault(normalize_archetype(name), []).append(name)
     mapped = []
+    dropped = []
     for deck in panel_decks:
-        normalised = normalize_archetype(deck.replace("-", " "))
-        matrix_name = aliases.get(normalised, by_normalised_name.get(normalised))
-        if matrix_name is not None:
+        tokens = normalize_archetype(deck.replace("-", " ")).split()
+        matrix_name = None
+        for end in range(len(tokens), 0, -1):
+            matches = by_normalised_name.get(" ".join(tokens[:end]), [])
+            if len(matches) == 1:
+                matrix_name = matches[0]
+                break
+            if len(matches) > 1:
+                break
+        if matrix_name:
             mapped.append(matrix_name)
+        else:
+            dropped.append(deck)
+    if dropped:
+        q_logger.warning("bdif_panel_decks_dropped", deck_ids=dropped)
     return mapped
 
 

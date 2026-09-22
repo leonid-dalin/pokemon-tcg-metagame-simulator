@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from src.worker import queue
+from src.core.scraper import normalize_archetype
 
 
 @pytest.mark.unit
@@ -199,6 +200,32 @@ def test_panel_decks_map_limitless_ids_to_simulation_names(monkeypatch):
         "Alakazam Dudunsparce",
         "N's Zoroark",
     ]
+
+
+@pytest.mark.unit
+def test_panel_deck_resolution_strips_unique_suffixes_and_preserves_compounds():
+    assert normalize_archetype("N's Zoroark") == "n zoroark"
+    assert normalize_archetype("Grass") == "grass"
+    assert queue._map_panel_decks_to_matrix(
+        ["slowking-scr", "n-zoroark", "dragapult-dusknoir"],
+        ["Slowking", "N's Zoroark", "Dragapult", "Dragapult Dusknoir"],
+    ) == ["Slowking", "N's Zoroark", "Dragapult Dusknoir"]
+
+
+@pytest.mark.unit
+def test_panel_deck_resolution_drops_ambiguous_and_missing_ids(monkeypatch):
+    dropped = []
+
+    class Logger:
+        def warning(self, event, **kwargs):
+            dropped.extend(kwargs["deck_ids"])
+
+    monkeypatch.setattr(queue, "q_logger", Logger())
+    assert queue._map_panel_decks_to_matrix(
+        ["foo-bar-baz", "missing-deck"],
+        ["Foo Bar", "Foo  Bar"],
+    ) == []
+    assert dropped == ["foo-bar-baz", "missing-deck"]
 
 
 @pytest.mark.unit
