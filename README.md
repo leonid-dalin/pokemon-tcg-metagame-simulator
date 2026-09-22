@@ -1,5 +1,10 @@
 # Pokemon TCG metagame simulator
 
+<p align="center">
+  <a href="https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/actions/workflows/tests.yml"><img src="https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <img src="https://img.shields.io/badge/Docker%20Compose-supported-2496ED?logo=docker&logoColor=white" alt="Docker Compose supported">
+</p>
+
 A Python and Rust simulator for Pokemon TCG metagame analysis. It provides two local workflows:
 
 - Replicator dynamics for long-run metagame evolution
@@ -7,7 +12,15 @@ A Python and Rust simulator for Pokemon TCG metagame analysis. It provides two l
 
 The Docker Compose deployment runs a FastAPI gateway, a Huey worker, a Streamlit UI, Redis, Jaeger, and a shared data volume
 
-## Quick start
+## 🖼️ App showcase
+
+| Main dashboard and controls | Head-to-head comparator |
+|:---:|:---:|
+| ![Main dashboard](docs/img/main.png) | ![Head-to-head comparator](docs/img/head-to-head.png) |
+| **Top recommendations** | **Simulation diagnostics** |
+| ![Top recommendations](docs/img/top-recommendations.png) | ![Simulation complete](docs/img/simulation_complete.png) |
+
+## 🚀 Quick start
 
 Requirements: Docker Desktop with Compose support
 
@@ -33,7 +46,7 @@ Stop the stack with:
 docker compose down
 ```
 
-## Run the CLI
+## 💻 Run the CLI
 
 Install the Python dependencies and build the Rust extension with the commands in [the local development guide](docs/how-to/local-development.md). Then run a simulation from the repository root:
 
@@ -49,7 +62,7 @@ python -m src.ui.cli -i data/input/ea_input.json --predict --players 512
 
 The CLI writes timestamped directories under `output/` unless `--output` changes the destination. See [CLI reference](docs/reference/cli.md) for all supported arguments and [CLI guide](docs/how-to/run-cli.md) for complete examples
 
-## Documentation
+## 📚 Documentation
 
 - [Tutorial: run the simulator](docs/tutorial/quickstart.md)
 - [How to run the CLI](docs/how-to/run-cli.md)
@@ -65,13 +78,13 @@ The CLI writes timestamped directories under `output/` unless `--output` changes
 
 The historical record is in [CHANGELOGS.md](docs/CHANGELOGS.md)
 
-## Data files
+## 🗃️ Data files
 
 The CLI default input is `data/input/ea_input.json`. The file contains archetype names and a win-rate matrix. The loader enforces the configured minimum match count and supplies matchup details for posterior analytics when those details exist
 
 Limitless ingestion is disabled by default. It writes `data/limitless.db`, `data/input/limitless_input.json`, and, when enough observations exist, `data/input/limitless_model_input.json`. BDIF card-model reporting is also disabled by default. See [BDIF analytics](docs/how-to/enable-bdif.md)
 
-## Tests
+## 🧪 Tests
 
 Use the project environment and run:
 
@@ -81,6 +94,6 @@ python -m pytest -q
 
 The Docker build compiles `src/tournament/tcg_engine` with Maturin before installing the wheel
 
-## Licence
+## 📄 Licence
 
 This project is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)

@@ -1,4 +1,33 @@
-### Commit `6f6dbe0` (Jun 03, 2026)
+# Changelog
+
+## September 2026
+
+The September release cycle added live matchup discovery, stronger request and matrix validation, Redis-backed SSE reliability, reproducible simulation seeds, the data-backed BDIF card model, and the QA gates that protect those paths
+
+### API, deployment, and data pipeline
+
+- Added live PBL matchup URL discovery and removed the manual URL list
+- Rejected duplicate, asymmetric, and invalid matchup data before it reaches the stored matrix
+- Bound prediction request sizes and rejected infeasible field constraints
+- Dispatched the startup scrape asynchronously and persisted refreshed data atomically
+- Preserved structured SSE failure events, reported failed task status, bounded streams, and centralised Redis Pub/Sub handling
+- Added cgroup-aware CPU limits, unprivileged Compose setup, volume ownership ordering, and the Python and Rust CI workflow
+
+### BDIF analytics
+
+- Added empirical panel selection, posterior matchup evidence, data-backed Best-60 recommendations, and H1 Misty reporting
+- Separated Monte Carlo results from report assembly and simplified the BDIF report renderer
+- Added canonical Limitless deck-name resolution at the storage boundary
+- Prepared legacy SQLite stores on their first read and handled legacy JSON `"null"` decklists in H1 observations
+- Added evidence thresholds for minimum matches, pair coverage, and reliable matchup counts
+
+### Verification and repository hygiene
+
+- Added the contract probe, flag matrix, interval sanity check, dead-symbol scan, and mutation sweeps to the QA harness
+- Added Docker build-context exclusions for Python caches, virtual environments, bytecode, and tool caches
+- Kept older entries below this current section as historical records
+
+## Commit `6f6dbe0` (Jun 03, 2026)
 
 ### 🚀 Distributed resource locking, async telemetry streams, and cgroup fixes
 #### `feat(infra): implement distributed startup lock, async SSE streaming, and cgroup-aware core scaling`
