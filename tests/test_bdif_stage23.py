@@ -54,6 +54,35 @@ def test_store_upserts_events_and_counts_unique_card_inclusion(tmp_path):
 
 
 @pytest.mark.unit
+def test_store_writes_missing_decklists_as_sql_null(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    store.upsert_standings("event", [{"player": "p1", "deck": {"id": "a"}, "decklist": None}])
+
+    with sqlite3.connect(tmp_path / "limitless.db") as conn:
+        assert conn.execute("SELECT decklist_json FROM standings").fetchone()[0] is None
+
+
+@pytest.mark.unit
+def test_limitless_client_retries_rate_limit_with_response_contract(monkeypatch):
+    responses = iter([
+        type("Response", (), {"status_code": 429, "headers": {"Retry-After": "0"}, "content": b"", "json": lambda self: []})(),
+        type("Response", (), {"status_code": 200, "headers": {}, "content": b"[]", "json": lambda self: []})(),
+    ])
+    calls = []
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return next(responses)
+
+    monkeypatch.setattr("src.ingestion.client.requests.get", fake_get)
+    client = LimitlessClient(api_key="secret-value", min_delay=0)
+
+    assert client.tournaments(game="PTCG") == []
+    assert len(calls) == 2
+    assert all(call[1]["timeout"] == client.timeout for call in calls)
+
+
+@pytest.mark.unit
 def test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag(tmp_path):
     store = LimitlessStore(tmp_path / "limitless.db")
     store.upsert_standings("event", [
