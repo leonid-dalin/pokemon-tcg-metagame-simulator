@@ -50,7 +50,7 @@
   {
     "name": "task4: let addon failures kill the job again",
     "file": "src/worker/queue.py",
-    "find": "            try:\n                best60_recommendations, h1_report = _build_bdif_report_addons()\n            except Exception as exc:\n                log.warning(\"bdif_report_addons_failed\", error=str(exc), exc_info=True)\n                best60_recommendations, h1_report = {}, {}",
+    "find": "            try:\n                best60_recommendations, h1_report = _build_bdif_report_addons(bdif_store)\n            except Exception as exc:\n                log.warning(\"bdif_report_addons_failed\", error=str(exc), exc_info=True)\n                best60_recommendations, h1_report = {}, {}",
     "replace": "            best60_recommendations, h1_report = _build_bdif_report_addons()"
   },
   {
