@@ -8,6 +8,8 @@ import numpy as np
 from scipy.stats import norm
 from sklearn.linear_model import LogisticRegression
 
+from src.core.config import BDIF_PANEL_MAX_DECKS, BDIF_PANEL_SHARE_THRESHOLD
+
 MIST_ENERGY_NAME = "Mist Energy"
 
 ACE_SPEC_CARDS = frozenset({
@@ -21,6 +23,20 @@ ACE_SPEC_CARDS = frozenset({
 })
 
 BASIC_ENERGY_NAMES = frozenset({"Grass Energy", "Fire Energy", "Water Energy", "Lightning Energy", "Psychic Energy", "Fighting Energy", "Darkness Energy", "Metal Energy"})
+
+
+def select_panel_decks(
+    deck_shares: Mapping[str, float],
+    threshold: float = BDIF_PANEL_SHARE_THRESHOLD,
+    max_decks: int | None = BDIF_PANEL_MAX_DECKS,
+) -> list[str]:
+    """Return decks at or above the empirical share threshold in deterministic order."""
+    selected = [
+        deck
+        for deck, share in sorted(deck_shares.items(), key=lambda item: (-item[1], item[0]))
+        if share >= threshold
+    ]
+    return selected[:max_decks] if max_decks is not None else selected
 
 
 def _logistic_standard_errors(estimator: LogisticRegression, design: np.ndarray) -> np.ndarray:
@@ -197,11 +213,37 @@ def recommend_best60(request: Best60Request) -> dict[str, Any]:
     scored.sort(key=lambda row: row["score"], reverse=True)
     no_signal = [{"card": row["card"]} for row in scored if row["bucket"] == "no signal"]
     signal = [row for row in scored if row["bucket"] == "signal"]
+    card_evidence = {
+        card: {
+            "inclusion_rate": inclusion.get(archetype, {}).get(card, 0.0),
+            "field_inclusion_rate": sum(
+                weight * inclusion.get(opponent, {}).get(card, 0.0)
+                for opponent, weight in meta_weights.items()
+            ),
+            "inclusion_delta": inclusion.get(archetype, {}).get(card, 0.0)
+            - sum(
+                weight * inclusion.get(opponent, {}).get(card, 0.0)
+                for opponent, weight in meta_weights.items()
+            ),
+            "coefficient": coefficients.get(card, 0.0),
+            "contribution": coefficients.get(card, 0.0)
+            * (
+                inclusion.get(archetype, {}).get(card, 0.0)
+                - sum(
+                    weight * inclusion.get(opponent, {}).get(card, 0.0)
+                    for opponent, weight in meta_weights.items()
+                )
+            ),
+            "interval": coefficient_intervals.get(card, (coefficients.get(card, 0.0), coefficients.get(card, 0.0))),
+        }
+        for card in candidates
+    }
     if not skeleton:
         return {
             "archetype": archetype,
             "cards": [],
             "no_signal": no_signal,
+            "card_evidence": card_evidence,
             "observational": True,
             "total_copies": 0,
             "status": "missing observed skeleton",
@@ -278,12 +320,13 @@ def recommend_best60(request: Best60Request) -> dict[str, Any]:
             "archetype": archetype,
             "cards": selected,
             "no_signal": no_signal,
+            "card_evidence": card_evidence,
             "observational": True,
             "total_copies": total_copies,
             "status": "insufficient legal observed cards to complete 60",
         }
     validate_recommendation(selected, banned_cards, card_rules)
-    return {"archetype": archetype, "cards": selected, "no_signal": no_signal, "observational": True, "total_copies": total_copies}
+    return {"archetype": archetype, "cards": selected, "no_signal": no_signal, "card_evidence": card_evidence, "observational": True, "total_copies": total_copies}
 
 
 def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -311,6 +354,10 @@ def h1_observations(rows: Iterable[tuple[Any, ...]]) -> list[dict[str, int]]:
     for deck1_id, deck2_id, deck1_raw, deck2_raw, winner, player1, player2 in rows:
         deck1 = json.loads(deck1_raw) if deck1_raw else {}
         deck2 = json.loads(deck2_raw) if deck2_raw else {}
+        if not isinstance(deck1, dict):
+            deck1 = {}
+        if not isinstance(deck2, dict):
+            deck2 = {}
         target_is_first = "alakazam" in str(deck1_id).lower()
         target_cards = deck1 if target_is_first else deck2
         opponent_cards = deck2 if target_is_first else deck1

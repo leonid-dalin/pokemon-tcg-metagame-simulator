@@ -214,6 +214,20 @@ def test_data_sufficiency_filter_separates_qualified_and_insufficient_decks():
 
 
 @pytest.mark.unit
+def test_data_sufficiency_filter_rejects_low_total_matches_with_full_coverage():
+    details = {
+        ("a", "a"): {"win_rate": 0.5, "match_count": 0},
+        ("b", "b"): {"win_rate": 0.5, "match_count": 0},
+        ("a", "b"): {"win_rate": 0.6, "match_count": 100},
+        ("b", "a"): {"win_rate": 0.4, "match_count": 100},
+    }
+    _, _, insufficient = monte_carlo.build_hierarchical_beta_posteriors(
+        ["a", "b"], np.full((2, 2), 0.5), details,
+    )
+    assert insufficient == ["a", "b"]
+
+
+@pytest.mark.unit
 def test_posterior_report_contains_intervals_and_ranked_split(monkeypatch):
     monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
     monkeypatch.setattr(

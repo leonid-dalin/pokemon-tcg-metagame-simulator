@@ -31,6 +31,7 @@ def normalize_archetype(name: str) -> str:
     if not name:
         return ""
     name = name.lower()
+    name = re.sub(r"['’]s\b", "", name)
     name = name.replace("&", " and ")
     name = _WS_RE.sub(" ", name)
     name = _CHARS_RE.sub("", name)

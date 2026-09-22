@@ -3,9 +3,10 @@ import sqlite3
 import pytest
 
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, validate_recommendation
+from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, select_panel_decks, validate_recommendation
 from src.ingestion.store import LimitlessStore
 from src.ingestion.aggregate import build_artifact
+from src.core.scraper import normalize_archetype
 
 
 @pytest.mark.unit
@@ -60,6 +61,63 @@ def test_store_writes_missing_decklists_as_sql_null(tmp_path):
 
     with sqlite3.connect(tmp_path / "limitless.db") as conn:
         assert conn.execute("SELECT decklist_json FROM standings").fetchone()[0] is None
+
+
+@pytest.mark.unit
+def test_store_construction_does_not_modify_existing_database(tmp_path):
+    path = tmp_path / "limitless.db"
+    store = LimitlessStore(path, canonical_names=["N's Zoroark"])
+    store.upsert_standings("event", [{"player": "p1", "deck": {"id": "n-zoroark"}}])
+    before = path.read_bytes()
+
+    LimitlessStore(path, canonical_names=["N's Zoroark"])
+
+    assert path.read_bytes() == before
+
+
+@pytest.mark.unit
+def test_readers_prepare_legacy_store_schema(tmp_path):
+    path = tmp_path / "legacy.db"
+    with sqlite3.connect(path) as conn:
+        conn.executescript(
+            "CREATE TABLE standings (tournament_id TEXT, player_id TEXT, deck_id TEXT, decklist_json TEXT);"
+            "CREATE TABLE pairings (tournament_id TEXT, player1 TEXT, player2 TEXT, winner TEXT);"
+        )
+        conn.execute("INSERT INTO standings VALUES ('event', 'p1', 'a', '{\"pokemon\": []}')")
+        conn.commit()
+
+    store = LimitlessStore(path, canonical_names=["a"])
+    assert list(store.matchup_rows()) == []
+
+    with sqlite3.connect(path) as conn:
+        assert "deck_name" in {row[1] for row in conn.execute("PRAGMA table_info(standings)")}
+        assert conn.execute("SELECT deck_name FROM standings").fetchone()[0] == "a"
+
+
+@pytest.mark.unit
+def test_h1_observations_treats_legacy_json_null_as_empty_deck():
+    rows = [("alakazam", "crustle", '{"pokemon": [{"name": "Alakazam"}]}', "null", "p2", "p1", "p2")]
+    assert h1_observations(rows) == [{"misty": 0, "hammer_variant": 0, "result": 0}]
+
+
+@pytest.mark.unit
+def test_store_persists_and_backfills_canonical_deck_names(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db", canonical_names=["N's Zoroark"])
+    store.upsert_standings("event", [
+        {"player": "p1", "deck": {"id": "n-zoroark", "name": "N's Zoroark"}},
+        {"player": "p2", "deck": {"id": "other", "name": "Other"}},
+    ])
+
+    with sqlite3.connect(tmp_path / "limitless.db") as conn:
+        assert conn.execute("SELECT deck_name FROM standings").fetchone()[0] == "N's Zoroark"
+        conn.execute("UPDATE standings SET deck_name=NULL")
+        conn.commit()
+
+    store.backfill_deck_names()
+    assert store.deck_weights() == {"N's Zoroark": 1.0}
+
+    with sqlite3.connect(tmp_path / "limitless.db") as conn:
+        assert conn.execute("SELECT deck_name FROM standings").fetchone()[0] == "N's Zoroark"
 
 
 @pytest.mark.unit
@@ -193,6 +251,21 @@ def test_best60_normalizes_skeleton_copy_and_ace_spec_rules():
     assert sum(row["card"] in {"Prime Catcher", "Master Ball"} for row in result["cards"]) <= 1
 
 
+def test_best60_fill_target_preserves_exact_sixty_card_contract():
+    result = recommend_best60(Best60Request(
+        archetype="a",
+        candidates=[],
+        coefficients={},
+        coefficient_intervals={},
+        inclusion={"a": {}, "b": {}},
+        meta_weights={"b": 1.0},
+        playable_cards={"Darkness Energy"},
+        skeleton=[{"card": "Darkness Energy", "copies": 1}],
+    ))
+    assert result["total_copies"] == 60
+    validate_recommendation(result["cards"])
+
+
 def test_best60_benjamini_hochberg_gate_filters_weak_candidates():
     cards = [f"Card {index}" for index in range(20)]
     result = recommend_best60(Best60Request(
@@ -261,6 +334,40 @@ def test_best60_rejects_five_copies():
 def test_recommendation_requires_exactly_sixty_cards():
     with pytest.raises(ValueError, match="exactly 60"):
         validate_recommendation([{"card": "Crustle", "copies": 4}])
+
+
+@pytest.mark.unit
+def test_panel_decks_include_every_empirical_share_above_threshold():
+    assert select_panel_decks({"a": 0.031, "b": 0.03, "c": 0.029}, threshold=0.03) == ["a", "b"]
+
+
+@pytest.mark.unit
+def test_panel_decks_cap_at_ten_after_share_threshold():
+    shares = {f"deck-{index}": 0.04 - index / 1000 for index in range(12)}
+    assert len(select_panel_decks(shares, threshold=0.03)) == 10
+
+
+@pytest.mark.unit
+def test_best60_reports_card_evidence_and_partial_status():
+    result = recommend_best60(Best60Request(
+        archetype="a",
+        candidates=["Signal Card"],
+        coefficients={"Signal Card": 2.0},
+        coefficient_intervals={"Signal Card": (1.0, 3.0)},
+        inclusion={"a": {"Signal Card": 1.0}, "b": {"Signal Card": 0.0}},
+        meta_weights={"b": 1.0},
+        playable_cards={"Signal Card"},
+        skeleton=[{"card": "Signal Card", "copies": 1}],
+    ))
+    assert result["status"] == "insufficient legal observed cards to complete 60"
+    assert result["card_evidence"]["Signal Card"] == {
+        "inclusion_rate": 1.0,
+        "field_inclusion_rate": 0.0,
+        "inclusion_delta": 1.0,
+        "coefficient": 2.0,
+        "contribution": 2.0,
+        "interval": (1.0, 3.0),
+    }
 
 
 @pytest.mark.unit

@@ -9,6 +9,8 @@ from huey import RedisHuey, crontab
 
 from src.api.models import ScrapedMatrix, TIER_MAPPING, PredictionRequest
 from src.core.config import (
+    BDIF_PANEL_DECKS,
+    BDIF_PANEL_SHARE_THRESHOLD,
     BDIF_USE_CARD_MODEL,
     INPUT_DATA,
     LIMITLESS_BACKFILL_TOURNAMENTS,
@@ -21,6 +23,7 @@ from src.core.scraper import (
     build_complete_matchup_matrix,
     discover_live_matchup_urls,
     fetch_live_matchup_data,
+    normalize_archetype,
 )
 from src.core.telemetry import tracer
 from src.tournament.monte_carlo import run_monte_carlo_analytics
@@ -57,27 +60,71 @@ def _has_complete_observations(observations: list[tuple[str, str, int]]) -> bool
     return len(observations) >= 4 and len({result for _, _, result in observations}) == 2
 
 
-def _build_bdif_report_addons() -> tuple[dict, dict]:
+def _map_panel_decks_to_matrix(panel_decks: list[str], deck_names: list[str]) -> list[str]:
+    by_normalised_name: dict[str, list[str]] = {}
+    for name in deck_names:
+        by_normalised_name.setdefault(normalize_archetype(name), []).append(name)
+    mapped = []
+    dropped = []
+    for deck in panel_decks:
+        tokens = normalize_archetype(deck.replace("-", " ")).split()
+        matrix_name = None
+        for end in range(len(tokens), 0, -1):
+            matches = by_normalised_name.get(" ".join(tokens[:end]), [])
+            if len(matches) == 1:
+                matrix_name = matches[0]
+                break
+            if len(matches) > 1:
+                break
+        if matrix_name:
+            mapped.append(matrix_name)
+        else:
+            dropped.append(deck)
+    if dropped:
+        q_logger.warning("bdif_panel_decks_dropped", deck_ids=dropped)
+    return mapped
+
+
+def _panel_decks_for_report(deck_names: list[str] | None = None, store=None) -> list[str]:
+    if not BDIF_USE_CARD_MODEL:
+        return list(BDIF_PANEL_DECKS)
+    db_path = os.path.join("data", "limitless.db")
+    if not os.path.exists(db_path):
+        return list(BDIF_PANEL_DECKS)
+    from src.ingestion.model import select_panel_decks
+    if store is None:
+        from src.ingestion.store import LimitlessStore
+        store = LimitlessStore(db_path)
+    selected = select_panel_decks(
+        store.deck_weights(),
+        threshold=BDIF_PANEL_SHARE_THRESHOLD,
+    )
+    return _map_panel_decks_to_matrix(selected, deck_names or [])
+
+
+def _build_bdif_report_addons(store=None) -> tuple[dict, dict]:
     if not BDIF_USE_CARD_MODEL:
         return {}, {}
 
     from src.ingestion.features import deck_features
-    from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, recommend_best60
+    from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, recommend_best60, select_panel_decks
     from src.ingestion.store import LimitlessStore
 
     db_path = os.path.join("data", "limitless.db")
     if not os.path.exists(db_path):
         return {}, {}
+    if store is None:
+        store = LimitlessStore(db_path)
+    store.prepare_for_read()
     cache_key = (os.path.abspath(db_path), float(os.path.getmtime(db_path)))
     if cache_key in _BDIF_MODEL_CACHE:
         recommendations, h1 = _BDIF_MODEL_CACHE[cache_key]
         return deepcopy(recommendations), deepcopy(h1)
     _BDIF_MODEL_CACHE.clear()
-    store = LimitlessStore(db_path)
     deck_weights = store.deck_weights()
     if not deck_weights:
         return {}, {}
-    top_decks = [deck for deck, _ in sorted(deck_weights.items(), key=lambda item: item[1], reverse=True)[:6]]
+    top_decks = select_panel_decks(deck_weights, threshold=BDIF_PANEL_SHARE_THRESHOLD)
     inclusion = deck_features(store, top_decks)
     observations = store.observations()
     if len(observations) < 4 or len({result for _, _, result in observations}) < 2:
@@ -158,8 +205,19 @@ def execute_simulation_job(payload: dict):
                 pipe.publish(f"channel:progress:{job_id}", msg_payload)
                 pipe.execute()
 
+            bdif_store = None
+            if BDIF_USE_CARD_MODEL and os.path.exists(os.path.join("data", "limitless.db")):
+                from src.ingestion.store import LimitlessStore
+                bdif_store = LimitlessStore(os.path.join("data", "limitless.db"))
+
             try:
-                best60_recommendations, h1_report = _build_bdif_report_addons()
+                panel_decks = _panel_decks_for_report(deck_names, bdif_store)
+            except Exception as exc:
+                log.warning("bdif_panel_selection_failed", error=str(exc), exc_info=True)
+                panel_decks = list(BDIF_PANEL_DECKS)
+
+            try:
+                best60_recommendations, h1_report = _build_bdif_report_addons(bdif_store)
             except Exception as exc:
                 log.warning("bdif_report_addons_failed", error=str(exc), exc_info=True)
                 best60_recommendations, h1_report = {}, {}
@@ -184,7 +242,7 @@ def execute_simulation_job(payload: dict):
                     seed=RNG_SEED,
                     progress_callback=_progress_handler,
                     matchup_details=matchup_details,
-                    panel_decks=None,
+                    panel_decks=panel_decks,
                 )
 
             log.info("simulation_job_complete", status="success")
@@ -212,6 +270,13 @@ def ingest_limitless_results():
 
     client = LimitlessClient.from_environment()
     store = LimitlessStore(os.path.join("data", "limitless.db"))
+    store.ensure_schema()
+    deck_names = {
+        str(deck.get("identifier") or deck.get("id")): str(deck["name"])
+        for deck in client.game_decks()
+        if deck.get("name") and (deck.get("identifier") or deck.get("id"))
+    }
+    store.backfill_deck_names(deck_names)
     events = client.tournaments(
         game="PTCG",
         format="STANDARD",
@@ -223,7 +288,10 @@ def ingest_limitless_results():
         try:
             details, standings, pairings = client.fetch_event_bundle(event_id)
             store.upsert_tournament(event, details)
-            store.upsert_standings(event_id, standings)
+            if deck_names:
+                store.upsert_standings(event_id, standings, deck_names)
+            else:
+                store.upsert_standings(event_id, standings)
             store.upsert_pairings(event_id, pairings)
         except Exception as exc:
             failed_events.append({"id": event_id, "error": str(exc)})
