@@ -20,6 +20,8 @@ ACE_SPEC_CARDS = frozenset({
     "Sparkling Crystal", "Survival Brace", "Treasure Tracker", "Unfair Stamp",
 })
 
+BASIC_ENERGY_NAMES = frozenset({"Grass Energy", "Fire Energy", "Water Energy", "Lightning Energy", "Psychic Energy", "Fighting Energy", "Darkness Energy", "Metal Energy"})
+
 
 def _logistic_standard_errors(estimator: LogisticRegression, design: np.ndarray) -> np.ndarray:
     probabilities = estimator.predict_proba(design)[:, 1]
@@ -41,8 +43,7 @@ def benjamini_hochberg(p_values: Mapping[str, float]) -> dict[str, float]:
 
 def _card_limit(card: str, card_rules: Mapping[str, Mapping[str, Any]]) -> int | None:
     rule = card_rules.get(card, {})
-    basic_energy_names = {"Grass Energy", "Fire Energy", "Water Energy", "Lightning Energy", "Psychic Energy", "Fighting Energy", "Darkness Energy", "Metal Energy"}
-    if rule.get("basic_energy") or rule.get("type") == "basic_energy" or card in basic_energy_names:
+    if rule.get("basic_energy") or rule.get("type") == "basic_energy" or card in BASIC_ENERGY_NAMES:
         return None
     if rule.get("ace_spec") or card in ACE_SPEC_CARDS:
         return 1
@@ -73,10 +74,11 @@ class FittedCardModel:
 
     def probability(self, deck_i: str, deck_j: str) -> float:
         row = np.zeros((1, len(self.decks) + len(self.cards)), dtype=float)
-        if deck_i in self.decks:
-            row[0, self.decks.index(deck_i)] = 1.0
-        if deck_j in self.decks:
-            row[0, self.decks.index(deck_j)] = -1.0
+        deck_indices = {deck: index for index, deck in enumerate(self.decks)}
+        if deck_i in deck_indices:
+            row[0, deck_indices[deck_i]] = 1.0
+        if deck_j in deck_indices:
+            row[0, deck_indices[deck_j]] = -1.0
         offset = len(self.decks)
         for index, card in enumerate(self.cards):
             row[0, offset + index] = self.inclusion.get(deck_i, {}).get(card, 0.0) - self.inclusion.get(deck_j, {}).get(card, 0.0)
@@ -88,10 +90,11 @@ def fit_model(observations: list[tuple[str, str, int]], inclusion: Mapping[str, 
     cards = sorted({card for values in inclusion.values() for card in values})
     rows = []
     labels = []
+    deck_indices = {deck: index for index, deck in enumerate(decks)}
     for deck_i, deck_j, result in observations:
         row = np.zeros(len(decks) + len(cards), dtype=float)
-        row[decks.index(deck_i)] = 1.0
-        row[decks.index(deck_j)] = -1.0
+        row[deck_indices[deck_i]] = 1.0
+        row[deck_indices[deck_j]] = -1.0
         for index, card in enumerate(cards):
             row[len(decks) + index] = inclusion.get(deck_i, {}).get(card, 0.0) - inclusion.get(deck_j, {}).get(card, 0.0)
         rows.append(row)
@@ -168,12 +171,13 @@ def recommend_best60(archetype: str, candidates: Sequence[str], coefficients: Ma
         if row["q_value"] > 0.05 or row["lower"] <= 0 <= row["upper"]:
             row["bucket"] = "no signal"
     scored.sort(key=lambda row: row["score"], reverse=True)
+    no_signal = [{"card": row["card"]} for row in scored if row["bucket"] == "no signal"]
     signal = [row for row in scored if row["bucket"] == "signal"]
     if not skeleton:
         return {
             "archetype": archetype,
             "cards": [],
-            "no_signal": scored,
+            "no_signal": no_signal,
             "observational": True,
             "total_copies": 0,
             "status": "missing observed skeleton",
@@ -249,13 +253,13 @@ def recommend_best60(archetype: str, candidates: Sequence[str], coefficients: Ma
         return {
             "archetype": archetype,
             "cards": selected,
-            "no_signal": [row for row in scored if row["bucket"] == "no signal"],
+            "no_signal": no_signal,
             "observational": True,
             "total_copies": total_copies,
             "status": "insufficient legal observed cards to complete 60",
         }
     validate_recommendation(selected, banned_cards, card_rules)
-    return {"archetype": archetype, "cards": selected, "no_signal": [row for row in scored if row["bucket"] == "no signal"], "observational": True, "total_copies": total_copies}
+    return {"archetype": archetype, "cards": selected, "no_signal": no_signal, "observational": True, "total_copies": total_copies}
 
 
 def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str, Any]:

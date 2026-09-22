@@ -219,8 +219,7 @@ def test_best60_puts_zero_spanning_interval_in_no_signal_bucket():
     )
 
     assert result["total_copies"] == 60
-    uncertain = next(row for row in result["no_signal"] if row["card"] == "Uncertain")
-    assert uncertain["bucket"] == "no signal"
+    assert {row["card"] for row in result["no_signal"]} >= {"Uncertain"}
 
 
 @pytest.mark.unit
