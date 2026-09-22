@@ -2,7 +2,7 @@
 # monte_carlo.py | High-speed static bracket execution (Rust-Powered)
 import multiprocessing
 import os
-import time
+
 import structlog
 import numpy as np
 import tcg_engine
@@ -32,7 +32,7 @@ def build_hierarchical_beta_posteriors(
         matchup_details: Dict[Tuple[str, str], Dict[str, Any]],
         prior_strength: float = BDIF_PRIOR_STRENGTH,
 ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
-    """Build matchup posteriors and identify decks with sufficient evidence."""
+    """Build matchup posteriors and identify decks with insufficient evidence."""
     n_decks = len(deck_names)
     index = {name: i for i, name in enumerate(deck_names)}
     totals = np.zeros(n_decks, dtype=float)
@@ -200,39 +200,19 @@ def run_monte_carlo_analytics(
         logger.warning("empty_meta_distribution_using_uniform_field", deck_count=n_decks)
         meta_vec.fill(1.0 / n_decks)
 
-    posterior_mode = matchup_details is not None
-    if posterior_mode:
+    use_posterior = matchup_details is not None
+    if use_posterior:
         alpha, beta, insufficient_data = build_hierarchical_beta_posteriors(
             deck_names, win_matrix, matchup_details
         )
-    else:
-        alpha = beta = None
-        insufficient_data = []
-
-    # Init empty tracking arrays for the aggregated totals
-    total_initial = np.zeros(n_decks, dtype=int)
-    total_day2 = np.zeros(n_decks, dtype=int)
-    total_topcut = np.zeros(n_decks, dtype=int)
-    total_champ = np.zeros(n_decks, dtype=int)
-
-    draw_count = posterior_draws if posterior_mode else 1
-    if posterior_mode:
-        base_iterations, remainder = divmod(iterations, draw_count)
-        draw_specs = [
-            (base_iterations + (1 if i < remainder else 0), i)
-            for i in range(draw_count)
+        base_iterations, remainder = divmod(iterations, posterior_draws)
+        draw_sizes = [
+            base_iterations + (1 if i < remainder else 0)
+            for i in range(posterior_draws)
         ]
-    else:
-        base_chunk_size = 10000 if iterations >= 10000 else iterations
-        chunks = max(1, iterations // base_chunk_size)
-        remainder = iterations % base_chunk_size
-        draw_specs = [
-            (base_chunk_size + (remainder if i == chunks - 1 else 0), i)
-            for i in range(chunks)
-        ]
-    draw_metrics = []
-    for current_chunk, draw_index in draw_specs:
-        if posterior_mode:
+        draw_count = posterior_draws
+
+        def matrix_sampler(draw_index: int) -> np.ndarray:
             rng = np.random.default_rng(seed + draw_index)
             working_matrix = np.zeros((n_decks, n_decks), dtype=float)
             for i in range(n_decks):
@@ -241,12 +221,37 @@ def run_monte_carlo_analytics(
                     sample = float(rng.beta(alpha[i, j], beta[i, j]))
                     working_matrix[i, j] = sample
                     working_matrix[j, i] = 1.0 - sample
-        else:
-            working_matrix = win_matrix.copy()
+            return working_matrix
+    else:
+        insufficient_data = []
+        base_chunk_size = 10000 if iterations >= 10000 else iterations
+        chunks = max(1, iterations // base_chunk_size)
+        remainder = iterations % base_chunk_size
+        draw_sizes = [
+            base_chunk_size + (remainder if i == chunks - 1 else 0)
+            for i in range(chunks)
+        ]
+        draw_count = chunks
+
+        def matrix_sampler(draw_index: int) -> np.ndarray:
+            return win_matrix.copy()
+
+    draw_specs = [(size, i) for i, size in enumerate(draw_sizes)]
+
+    # Init empty tracking arrays for the aggregated totals
+    total_initial = np.zeros(n_decks, dtype=int)
+    total_day2 = np.zeros(n_decks, dtype=int)
+    total_topcut = np.zeros(n_decks, dtype=int)
+    total_champ = np.zeros(n_decks, dtype=int)
+
+    draw_metrics = []
+    for current_chunk, draw_index in draw_specs:
+        working_matrix = matrix_sampler(draw_index)
         if match_format == "BO3":
             working_matrix = 3 * (working_matrix ** 2) - 2 * (working_matrix ** 3)
 
-        if current_chunk == 0: continue
+        if current_chunk == 0:
+            continue
 
         # Ensure a unique, deterministic seed per chunk
         base_seed = (seed + draw_index) % (1 << 32)
@@ -288,9 +293,8 @@ def run_monte_carlo_analytics(
             })
 
         if progress_callback:
-            progress_callback(draw_index + 1, draw_count if posterior_mode else chunks)
+            progress_callback(draw_index + 1, draw_count)
 
-        time.sleep(0.1)
     results = {}
     with np.errstate(divide='ignore', invalid='ignore'):
         day2_conv: np.ndarray = np.asarray(np.where(total_initial > 0, total_day2 / total_initial, 0))
@@ -311,7 +315,7 @@ def run_monte_carlo_analytics(
             }
 
     draw_array = {key: np.array([draw[key] for draw in draw_metrics]) for key in ("day2_share", "top_cut_share", "win_probability")}
-    if draw_metrics:
+    if use_posterior and draw_metrics:
         for i, deck in enumerate(deck_names):
             if deck not in results:
                 continue
@@ -333,7 +337,7 @@ def run_monte_carlo_analytics(
             beta,
             matchup_details or {},
             panel_decks=panel_decks,
-        ) if posterior_mode else {
+        ) if use_posterior else {
             "rows": {},
             "unmatched": list(panel_decks if panel_decks is not None else BDIF_PANEL_DECKS),
             "opponents": [],
