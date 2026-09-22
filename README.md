@@ -1,8 +1,9 @@
-# Pokemon TCG metagame simulator
+# Pokemon TCG Metagame Simulator
 
 <p align="center">
   <a href="https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/actions/workflows/tests.yml"><img src="https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
   <img src="https://img.shields.io/badge/Docker%20Compose-supported-2496ED?logo=docker&logoColor=white" alt="Docker Compose supported">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-AGPL--3.0--or--later-blue" alt="AGPL-3.0-or-later licence"></a>
 </p>
 
 A Python and Rust simulator for Pokemon TCG metagame analysis. It provides two local workflows:
@@ -64,19 +65,30 @@ The CLI writes timestamped directories under `output/` unless `--output` changes
 
 ## 📚 Documentation
 
-- [Tutorial: run the simulator](docs/tutorial/quickstart.md)
-- [How to run the CLI](docs/how-to/run-cli.md)
-- [How to run the Compose stack](docs/how-to/run-compose.md)
-- [How to enable Limitless and BDIF analytics](docs/how-to/enable-bdif.md)
-- [How to develop locally](docs/how-to/local-development.md)
-- [CLI reference](docs/reference/cli.md)
-- [API reference](docs/reference/api.md)
-- [Configuration reference](docs/reference/configuration.md)
-- [Architecture](docs/explanation/architecture.md)
-- [Analytics and data contracts](docs/explanation/analytics.md)
-- [Code reference](docs/REFERENCE.md)
+| You need to | Read |
+| --- | --- |
+| Learn the main workflow | [Quickstart tutorial](docs/tutorial/quickstart.md) |
+| Run the CLI | [CLI how-to](docs/how-to/run-cli.md) |
+| Run the Docker Compose stack | [Compose how-to](docs/how-to/run-compose.md) |
+| Enable Limitless and BDIF analytics | [BDIF how-to](docs/how-to/enable-bdif.md) |
+| Set up local development | [Local development how-to](docs/how-to/local-development.md) |
+| Check CLI flags and defaults | [CLI reference](docs/reference/cli.md) |
+| Integrate with the API | [API reference](docs/reference/api.md) |
+| Check configuration values | [Configuration reference](docs/reference/configuration.md) |
+| Understand the service layout | [Architecture explanation](docs/explanation/architecture.md) |
+| Understand the models and evidence rules | [Analytics explanation](docs/explanation/analytics.md) |
+| Find source entry points | [Code reference](docs/REFERENCE.md) |
+| See what changed | [Changelog](docs/CHANGELOGS.md) |
 
-The historical record is in [CHANGELOGS.md](docs/CHANGELOGS.md)
+## 🧾 Project documents
+
+| You need to | Read |
+| --- | --- |
+| Contribute code or data | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Read community standards | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
+| Report a security issue | [SECURITY.md](SECURITY.md) |
+| Read the project licence | [LICENSE](LICENSE) |
+| Check dependency and data notices | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 
 ## 🗃️ Data files
 
@@ -96,4 +108,4 @@ The Docker build compiles `src/tournament/tcg_engine` with Maturin before instal
 
 ## 📄 Licence
 
-This project is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+This project is licensed under [GNU AGPL-3.0-or-later](LICENSE)
