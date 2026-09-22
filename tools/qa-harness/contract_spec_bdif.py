@@ -1,4 +1,4 @@
-import json, os, tempfile
+import json, os, sqlite3, tempfile
 
 from src.core.config import MIN_GAMES
 from src.core.data import load_matchup_data
@@ -39,6 +39,37 @@ def _degenerate(loaded):
     return None
 
 
+def _produce_legacy_store():
+    root = tempfile.mkdtemp()
+    path = os.path.join(root, "limitless.db")
+    with sqlite3.connect(path) as conn:
+        conn.executescript(
+            "CREATE TABLE standings (tournament_id TEXT, player_id TEXT, deck_id TEXT, decklist_json TEXT);"
+            "CREATE TABLE pairings (tournament_id TEXT, player1 TEXT, player2 TEXT, winner TEXT);"
+        )
+        conn.execute("INSERT INTO standings VALUES ('event', 'p1', 'a', '{\"pokemon\": []}')")
+        conn.commit()
+    return path
+
+
+def _consume_legacy_store(path):
+    from src.ingestion.store import LimitlessStore
+    store = LimitlessStore(path, canonical_names=["a"])
+    list(store.matchup_rows())
+    with sqlite3.connect(path) as conn:
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(standings)")}
+        deck_name = conn.execute("SELECT deck_name FROM standings").fetchone()[0]
+    return {"has_deck_name": "deck_name" in columns, "backfilled": deck_name == "a"}
+
+
+def _legacy_store_degenerate(loaded):
+    if not loaded["has_deck_name"]:
+        return "read path did not prepare the legacy schema"
+    if not loaded["backfilled"]:
+        return "read path did not backfill canonical deck names"
+    return None
+
+
 CASES = [
     {
         "name": "ingestion aggregate -> load_matchup_data (limitless_input.json)",
@@ -51,5 +82,11 @@ CASES = [
         "produce": _produce_card_model,
         "consume": lambda a: load_matchup_data(_write(a), MIN_GAMES),
         "degenerate": _degenerate,
+    },
+    {
+        "name": "legacy Limitless SQLite store -> reader schema preparation",
+        "produce": _produce_legacy_store,
+        "consume": _consume_legacy_store,
+        "degenerate": _legacy_store_degenerate,
     },
 ]

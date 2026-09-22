@@ -354,6 +354,10 @@ def h1_observations(rows: Iterable[tuple[Any, ...]]) -> list[dict[str, int]]:
     for deck1_id, deck2_id, deck1_raw, deck2_raw, winner, player1, player2 in rows:
         deck1 = json.loads(deck1_raw) if deck1_raw else {}
         deck2 = json.loads(deck2_raw) if deck2_raw else {}
+        if not isinstance(deck1, dict):
+            deck1 = {}
+        if not isinstance(deck2, dict):
+            deck2 = {}
         target_is_first = "alakazam" in str(deck1_id).lower()
         target_cards = deck1 if target_is_first else deck2
         opponent_cards = deck2 if target_is_first else deck1

@@ -76,6 +76,31 @@ def test_store_construction_does_not_modify_existing_database(tmp_path):
 
 
 @pytest.mark.unit
+def test_readers_prepare_legacy_store_schema(tmp_path):
+    path = tmp_path / "legacy.db"
+    with sqlite3.connect(path) as conn:
+        conn.executescript(
+            "CREATE TABLE standings (tournament_id TEXT, player_id TEXT, deck_id TEXT, decklist_json TEXT);"
+            "CREATE TABLE pairings (tournament_id TEXT, player1 TEXT, player2 TEXT, winner TEXT);"
+        )
+        conn.execute("INSERT INTO standings VALUES ('event', 'p1', 'a', '{\"pokemon\": []}')")
+        conn.commit()
+
+    store = LimitlessStore(path, canonical_names=["a"])
+    assert list(store.matchup_rows()) == []
+
+    with sqlite3.connect(path) as conn:
+        assert "deck_name" in {row[1] for row in conn.execute("PRAGMA table_info(standings)")}
+        assert conn.execute("SELECT deck_name FROM standings").fetchone()[0] == "a"
+
+
+@pytest.mark.unit
+def test_h1_observations_treats_legacy_json_null_as_empty_deck():
+    rows = [("alakazam", "crustle", '{"pokemon": [{"name": "Alakazam"}]}', "null", "p2", "p1", "p2")]
+    assert h1_observations(rows) == [{"misty": 0, "hammer_variant": 0, "result": 0}]
+
+
+@pytest.mark.unit
 def test_store_persists_and_backfills_canonical_deck_names(tmp_path):
     store = LimitlessStore(tmp_path / "limitless.db", canonical_names=["N's Zoroark"])
     store.upsert_standings("event", [

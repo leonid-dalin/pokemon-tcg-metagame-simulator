@@ -113,13 +113,14 @@ def _build_bdif_report_addons(store=None) -> tuple[dict, dict]:
     db_path = os.path.join("data", "limitless.db")
     if not os.path.exists(db_path):
         return {}, {}
+    if store is None:
+        store = LimitlessStore(db_path)
+    store.prepare_for_read()
     cache_key = (os.path.abspath(db_path), float(os.path.getmtime(db_path)))
     if cache_key in _BDIF_MODEL_CACHE:
         recommendations, h1 = _BDIF_MODEL_CACHE[cache_key]
         return deepcopy(recommendations), deepcopy(h1)
     _BDIF_MODEL_CACHE.clear()
-    if store is None:
-        store = LimitlessStore(db_path)
     deck_weights = store.deck_weights()
     if not deck_weights:
         return {}, {}

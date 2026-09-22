@@ -192,6 +192,9 @@ def test_panel_decks_map_limitless_ids_to_simulation_names(monkeypatch):
         def __init__(self, path):
             pass
 
+        def prepare_for_read(self):
+            pass
+
         def deck_weights(self):
             return {"alakazam-dudunsparce": 0.5}
 
@@ -285,6 +288,27 @@ def test_bdif_builder_is_not_invoked_when_card_model_is_disabled(monkeypatch):
     monkeypatch.setattr(queue, "BDIF_USE_CARD_MODEL", False)
     monkeypatch.setattr(queue.os.path, "exists", lambda path: (_ for _ in ()).throw(AssertionError(path)))
     assert queue._build_bdif_report_addons() == ({}, {})
+
+
+@pytest.mark.unit
+def test_bdif_builder_prepares_supplied_store_before_reads(monkeypatch, tmp_path):
+    calls = []
+
+    class Store:
+        def prepare_for_read(self):
+            calls.append("prepare")
+
+        def deck_weights(self):
+            calls.append("deck_weights")
+            return {}
+
+    monkeypatch.setattr(queue, "BDIF_USE_CARD_MODEL", True)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "limitless.db").touch()
+
+    assert queue._build_bdif_report_addons(Store()) == ({}, {})
+    assert calls == ["prepare", "deck_weights"]
 
 
 @pytest.mark.unit

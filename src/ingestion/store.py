@@ -22,6 +22,7 @@ class LimitlessStore:
         self.path = str(path)
         self.canonical_names = list(canonical_names) if canonical_names is not None else self._load_canonical_names()
         self._schema_ready = False
+        self._read_ready = False
 
     def ensure_schema(self) -> None:
         if self._schema_ready:
@@ -33,6 +34,13 @@ class LimitlessStore:
             if "deck_name" not in columns:
                 conn.execute("ALTER TABLE standings ADD COLUMN deck_name TEXT")
         self._schema_ready = True
+
+    def prepare_for_read(self) -> None:
+        if self._read_ready:
+            return
+        self.ensure_schema()
+        self.backfill_deck_names()
+        self._read_ready = True
 
     @staticmethod
     def _load_canonical_names() -> list[str]:
@@ -70,6 +78,7 @@ class LimitlessStore:
         return sqlite3.connect(self.path)
 
     def _decklists(self, archetype: str):
+        self.prepare_for_read()
         with closing(self.connect()) as conn:
             rows = conn.execute(
                 "SELECT decklist_json FROM standings WHERE deck_name=? AND decklist_json IS NOT NULL",
@@ -141,6 +150,7 @@ class LimitlessStore:
             yield from conn.execute("SELECT id, game, format, name, date, players, details_json FROM tournaments ORDER BY date DESC")
 
     def matchup_rows(self):
+        self.prepare_for_read()
         query = """
         SELECT s1.deck_name, s2.deck_name, p.winner, p.player1, p.player2
         FROM pairings p JOIN standings s1 ON s1.tournament_id=p.tournament_id AND s1.player_id=p.player1
@@ -198,6 +208,7 @@ class LimitlessStore:
         return skeleton
 
     def deck_weights(self, archetypes: Iterable[str] | None = None) -> dict[str, float]:
+        self.prepare_for_read()
         names = list(archetypes or [])
         with self.connect() as conn:
             if names:
@@ -212,6 +223,7 @@ class LimitlessStore:
         return {row["card"] for row in self.observed_skeleton(archetype)}
 
     def pairings_with_decklists(self, archetype_pattern: str) -> list[tuple[Any, ...]]:
+        self.prepare_for_read()
         query = """
         SELECT s1.deck_name, s2.deck_name, s1.decklist_json, s2.decklist_json, p.winner, p.player1, p.player2
         FROM pairings p
