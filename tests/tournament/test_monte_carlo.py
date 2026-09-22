@@ -283,7 +283,7 @@ def test_exposes_matchup_panel(monkeypatch):
         "run_parallel_monte_carlo",
         lambda *args: ([10, 10], [5, 5], [2, 2], [1, 1]),
     )
-    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
+
     result = monte_carlo.run_monte_carlo_analytics(
         deck_names=["Crustle", "a"],
         win_matrix=np.array([[0.5, 0.6], [0.4, 0.5]]),
