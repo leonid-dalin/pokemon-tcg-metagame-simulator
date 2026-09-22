@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 
 def inclusion_rates(store, archetype: str) -> dict[str, float]:
     return store.card_inclusion(archetype)
