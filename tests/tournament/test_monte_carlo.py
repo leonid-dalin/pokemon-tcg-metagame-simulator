@@ -17,7 +17,6 @@ def test_chunk_seeds_come_from_the_supplied_seed(monkeypatch):
         return [1], [1], [1], [1]
 
     monkeypatch.setattr(monte_carlo.tcg_engine, "run_parallel_monte_carlo", run_parallel)
-    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
 
     kwargs = {
         "deck_names": ["a"],
@@ -47,7 +46,6 @@ def test_empty_meta_distribution_uses_a_uniform_field(monkeypatch):
         return [1, 1], [1, 1], [1, 1], [1, 1]
 
     monkeypatch.setattr(monte_carlo.tcg_engine, "run_parallel_monte_carlo", run_parallel)
-    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
 
     monte_carlo.run_monte_carlo_analytics(
         deck_names=["a", "b"],
@@ -118,7 +116,6 @@ def test_winless_deck_pair_gets_positive_posterior_pseudocounts(monkeypatch):
         "run_parallel_monte_carlo",
         lambda *args: ([1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]),
     )
-    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
 
     deck_names = ["winless-a", "winless-b", "winner"]
     win_matrix = np.array([
@@ -224,7 +221,6 @@ def test_posterior_report_contains_intervals_and_ranked_split(monkeypatch):
         "run_parallel_monte_carlo",
         lambda *args: ([10, 10], [5, 5], [2, 2], [1, 1]),
     )
-    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
 
     result = monte_carlo.run_monte_carlo_analytics(
         deck_names=["a", "b"],
@@ -319,7 +315,6 @@ def test_posterior_draws_keep_matchup_matrix_complementary(monkeypatch):
         return [1, 1], [1, 1], [1, 1], [1, 1]
 
     monkeypatch.setattr(monte_carlo.tcg_engine, "run_parallel_monte_carlo", run_parallel)
-    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
 
     monte_carlo.run_monte_carlo_analytics(
         deck_names=["a", "b"],
@@ -350,7 +345,6 @@ def test_posterior_draws_preserve_requested_iterations(monkeypatch):
         "run_parallel_monte_carlo",
         lambda iterations, *args: (iterations_seen.append(iterations) or ([1], [1], [1], [1])),
     )
-    monkeypatch.setattr(monte_carlo.time, "sleep", lambda _: None)
 
     monte_carlo.run_monte_carlo_analytics(
         deck_names=["a"],

@@ -2,7 +2,7 @@
 # monte_carlo.py | High-speed static bracket execution (Rust-Powered)
 import multiprocessing
 import os
-import time
+
 import structlog
 import numpy as np
 import tcg_engine
@@ -206,22 +206,37 @@ def run_monte_carlo_analytics(
             deck_names, win_matrix, matchup_details
         )
         base_iterations, remainder = divmod(iterations, posterior_draws)
-        draw_specs = [
-            (base_iterations + (1 if i < remainder else 0), i)
+        draw_sizes = [
+            base_iterations + (1 if i < remainder else 0)
             for i in range(posterior_draws)
         ]
         draw_count = posterior_draws
+
+        def matrix_sampler(draw_index: int) -> np.ndarray:
+            rng = np.random.default_rng(seed + draw_index)
+            working_matrix = np.zeros((n_decks, n_decks), dtype=float)
+            for i in range(n_decks):
+                working_matrix[i, i] = 0.5
+                for j in range(i + 1, n_decks):
+                    sample = float(rng.beta(alpha[i, j], beta[i, j]))
+                    working_matrix[i, j] = sample
+                    working_matrix[j, i] = 1.0 - sample
+            return working_matrix
     else:
-        alpha = beta = None
         insufficient_data = []
         base_chunk_size = 10000 if iterations >= 10000 else iterations
         chunks = max(1, iterations // base_chunk_size)
         remainder = iterations % base_chunk_size
-        draw_specs = [
-            (base_chunk_size + (remainder if i == chunks - 1 else 0), i)
+        draw_sizes = [
+            base_chunk_size + (remainder if i == chunks - 1 else 0)
             for i in range(chunks)
         ]
         draw_count = chunks
+
+        def matrix_sampler(draw_index: int) -> np.ndarray:
+            return win_matrix.copy()
+
+    draw_specs = [(size, i) for i, size in enumerate(draw_sizes)]
 
     # Init empty tracking arrays for the aggregated totals
     total_initial = np.zeros(n_decks, dtype=int)
@@ -231,17 +246,7 @@ def run_monte_carlo_analytics(
 
     draw_metrics = []
     for current_chunk, draw_index in draw_specs:
-        if use_posterior:
-            rng = np.random.default_rng(seed + draw_index)
-            working_matrix = np.zeros((n_decks, n_decks), dtype=float)
-            for i in range(n_decks):
-                working_matrix[i, i] = 0.5
-                for j in range(i + 1, n_decks):
-                    sample = float(rng.beta(alpha[i, j], beta[i, j]))
-                    working_matrix[i, j] = sample
-                    working_matrix[j, i] = 1.0 - sample
-        else:
-            working_matrix = win_matrix.copy()
+        working_matrix = matrix_sampler(draw_index)
         if match_format == "BO3":
             working_matrix = 3 * (working_matrix ** 2) - 2 * (working_matrix ** 3)
 
