@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -24,9 +25,19 @@ class LimitlessStore:
     def connect(self):
         return sqlite3.connect(self.path)
 
+    def _decklists(self, archetype: str):
+        with closing(self.connect()) as conn:
+            rows = conn.execute(
+                "SELECT decklist_json FROM standings WHERE deck_id=? AND decklist_json IS NOT NULL",
+                (archetype,),
+            )
+            for (raw,) in rows:
+                if raw and raw != "null":
+                    yield json.loads(raw)
+
     def upsert_tournament(self, row: dict[str, Any], details: dict[str, Any]) -> None:
         with self.connect() as conn:
-            conn.execute("INSERT OR REPLACE INTO tournaments VALUES (?, ?, ?, ?, ?, ?, ?)", (
+            conn.execute("INSERT OR REPLACE INTO tournaments (id, game, format, name, date, players, details_json) VALUES (?, ?, ?, ?, ?, ?, ?)", (
                 row["id"], row.get("game"), row.get("format"), row.get("name"), row.get("date"), row.get("players"), json.dumps(details)
             ))
 
@@ -35,15 +46,15 @@ class LimitlessStore:
             for row in rows:
                 record = row.get("record", {})
                 deck = row.get("deck") or {}
-                conn.execute("INSERT OR REPLACE INTO standings VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (
+                conn.execute("INSERT OR REPLACE INTO standings (tournament_id, player_id, placing, wins, losses, ties, deck_id, decklist_json, dropped_round) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (
                     tournament_id, str(row.get("player", row.get("name", ""))), row.get("placing"), record.get("wins", 0),
-                    record.get("losses", 0), record.get("ties", 0), deck.get("id"), json.dumps(row.get("decklist")), row.get("drop")
+                    record.get("losses", 0), record.get("ties", 0), deck.get("id"), json.dumps(row.get("decklist")) if row.get("decklist") is not None else None, row.get("drop")
                 ))
 
     def upsert_pairings(self, tournament_id: str, rows: Iterable[dict[str, Any]]) -> None:
         with self.connect() as conn:
             for row in rows:
-                conn.execute("INSERT OR REPLACE INTO pairings VALUES (?, ?, ?, ?, ?, ?)", (
+                conn.execute("INSERT OR REPLACE INTO pairings (tournament_id, round, phase, player1, player2, winner) VALUES (?, ?, ?, ?, ?, ?)", (
                     tournament_id, row.get("round", 0), row.get("phase", 0), str(row.get("player1", "")),
                     str(row.get("player2", "")), str(row.get("winner", ""))
                 ))
@@ -63,14 +74,9 @@ class LimitlessStore:
             yield from conn.execute(query)
 
     def card_inclusion(self, archetype: str) -> dict[str, float]:
-        with self.connect() as conn:
-            rows = conn.execute(
-                "SELECT decklist_json FROM standings WHERE deck_id=? AND decklist_json IS NOT NULL AND decklist_json != 'null'",
-                (archetype,),
-            ).fetchall()
         counts: dict[str, int] = {}
-        for (raw,) in rows:
-            cards = json.loads(raw) if raw and raw != "null" else {}
+        rows = list(self._decklists(archetype))
+        for cards in rows:
             names = {card["name"] for group in (cards or {}).values() if isinstance(group, list) for card in group if isinstance(card, dict) and "name" in card}
             for name in names:
                 counts[name] = counts.get(name, 0) + 1
@@ -87,14 +93,9 @@ class LimitlessStore:
         return rows
 
     def observed_skeleton(self, archetype: str) -> list[dict[str, object]]:
-        with self.connect() as conn:
-            rows = conn.execute(
-                "SELECT decklist_json FROM standings WHERE deck_id=? AND decklist_json IS NOT NULL AND decklist_json != 'null'",
-                (archetype,),
-            ).fetchall()
         counts: dict[str, int] = {}
-        for (raw,) in rows:
-            decklist = json.loads(raw)
+        rows = list(self._decklists(archetype))
+        for decklist in rows:
             for group in decklist.values():
                 if not isinstance(group, list):
                     continue

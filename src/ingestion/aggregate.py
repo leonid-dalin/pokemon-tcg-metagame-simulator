@@ -7,7 +7,16 @@ from src.core.config import BDIF_PAIR_MIN_GAMES
 from .store import LimitlessStore
 
 
-def build_artifact(store: LimitlessStore, min_matches: int = BDIF_PAIR_MIN_GAMES) -> dict[str, Any]:
+def _record_winner(wins: dict[tuple[str, str], float], totals: dict[tuple[str, str], int], key: tuple[str, str], winner: str | None, first: str, second: str) -> None:
+    if winner == first:
+        wins[key] += 1.0
+    elif winner == second:
+        return
+    else:
+        totals[key] -= 1
+
+
+def build_artifact(store: LimitlessStore) -> dict[str, Any]:
     totals: dict[tuple[str, str], int] = defaultdict(int)
     wins: dict[tuple[str, str], float] = defaultdict(float)
     for deck1, deck2, winner, player1, player2 in store.matchup_rows():
@@ -18,12 +27,7 @@ def build_artifact(store: LimitlessStore, min_matches: int = BDIF_PAIR_MIN_GAMES
         key = (first, second)
         totals[key] += 1
         winner_deck = deck1 if str(winner) == str(player1) else deck2 if str(winner) == str(player2) else None
-        if winner_deck == first:
-            wins[key] += 1.0
-        elif winner_deck == second:
-            wins[key] += 0.0
-        else:
-            totals[key] -= 1
+        _record_winner(wins, totals, key, winner_deck, first, second)
     archetypes = sorted({deck for pair in totals for deck in pair})
     matrix: dict[str, dict[str, dict[str, float | int]]] = {}
     for deck in archetypes:
@@ -41,5 +45,5 @@ def build_artifact(store: LimitlessStore, min_matches: int = BDIF_PAIR_MIN_GAMES
         "archetypes": archetypes,
         "win_rate_matrix": matrix,
         "card_inclusion": {deck: store.card_inclusion(deck) for deck in archetypes},
-        "min_pair_matches": min_matches,
+        "min_pair_matches": BDIF_PAIR_MIN_GAMES,
     }
