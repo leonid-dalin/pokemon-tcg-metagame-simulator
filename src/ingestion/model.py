@@ -23,6 +23,15 @@ ACE_SPEC_CARDS = frozenset({
 BASIC_ENERGY_NAMES = frozenset({"Grass Energy", "Fire Energy", "Water Energy", "Lightning Energy", "Psychic Energy", "Fighting Energy", "Darkness Energy", "Metal Energy"})
 
 
+def select_panel_decks(deck_shares: Mapping[str, float], threshold: float = 0.03) -> list[str]:
+    """Return decks at or above the empirical share threshold in deterministic order."""
+    return [
+        deck
+        for deck, share in sorted(deck_shares.items(), key=lambda item: (-item[1], item[0]))
+        if share >= threshold
+    ]
+
+
 def _logistic_standard_errors(estimator: LogisticRegression, design: np.ndarray) -> np.ndarray:
     probabilities = estimator.predict_proba(design)[:, 1]
     weights = probabilities * (1.0 - probabilities)
@@ -197,11 +206,37 @@ def recommend_best60(request: Best60Request) -> dict[str, Any]:
     scored.sort(key=lambda row: row["score"], reverse=True)
     no_signal = [{"card": row["card"]} for row in scored if row["bucket"] == "no signal"]
     signal = [row for row in scored if row["bucket"] == "signal"]
+    card_evidence = {
+        card: {
+            "inclusion_rate": inclusion.get(archetype, {}).get(card, 0.0),
+            "field_inclusion_rate": sum(
+                weight * inclusion.get(opponent, {}).get(card, 0.0)
+                for opponent, weight in meta_weights.items()
+            ),
+            "inclusion_delta": inclusion.get(archetype, {}).get(card, 0.0)
+            - sum(
+                weight * inclusion.get(opponent, {}).get(card, 0.0)
+                for opponent, weight in meta_weights.items()
+            ),
+            "coefficient": coefficients.get(card, 0.0),
+            "contribution": coefficients.get(card, 0.0)
+            * (
+                inclusion.get(archetype, {}).get(card, 0.0)
+                - sum(
+                    weight * inclusion.get(opponent, {}).get(card, 0.0)
+                    for opponent, weight in meta_weights.items()
+                )
+            ),
+            "interval": coefficient_intervals.get(card, (coefficients.get(card, 0.0), coefficients.get(card, 0.0))),
+        }
+        for card in candidates
+    }
     if not skeleton:
         return {
             "archetype": archetype,
             "cards": [],
             "no_signal": no_signal,
+            "card_evidence": card_evidence,
             "observational": True,
             "total_copies": 0,
             "status": "missing observed skeleton",
@@ -278,12 +313,13 @@ def recommend_best60(request: Best60Request) -> dict[str, Any]:
             "archetype": archetype,
             "cards": selected,
             "no_signal": no_signal,
+            "card_evidence": card_evidence,
             "observational": True,
             "total_copies": total_copies,
             "status": "insufficient legal observed cards to complete 60",
         }
     validate_recommendation(selected, banned_cards, card_rules)
-    return {"archetype": archetype, "cards": selected, "no_signal": no_signal, "observational": True, "total_copies": total_copies}
+    return {"archetype": archetype, "cards": selected, "no_signal": no_signal, "card_evidence": card_evidence, "observational": True, "total_copies": total_copies}
 
 
 def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str, Any]:

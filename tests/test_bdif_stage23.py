@@ -3,7 +3,7 @@ import sqlite3
 import pytest
 
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, validate_recommendation
+from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, select_panel_decks, validate_recommendation
 from src.ingestion.store import LimitlessStore
 from src.ingestion.aggregate import build_artifact
 
@@ -261,6 +261,34 @@ def test_best60_rejects_five_copies():
 def test_recommendation_requires_exactly_sixty_cards():
     with pytest.raises(ValueError, match="exactly 60"):
         validate_recommendation([{"card": "Crustle", "copies": 4}])
+
+
+@pytest.mark.unit
+def test_panel_decks_include_every_empirical_share_above_threshold():
+    assert select_panel_decks({"a": 0.031, "b": 0.03, "c": 0.029}, threshold=0.03) == ["a", "b"]
+
+
+@pytest.mark.unit
+def test_best60_reports_card_evidence_and_partial_status():
+    result = recommend_best60(Best60Request(
+        archetype="a",
+        candidates=["Signal Card"],
+        coefficients={"Signal Card": 2.0},
+        coefficient_intervals={"Signal Card": (1.0, 3.0)},
+        inclusion={"a": {"Signal Card": 1.0}, "b": {"Signal Card": 0.0}},
+        meta_weights={"b": 1.0},
+        playable_cards={"Signal Card"},
+        skeleton=[{"card": "Signal Card", "copies": 1}],
+    ))
+    assert result["status"] == "insufficient legal observed cards to complete 60"
+    assert result["card_evidence"]["Signal Card"] == {
+        "inclusion_rate": 1.0,
+        "field_inclusion_rate": 0.0,
+        "inclusion_delta": 1.0,
+        "coefficient": 2.0,
+        "contribution": 2.0,
+        "interval": (1.0, 3.0),
+    }
 
 
 @pytest.mark.unit

@@ -9,6 +9,8 @@ from huey import RedisHuey, crontab
 
 from src.api.models import ScrapedMatrix, TIER_MAPPING, PredictionRequest
 from src.core.config import (
+    BDIF_PANEL_DECKS,
+    BDIF_PANEL_SHARE_THRESHOLD,
     BDIF_USE_CARD_MODEL,
     INPUT_DATA,
     LIMITLESS_BACKFILL_TOURNAMENTS,
@@ -57,12 +59,23 @@ def _has_complete_observations(observations: list[tuple[str, str, int]]) -> bool
     return len(observations) >= 4 and len({result for _, _, result in observations}) == 2
 
 
+def _panel_decks_for_report() -> list[str]:
+    if not BDIF_USE_CARD_MODEL:
+        return list(BDIF_PANEL_DECKS)
+    db_path = os.path.join("data", "limitless.db")
+    if not os.path.exists(db_path):
+        return list(BDIF_PANEL_DECKS)
+    from src.ingestion.store import LimitlessStore
+    from src.ingestion.model import select_panel_decks
+    return select_panel_decks(LimitlessStore(db_path).deck_weights(), threshold=BDIF_PANEL_SHARE_THRESHOLD)
+
+
 def _build_bdif_report_addons() -> tuple[dict, dict]:
     if not BDIF_USE_CARD_MODEL:
         return {}, {}
 
     from src.ingestion.features import deck_features
-    from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, recommend_best60
+    from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, recommend_best60, select_panel_decks
     from src.ingestion.store import LimitlessStore
 
     db_path = os.path.join("data", "limitless.db")
@@ -77,7 +90,7 @@ def _build_bdif_report_addons() -> tuple[dict, dict]:
     deck_weights = store.deck_weights()
     if not deck_weights:
         return {}, {}
-    top_decks = [deck for deck, _ in sorted(deck_weights.items(), key=lambda item: item[1], reverse=True)[:6]]
+    top_decks = select_panel_decks(deck_weights, threshold=BDIF_PANEL_SHARE_THRESHOLD)
     inclusion = deck_features(store, top_decks)
     observations = store.observations()
     if len(observations) < 4 or len({result for _, _, result in observations}) < 2:
@@ -159,6 +172,12 @@ def execute_simulation_job(payload: dict):
                 pipe.execute()
 
             try:
+                panel_decks = _panel_decks_for_report()
+            except Exception as exc:
+                log.warning("bdif_panel_selection_failed", error=str(exc), exc_info=True)
+                panel_decks = list(BDIF_PANEL_DECKS)
+
+            try:
                 best60_recommendations, h1_report = _build_bdif_report_addons()
             except Exception as exc:
                 log.warning("bdif_report_addons_failed", error=str(exc), exc_info=True)
@@ -184,7 +203,7 @@ def execute_simulation_job(payload: dict):
                     seed=RNG_SEED,
                     progress_callback=_progress_handler,
                     matchup_details=matchup_details,
-                    panel_decks=None,
+                    panel_decks=panel_decks,
                 )
 
             log.info("simulation_job_complete", status="success")
