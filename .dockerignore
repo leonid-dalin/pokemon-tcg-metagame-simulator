@@ -2,3 +2,8 @@ src/tournament/tcg_engine/target/
 .venv-qa/
 .venv/
 .git/
+**/.pytest_cache/
+**/__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
