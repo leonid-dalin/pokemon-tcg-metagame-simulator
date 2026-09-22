@@ -23,6 +23,7 @@ from src.core.scraper import (
     build_complete_matchup_matrix,
     discover_live_matchup_urls,
     fetch_live_matchup_data,
+    normalize_archetype,
 )
 from src.core.telemetry import tracer
 from src.tournament.monte_carlo import run_monte_carlo_analytics
@@ -59,7 +60,27 @@ def _has_complete_observations(observations: list[tuple[str, str, int]]) -> bool
     return len(observations) >= 4 and len({result for _, _, result in observations}) == 2
 
 
-def _panel_decks_for_report() -> list[str]:
+def _map_panel_decks_to_matrix(panel_decks: list[str], deck_names: list[str]) -> list[str]:
+    aliases = {
+        "n zoroark": "N's Zoroark",
+        "slowking scr": "Slowking",
+        "dhelmise pbl": "Dhelmise",
+        "basic box m": "Basic Box",
+        "crustle dri": "Crustle",
+        "dragapult ex": "Dragapult",
+        "mega excadrill ex": "Mega Excadrill",
+    }
+    by_normalised_name = {normalize_archetype(name): name for name in deck_names}
+    mapped = []
+    for deck in panel_decks:
+        normalised = normalize_archetype(deck.replace("-", " "))
+        matrix_name = aliases.get(normalised, by_normalised_name.get(normalised))
+        if matrix_name is not None:
+            mapped.append(matrix_name)
+    return mapped
+
+
+def _panel_decks_for_report(deck_names: list[str] | None = None) -> list[str]:
     if not BDIF_USE_CARD_MODEL:
         return list(BDIF_PANEL_DECKS)
     db_path = os.path.join("data", "limitless.db")
@@ -67,7 +88,8 @@ def _panel_decks_for_report() -> list[str]:
         return list(BDIF_PANEL_DECKS)
     from src.ingestion.store import LimitlessStore
     from src.ingestion.model import select_panel_decks
-    return select_panel_decks(LimitlessStore(db_path).deck_weights(), threshold=BDIF_PANEL_SHARE_THRESHOLD)
+    selected = select_panel_decks(LimitlessStore(db_path).deck_weights(), threshold=BDIF_PANEL_SHARE_THRESHOLD)
+    return _map_panel_decks_to_matrix(selected, deck_names or [])
 
 
 def _build_bdif_report_addons() -> tuple[dict, dict]:
@@ -172,7 +194,7 @@ def execute_simulation_job(payload: dict):
                 pipe.execute()
 
             try:
-                panel_decks = _panel_decks_for_report()
+                panel_decks = _panel_decks_for_report(deck_names)
             except Exception as exc:
                 log.warning("bdif_panel_selection_failed", error=str(exc), exc_info=True)
                 panel_decks = list(BDIF_PANEL_DECKS)

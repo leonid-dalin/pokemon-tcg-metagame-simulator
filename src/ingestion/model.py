@@ -8,6 +8,8 @@ import numpy as np
 from scipy.stats import norm
 from sklearn.linear_model import LogisticRegression
 
+from src.core.config import BDIF_PANEL_SHARE_THRESHOLD
+
 MIST_ENERGY_NAME = "Mist Energy"
 
 ACE_SPEC_CARDS = frozenset({
@@ -23,7 +25,10 @@ ACE_SPEC_CARDS = frozenset({
 BASIC_ENERGY_NAMES = frozenset({"Grass Energy", "Fire Energy", "Water Energy", "Lightning Energy", "Psychic Energy", "Fighting Energy", "Darkness Energy", "Metal Energy"})
 
 
-def select_panel_decks(deck_shares: Mapping[str, float], threshold: float = 0.03) -> list[str]:
+def select_panel_decks(
+    deck_shares: Mapping[str, float],
+    threshold: float = BDIF_PANEL_SHARE_THRESHOLD,
+) -> list[str]:
     """Return decks at or above the empirical share threshold in deterministic order."""
     return [
         deck

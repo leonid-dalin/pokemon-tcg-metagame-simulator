@@ -178,6 +178,30 @@ def test_limitless_ingestion_is_disabled_by_default(monkeypatch):
 
 
 @pytest.mark.unit
+def test_panel_decks_map_limitless_ids_to_simulation_names(monkeypatch):
+    monkeypatch.setattr(queue, "BDIF_USE_CARD_MODEL", True)
+    monkeypatch.setattr(queue.os.path, "exists", lambda path: True)
+    monkeypatch.setattr("src.ingestion.model.select_panel_decks", lambda *args, **kwargs: [
+        "alakazam-dudunsparce",
+        "n-zoroark",
+        "unknown-deck",
+    ])
+
+    class Store:
+        def __init__(self, path):
+            pass
+
+        def deck_weights(self):
+            return {"alakazam-dudunsparce": 0.5}
+
+    monkeypatch.setattr("src.ingestion.store.LimitlessStore", Store)
+    assert queue._panel_decks_for_report(["Alakazam Dudunsparce", "N's Zoroark"]) == [
+        "Alakazam Dudunsparce",
+        "N's Zoroark",
+    ]
+
+
+@pytest.mark.unit
 def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(monkeypatch, tmp_path):
     class Client:
         @classmethod
