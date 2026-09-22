@@ -34,6 +34,29 @@ redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/?db=0")
 huey = RedisHuey('tcg_tasks', url=redis_url)
 
 
+def _write_json_atomic(payload: dict, path: str) -> None:
+    temp_path = f"{path}.tmp"
+    target_mode = os.stat(path).st_mode & 0o777 if os.path.exists(path) else None
+    try:
+        with open(temp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if target_mode is not None:
+            os.chmod(temp_path, target_mode)
+        os.replace(temp_path, path)
+    except Exception:
+        try:
+            os.remove(temp_path)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _has_complete_observations(observations: list[tuple[str, str, int]]) -> bool:
+    return len(observations) >= 4 and len({result for _, _, result in observations}) == 2
+
+
 def _build_bdif_report_addons() -> tuple[dict, dict]:
     if not BDIF_USE_CARD_MODEL:
         return {}, {}
@@ -194,25 +217,29 @@ def ingest_limitless_results():
         format="STANDARD",
         limit=LIMITLESS_BACKFILL_TOURNAMENTS,
     )
+    failed_events = []
     for event in events:
         event_id = str(event["id"])
-        details, standings, pairings = client.fetch_event_bundle(event_id)
-        store.upsert_tournament(event, details)
-        store.upsert_standings(event_id, standings)
-        store.upsert_pairings(event_id, pairings)
+        try:
+            details, standings, pairings = client.fetch_event_bundle(event_id)
+            store.upsert_tournament(event, details)
+            store.upsert_standings(event_id, standings)
+            store.upsert_pairings(event_id, pairings)
+        except Exception as exc:
+            failed_events.append({"id": event_id, "error": str(exc)})
+            q_logger.warning("limitless_event_failed", event_id=event_id, error=str(exc))
 
     artifact = build_artifact(store)
     artifact_path = os.path.join("data", "input", "limitless_input.json")
     os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
-    with open(artifact_path, "w", encoding="utf-8") as handle:
-        json.dump(artifact, handle, indent=2)
+    _write_json_atomic(artifact, artifact_path)
     observations = store.observations()
-    if len(observations) >= 4 and len({result for _, _, result in observations}) == 2:
+    model_path = os.path.join("data", "input", "limitless_model_input.json")
+    if _has_complete_observations(observations):
         inclusion = deck_features(store, artifact["archetypes"])
         fitted = fit_model(observations, inclusion)
-        with open(os.path.join("data", "input", "limitless_model_input.json"), "w", encoding="utf-8") as handle:
-            json.dump(model_artifact(fitted), handle, indent=2)
-    return {"status": "complete", "events": len(events), "path": artifact_path}
+        _write_json_atomic(model_artifact(fitted), model_path)
+    return {"status": "complete", "events": len(events), "failed_events": failed_events, "path": artifact_path}
 
 
 @huey.periodic_task(crontab(minute='0', hour='*/2'))
@@ -267,27 +294,7 @@ def automated_daily_pipeline():
                 }
             }
 
-            temp_path = f"{INPUT_DATA}.tmp"
-            target_mode = None
-            if os.path.exists(INPUT_DATA):
-                target_mode = os.stat(INPUT_DATA).st_mode & 0o777
-
-            try:
-                with open(temp_path, "w", encoding="utf-8") as f:
-                    json.dump(final_json_structure, f, indent=2)
-                    f.flush()
-                    os.fsync(f.fileno())
-
-                if target_mode is not None:
-                    os.chmod(temp_path, target_mode)
-
-                os.replace(temp_path, INPUT_DATA)
-            except Exception:
-                try:
-                    os.remove(temp_path)
-                except FileNotFoundError:
-                    pass
-                raise
+            _write_json_atomic(final_json_structure, INPUT_DATA)
 
             log.info("pipeline_successful", deck_count=len(matrix_data["archetypes"]))  # Log success with metadata
 
