@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
@@ -18,6 +19,8 @@ ACE_SPEC_CARDS = frozenset({
     "Reboot Pod", "Scoop Up Cyclone", "Scramble Switch", "Secret Box",
     "Sparkling Crystal", "Survival Brace", "Treasure Tracker", "Unfair Stamp",
 })
+
+BASIC_ENERGY_NAMES = frozenset({"Grass Energy", "Fire Energy", "Water Energy", "Lightning Energy", "Psychic Energy", "Fighting Energy", "Darkness Energy", "Metal Energy"})
 
 
 def _logistic_standard_errors(estimator: LogisticRegression, design: np.ndarray) -> np.ndarray:
@@ -40,8 +43,7 @@ def benjamini_hochberg(p_values: Mapping[str, float]) -> dict[str, float]:
 
 def _card_limit(card: str, card_rules: Mapping[str, Mapping[str, Any]]) -> int | None:
     rule = card_rules.get(card, {})
-    basic_energy_names = {"Grass Energy", "Fire Energy", "Water Energy", "Lightning Energy", "Psychic Energy", "Fighting Energy", "Darkness Energy", "Metal Energy"}
-    if rule.get("basic_energy") or rule.get("type") == "basic_energy" or card in basic_energy_names:
+    if rule.get("basic_energy") or rule.get("type") == "basic_energy" or card in BASIC_ENERGY_NAMES:
         return None
     if rule.get("ace_spec") or card in ACE_SPEC_CARDS:
         return 1
@@ -72,14 +74,29 @@ class FittedCardModel:
 
     def probability(self, deck_i: str, deck_j: str) -> float:
         row = np.zeros((1, len(self.decks) + len(self.cards)), dtype=float)
-        if deck_i in self.decks:
-            row[0, self.decks.index(deck_i)] = 1.0
-        if deck_j in self.decks:
-            row[0, self.decks.index(deck_j)] = -1.0
+        deck_indices = {deck: index for index, deck in enumerate(self.decks)}
+        if deck_i in deck_indices:
+            row[0, deck_indices[deck_i]] = 1.0
+        if deck_j in deck_indices:
+            row[0, deck_indices[deck_j]] = -1.0
         offset = len(self.decks)
         for index, card in enumerate(self.cards):
             row[0, offset + index] = self.inclusion.get(deck_i, {}).get(card, 0.0) - self.inclusion.get(deck_j, {}).get(card, 0.0)
         return float(self.estimator.predict_proba(row)[0, 1])
+
+
+@dataclass(frozen=True)
+class Best60Request:
+    archetype: str
+    candidates: Sequence[str]
+    coefficients: Mapping[str, float]
+    coefficient_intervals: Mapping[str, tuple[float, float]]
+    inclusion: Mapping[str, Mapping[str, float]]
+    meta_weights: Mapping[str, float]
+    banned_cards: set[str] | None = None
+    card_rules: Mapping[str, Mapping[str, Any]] | None = None
+    playable_cards: set[str] | None = None
+    skeleton: Sequence[Mapping[str, Any]] | None = None
 
 
 def fit_model(observations: list[tuple[str, str, int]], inclusion: Mapping[str, Mapping[str, float]]) -> FittedCardModel:
@@ -87,10 +104,11 @@ def fit_model(observations: list[tuple[str, str, int]], inclusion: Mapping[str, 
     cards = sorted({card for values in inclusion.values() for card in values})
     rows = []
     labels = []
+    deck_indices = {deck: index for index, deck in enumerate(decks)}
     for deck_i, deck_j, result in observations:
         row = np.zeros(len(decks) + len(cards), dtype=float)
-        row[decks.index(deck_i)] = 1.0
-        row[decks.index(deck_j)] = -1.0
+        row[deck_indices[deck_i]] = 1.0
+        row[deck_indices[deck_j]] = -1.0
         for index, card in enumerate(cards):
             row[len(decks) + index] = inclusion.get(deck_i, {}).get(card, 0.0) - inclusion.get(deck_j, {}).get(card, 0.0)
         rows.append(row)
@@ -143,7 +161,17 @@ def validate_recommendation(cards: Sequence[Mapping[str, Any]], banned_cards: se
         raise ValueError("recommendation must contain exactly 60 cards")
 
 
-def recommend_best60(archetype: str, candidates: Sequence[str], coefficients: Mapping[str, float], coefficient_intervals: Mapping[str, tuple[float, float]], inclusion: Mapping[str, Mapping[str, float]], meta_weights: Mapping[str, float], banned_cards: set[str] | None = None, card_rules: Mapping[str, Mapping[str, Any]] | None = None, playable_cards: set[str] | None = None, skeleton: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
+def recommend_best60(request: Best60Request) -> dict[str, Any]:
+    archetype = request.archetype
+    candidates = request.candidates
+    coefficients = request.coefficients
+    coefficient_intervals = request.coefficient_intervals
+    inclusion = request.inclusion
+    meta_weights = request.meta_weights
+    banned_cards = request.banned_cards
+    card_rules = request.card_rules
+    playable_cards = request.playable_cards
+    skeleton = request.skeleton
     banned_cards = banned_cards or set()
     card_rules = card_rules or {}
     playable_cards = set(playable_cards) if playable_cards is not None else set(candidates)
@@ -167,12 +195,13 @@ def recommend_best60(archetype: str, candidates: Sequence[str], coefficients: Ma
         if row["q_value"] > 0.05 or row["lower"] <= 0 <= row["upper"]:
             row["bucket"] = "no signal"
     scored.sort(key=lambda row: row["score"], reverse=True)
+    no_signal = [{"card": row["card"]} for row in scored if row["bucket"] == "no signal"]
     signal = [row for row in scored if row["bucket"] == "signal"]
     if not skeleton:
         return {
             "archetype": archetype,
             "cards": [],
-            "no_signal": scored,
+            "no_signal": no_signal,
             "observational": True,
             "total_copies": 0,
             "status": "missing observed skeleton",
@@ -248,13 +277,13 @@ def recommend_best60(archetype: str, candidates: Sequence[str], coefficients: Ma
         return {
             "archetype": archetype,
             "cards": selected,
-            "no_signal": [row for row in scored if row["bucket"] == "no signal"],
+            "no_signal": no_signal,
             "observational": True,
             "total_copies": total_copies,
             "status": "insufficient legal observed cards to complete 60",
         }
     validate_recommendation(selected, banned_cards, card_rules)
-    return {"archetype": archetype, "cards": selected, "no_signal": [row for row in scored if row["bucket"] == "no signal"], "observational": True, "total_copies": total_copies}
+    return {"archetype": archetype, "cards": selected, "no_signal": no_signal, "observational": True, "total_copies": total_copies}
 
 
 def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -275,3 +304,36 @@ def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str,
     without_variant = fit(False)
     with_variant = fit(True)
     return {"hypothesis": "H1", "card": MIST_ENERGY_NAME, "target": "Alakazam Dudunsparce", "without_variant": {"beta": without_variant[0], "interval": without_variant[1]}, "with_variant": {"beta": with_variant[0], "interval": with_variant[1]}, "status": "supported" if without_variant[0] > 0 and with_variant[0] > 0 else "rejected", "interpretation": "observational association, not a causal effect"}
+
+
+def h1_observations(rows: Iterable[tuple[Any, ...]]) -> list[dict[str, int]]:
+    result = []
+    for deck1_id, deck2_id, deck1_raw, deck2_raw, winner, player1, player2 in rows:
+        deck1 = json.loads(deck1_raw) if deck1_raw else {}
+        deck2 = json.loads(deck2_raw) if deck2_raw else {}
+        target_is_first = "alakazam" in str(deck1_id).lower()
+        target_cards = deck1 if target_is_first else deck2
+        opponent_cards = deck2 if target_is_first else deck1
+        names = {
+            str(card["name"]).lower()
+            for group in target_cards.values()
+            if isinstance(group, list)
+            for card in group
+            if isinstance(card, dict) and card.get("name")
+        }
+        opponent_names = {
+            str(card["name"]).lower()
+            for group in opponent_cards.values()
+            if isinstance(group, list)
+            for card in group
+            if isinstance(card, dict) and card.get("name")
+        }
+        if not names:
+            continue
+        target_player = player1 if target_is_first else player2
+        result.append({
+            "misty": int(MIST_ENERGY_NAME.lower() in opponent_names),
+            "hammer_variant": int("dedenne" in names and "enhanced hammer" in names),
+            "result": int(str(winner) == str(target_player)),
+        })
+    return result

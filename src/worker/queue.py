@@ -34,12 +34,35 @@ redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/?db=0")
 huey = RedisHuey('tcg_tasks', url=redis_url)
 
 
+def _write_json_atomic(payload: dict, path: str) -> None:
+    temp_path = f"{path}.tmp"
+    target_mode = os.stat(path).st_mode & 0o777 if os.path.exists(path) else None
+    try:
+        with open(temp_path, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if target_mode is not None:
+            os.chmod(temp_path, target_mode)
+        os.replace(temp_path, path)
+    except Exception:
+        try:
+            os.remove(temp_path)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def _has_complete_observations(observations: list[tuple[str, str, int]]) -> bool:
+    return len(observations) >= 4 and len({result for _, _, result in observations}) == 2
+
+
 def _build_bdif_report_addons() -> tuple[dict, dict]:
     if not BDIF_USE_CARD_MODEL:
         return {}, {}
 
     from src.ingestion.features import deck_features
-    from src.ingestion.model import fit_h1_misty_variant, fit_model, recommend_best60
+    from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, recommend_best60
     from src.ingestion.store import LimitlessStore
 
     db_path = os.path.join("data", "limitless.db")
@@ -64,18 +87,19 @@ def _build_bdif_report_addons() -> tuple[dict, dict]:
     candidates = sorted({card for values in inclusion.values() for card in values})
     recommendations = {}
     for deck in top_decks:
-        recommendations[deck] = recommend_best60(
-            deck,
-            candidates,
-            coefficients,
-            intervals,
-            inclusion,
-            deck_weights,
+        recommendations[deck] = recommend_best60(Best60Request(
+            archetype=deck,
+            candidates=candidates,
+            coefficients=coefficients,
+            coefficient_intervals=intervals,
+            inclusion=inclusion,
+            meta_weights=deck_weights,
             playable_cards=store.observed_cards(deck),
             skeleton=store.observed_skeleton(deck),
-        )
-    h1_observations = store.h1_observations()
-    h1 = fit_h1_misty_variant(h1_observations) if h1_observations else {}
+        ))
+    h1_rows = store.pairings_with_decklists("%alakazam%")
+    h1_data = h1_observations(h1_rows)
+    h1 = fit_h1_misty_variant(h1_data) if h1_data else {}
     result = (recommendations, h1)
     _BDIF_MODEL_CACHE[cache_key] = deepcopy(result)
     return deepcopy(result[0]), deepcopy(result[1])
@@ -193,25 +217,29 @@ def ingest_limitless_results():
         format="STANDARD",
         limit=LIMITLESS_BACKFILL_TOURNAMENTS,
     )
+    failed_events = []
     for event in events:
         event_id = str(event["id"])
-        details, standings, pairings = client.fetch_event_bundle(event_id)
-        store.upsert_tournament(event, details)
-        store.upsert_standings(event_id, standings)
-        store.upsert_pairings(event_id, pairings)
+        try:
+            details, standings, pairings = client.fetch_event_bundle(event_id)
+            store.upsert_tournament(event, details)
+            store.upsert_standings(event_id, standings)
+            store.upsert_pairings(event_id, pairings)
+        except Exception as exc:
+            failed_events.append({"id": event_id, "error": str(exc)})
+            q_logger.warning("limitless_event_failed", event_id=event_id, error=str(exc))
 
     artifact = build_artifact(store)
     artifact_path = os.path.join("data", "input", "limitless_input.json")
     os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
-    with open(artifact_path, "w", encoding="utf-8") as handle:
-        json.dump(artifact, handle, indent=2)
+    _write_json_atomic(artifact, artifact_path)
     observations = store.observations()
-    if len(observations) >= 4 and len({result for _, _, result in observations}) == 2:
+    model_path = os.path.join("data", "input", "limitless_model_input.json")
+    if _has_complete_observations(observations):
         inclusion = deck_features(store, artifact["archetypes"])
         fitted = fit_model(observations, inclusion)
-        with open(os.path.join("data", "input", "limitless_model_input.json"), "w", encoding="utf-8") as handle:
-            json.dump(model_artifact(fitted), handle, indent=2)
-    return {"status": "complete", "events": len(events), "path": artifact_path}
+        _write_json_atomic(model_artifact(fitted), model_path)
+    return {"status": "complete", "events": len(events), "failed_events": failed_events, "path": artifact_path}
 
 
 @huey.periodic_task(crontab(minute='0', hour='*/2'))
@@ -266,27 +294,7 @@ def automated_daily_pipeline():
                 }
             }
 
-            temp_path = f"{INPUT_DATA}.tmp"
-            target_mode = None
-            if os.path.exists(INPUT_DATA):
-                target_mode = os.stat(INPUT_DATA).st_mode & 0o777
-
-            try:
-                with open(temp_path, "w", encoding="utf-8") as f:
-                    json.dump(final_json_structure, f, indent=2)
-                    f.flush()
-                    os.fsync(f.fileno())
-
-                if target_mode is not None:
-                    os.chmod(temp_path, target_mode)
-
-                os.replace(temp_path, INPUT_DATA)
-            except Exception:
-                try:
-                    os.remove(temp_path)
-                except FileNotFoundError:
-                    pass
-                raise
+            _write_json_atomic(final_json_structure, INPUT_DATA)
 
             log.info("pipeline_successful", deck_count=len(matrix_data["archetypes"]))  # Log success with metadata
 

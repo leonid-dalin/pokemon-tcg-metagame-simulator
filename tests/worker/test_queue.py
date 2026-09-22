@@ -178,6 +178,49 @@ def test_limitless_ingestion_is_disabled_by_default(monkeypatch):
 
 
 @pytest.mark.unit
+def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(monkeypatch, tmp_path):
+    class Client:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def tournaments(self, **params):
+            return [{"id": "good"}, {"id": "bad"}]
+
+        def fetch_event_bundle(self, event_id):
+            if event_id == "bad":
+                raise RuntimeError("event unavailable")
+            return ({}, [], [])
+
+    class Store:
+        def __init__(self, path):
+            self.path = path
+
+        def upsert_tournament(self, event, details):
+            pass
+
+        def upsert_standings(self, event_id, standings):
+            pass
+
+        def upsert_pairings(self, event_id, pairings):
+            pass
+
+        def observations(self):
+            return []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(queue, "LIMITLESS_INGESTION_ENABLED", True)
+    monkeypatch.setattr("src.ingestion.client.LimitlessClient", Client)
+    monkeypatch.setattr("src.ingestion.store.LimitlessStore", Store)
+    monkeypatch.setattr("src.ingestion.aggregate.build_artifact", lambda store: {"archetypes": []})
+
+    result = queue.ingest_limitless_results.call_local()
+
+    assert result["failed_events"] == [{"id": "bad", "error": "event unavailable"}]
+    assert (tmp_path / "data" / "input" / "limitless_input.json").exists()
+
+
+@pytest.mark.unit
 def test_bdif_builder_is_not_invoked_when_card_model_is_disabled(monkeypatch):
     monkeypatch.setattr(queue, "BDIF_USE_CARD_MODEL", False)
     monkeypatch.setattr(queue.os.path, "exists", lambda path: (_ for _ in ()).throw(AssertionError(path)))

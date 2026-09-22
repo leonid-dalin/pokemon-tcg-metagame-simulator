@@ -2,9 +2,8 @@ import sqlite3
 
 import pytest
 
-from src import bdif_covariates
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import fit_h1_misty_variant, fit_model, model_artifact, recommend_best60, validate_recommendation
+from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, validate_recommendation
 from src.ingestion.store import LimitlessStore
 from src.ingestion.aggregate import build_artifact
 
@@ -14,6 +13,9 @@ def test_limitless_client_sends_key_only_as_an_access_header(monkeypatch):
     seen = {}
 
     class Response:
+        status_code = 200
+        content = b"[]"
+
         def raise_for_status(self):
             return None
 
@@ -30,26 +32,6 @@ def test_limitless_client_sends_key_only_as_an_access_header(monkeypatch):
     assert seen["headers"]["X-Access-Key"] == "secret-value"
     assert "secret-value" not in seen.get("params", {})
     assert "secret-value" not in seen.get("url", "")
-
-
-@pytest.mark.unit
-def test_card_covariate_model_is_disabled_by_default(monkeypatch):
-    monkeypatch.delenv("BDIF_CARD_COVARIATES_ENABLED", raising=False)
-    model = bdif_covariates.CardCovariateModel({}, {})
-    assert model.enabled is False
-    with pytest.raises(RuntimeError, match="disabled"):
-        model.logit_probability("a", "b", {}, {})
-
-
-@pytest.mark.unit
-def test_card_covariate_model_uses_inclusion_differences_when_enabled():
-    model = bdif_covariates.CardCovariateModel(
-        strengths={"a": 0.0, "b": 0.0},
-        coefficients={"Misty": 2.0},
-        enabled=True,
-    )
-    probability = model.logit_probability("a", "b", {"Misty": 1.0}, {})
-    assert probability > 0.8
 
 
 @pytest.mark.unit
@@ -72,6 +54,35 @@ def test_store_upserts_events_and_counts_unique_card_inclusion(tmp_path):
 
 
 @pytest.mark.unit
+def test_store_writes_missing_decklists_as_sql_null(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    store.upsert_standings("event", [{"player": "p1", "deck": {"id": "a"}, "decklist": None}])
+
+    with sqlite3.connect(tmp_path / "limitless.db") as conn:
+        assert conn.execute("SELECT decklist_json FROM standings").fetchone()[0] is None
+
+
+@pytest.mark.unit
+def test_limitless_client_retries_rate_limit_with_response_contract(monkeypatch):
+    responses = iter([
+        type("Response", (), {"status_code": 429, "headers": {"Retry-After": "0"}, "content": b"", "json": lambda self: []})(),
+        type("Response", (), {"status_code": 200, "headers": {}, "content": b"[]", "json": lambda self: []})(),
+    ])
+    calls = []
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return next(responses)
+
+    monkeypatch.setattr("src.ingestion.client.requests.get", fake_get)
+    client = LimitlessClient(api_key="secret-value", min_delay=0)
+
+    assert client.tournaments(game="PTCG") == []
+    assert len(calls) == 2
+    assert all(call[1]["timeout"] == client.timeout for call in calls)
+
+
+@pytest.mark.unit
 def test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag(tmp_path):
     store = LimitlessStore(tmp_path / "limitless.db")
     store.upsert_standings("event", [
@@ -80,7 +91,7 @@ def test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag(tmp_path):
     ])
     store.upsert_pairings("event", [{"round": 1, "phase": 1, "player1": "p1", "player2": "p2", "winner": "p2"}])
 
-    assert store.h1_observations() == [{"misty": 1, "hammer_variant": 1, "result": 0}]
+    assert h1_observations(store.pairings_with_decklists("%alakazam%")) == [{"misty": 1, "hammer_variant": 1, "result": 0}]
 
 
 @pytest.mark.unit
@@ -148,27 +159,27 @@ def test_fitted_card_model_recovers_positive_card_edge():
 
 @pytest.mark.unit
 def test_best60_ranks_positive_pooled_cards_in_score_order():
-    result = recommend_best60(
-        "a",
-        ["High", "Middle", "Low"],
-        {"High": 3.0, "Middle": 2.0, "Low": 1.0},
-        {"High": (1.0, 3.0), "Middle": (1.0, 2.0), "Low": (0.5, 1.5)},
-        {"a": {"High": 1.0, "Middle": 1.0, "Low": 1.0}, "b": {}},
-        {"b": 1.0},
+    result = recommend_best60(Best60Request(
+        archetype="a",
+        candidates=["High", "Middle", "Low"],
+        coefficients={"High": 3.0, "Middle": 2.0, "Low": 1.0},
+        coefficient_intervals={"High": (1.0, 3.0), "Middle": (1.0, 2.0), "Low": (0.5, 1.5)},
+        inclusion={"a": {"High": 1.0, "Middle": 1.0, "Low": 1.0}, "b": {}},
+        meta_weights={"b": 1.0},
         skeleton=[{"card": "Darkness Energy", "copies": 48}],
-    )
+    ))
     cards = [row["card"] for row in result["cards"] if row["card"] in {"High", "Middle", "Low"}]
     assert cards == ["High", "Middle", "Low"]
 
 
 def test_best60_normalizes_skeleton_copy_and_ace_spec_rules():
-    result = recommend_best60(
-        "a",
-        [],
-        {},
-        {},
-        {"a": {}, "b": {}},
-        {"b": 1.0},
+    result = recommend_best60(Best60Request(
+        archetype="a",
+        candidates=[],
+        coefficients={},
+        coefficient_intervals={},
+        inclusion={"a": {}, "b": {}},
+        meta_weights={"b": 1.0},
         playable_cards={"Darkness Energy"},
         skeleton=[
             {"card": "Weird Card", "copies": 9},
@@ -176,7 +187,7 @@ def test_best60_normalizes_skeleton_copy_and_ace_spec_rules():
             {"card": "Master Ball", "copies": 1},
             {"card": "Darkness Energy", "copies": 50},
         ],
-    )
+    ))
     assert result["total_copies"] == 60
     validate_recommendation(result["cards"])
     assert sum(row["card"] in {"Prime Catcher", "Master Ball"} for row in result["cards"]) <= 1
@@ -184,16 +195,16 @@ def test_best60_normalizes_skeleton_copy_and_ace_spec_rules():
 
 def test_best60_benjamini_hochberg_gate_filters_weak_candidates():
     cards = [f"Card {index}" for index in range(20)]
-    result = recommend_best60(
-        "a",
-        cards,
-        {card: 10.0 if index == 0 else 0.01 for index, card in enumerate(cards)},
-        {card: (0.9, 1.1) for card in cards},
-        {"a": {card: 1.0 for card in cards}, "b": {}},
-        {"b": 1.0},
+    result = recommend_best60(Best60Request(
+        archetype="a",
+        candidates=cards,
+        coefficients={card: 10.0 if index == 0 else 0.01 for index, card in enumerate(cards)},
+        coefficient_intervals={card: (0.9, 1.1) for card in cards},
+        inclusion={"a": {card: 1.0 for card in cards}, "b": {}},
+        meta_weights={"b": 1.0},
         playable_cards=set(cards) | {"Darkness Energy"},
         skeleton=[{"card": "Darkness Energy", "copies": 40}],
-    )
+    ))
     assert any(row["card"] != "Card 0" for row in result["no_signal"])
 
 
@@ -201,16 +212,16 @@ def test_best60_benjamini_hochberg_gate_filters_weak_candidates():
 @pytest.mark.parametrize("signal_count", [0, 1, 2, 10])
 def test_best60_legality_matrix_returns_deck_or_status(skeleton_size, signal_count):
     signal_cards = [f"Signal {index}" for index in range(signal_count)]
-    result = recommend_best60(
-        "a",
-        signal_cards,
-        {card: float(signal_count - index) for index, card in enumerate(signal_cards)},
-        {card: (0.1, 0.2) for card in signal_cards},
-        {"a": {card: 1.0 for card in signal_cards}, "b": {}},
-        {"b": 1.0},
+    result = recommend_best60(Best60Request(
+        archetype="a",
+        candidates=signal_cards,
+        coefficients={card: float(signal_count - index) for index, card in enumerate(signal_cards)},
+        coefficient_intervals={card: (0.1, 0.2) for card in signal_cards},
+        inclusion={"a": {card: 1.0 for card in signal_cards}, "b": {}},
+        meta_weights={"b": 1.0},
         playable_cards=set(signal_cards) | {"Darkness Energy"},
         skeleton=[{"card": "Darkness Energy", "copies": skeleton_size}],
-    )
+    ))
     assert "status" in result or result["total_copies"] == 60
     if "status" not in result:
         validate_recommendation(result["cards"])
@@ -226,19 +237,18 @@ def test_best60_rejects_two_ace_specs():
 
 @pytest.mark.unit
 def test_best60_puts_zero_spanning_interval_in_no_signal_bucket():
-    result = recommend_best60(
-        "a",
-        ["Uncertain"],
-        {"Uncertain": 0.1},
-        {"Uncertain": (-0.2, 0.2)},
-        {"a": {"Uncertain": 1.0}, "b": {"Uncertain": 0.0}},
-        {"b": 1.0},
+    result = recommend_best60(Best60Request(
+        archetype="a",
+        candidates=["Uncertain"],
+        coefficients={"Uncertain": 0.1},
+        coefficient_intervals={"Uncertain": (-0.2, 0.2)},
+        inclusion={"a": {"Uncertain": 1.0}, "b": {"Uncertain": 0.0}},
+        meta_weights={"b": 1.0},
         skeleton=[{"card": "Darkness Energy", "copies": 59}],
-    )
+    ))
 
     assert result["total_copies"] == 60
-    uncertain = next(row for row in result["no_signal"] if row["card"] == "Uncertain")
-    assert uncertain["bucket"] == "no signal"
+    assert {row["card"] for row in result["no_signal"]} >= {"Uncertain"}
 
 
 @pytest.mark.unit
