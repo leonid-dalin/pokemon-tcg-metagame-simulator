@@ -85,6 +85,20 @@ class FittedCardModel:
         return float(self.estimator.predict_proba(row)[0, 1])
 
 
+@dataclass(frozen=True)
+class Best60Request:
+    archetype: str
+    candidates: Sequence[str]
+    coefficients: Mapping[str, float]
+    coefficient_intervals: Mapping[str, tuple[float, float]]
+    inclusion: Mapping[str, Mapping[str, float]]
+    meta_weights: Mapping[str, float]
+    banned_cards: set[str] | None = None
+    card_rules: Mapping[str, Mapping[str, Any]] | None = None
+    playable_cards: set[str] | None = None
+    skeleton: Sequence[Mapping[str, Any]] | None = None
+
+
 def fit_model(observations: list[tuple[str, str, int]], inclusion: Mapping[str, Mapping[str, float]]) -> FittedCardModel:
     decks = sorted({deck for row in observations for deck in row[:2]})
     cards = sorted({card for values in inclusion.values() for card in values})
@@ -147,7 +161,17 @@ def validate_recommendation(cards: Sequence[Mapping[str, Any]], banned_cards: se
         raise ValueError("recommendation must contain exactly 60 cards")
 
 
-def recommend_best60(archetype: str, candidates: Sequence[str], coefficients: Mapping[str, float], coefficient_intervals: Mapping[str, tuple[float, float]], inclusion: Mapping[str, Mapping[str, float]], meta_weights: Mapping[str, float], banned_cards: set[str] | None = None, card_rules: Mapping[str, Mapping[str, Any]] | None = None, playable_cards: set[str] | None = None, skeleton: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
+def recommend_best60(request: Best60Request) -> dict[str, Any]:
+    archetype = request.archetype
+    candidates = request.candidates
+    coefficients = request.coefficients
+    coefficient_intervals = request.coefficient_intervals
+    inclusion = request.inclusion
+    meta_weights = request.meta_weights
+    banned_cards = request.banned_cards
+    card_rules = request.card_rules
+    playable_cards = request.playable_cards
+    skeleton = request.skeleton
     banned_cards = banned_cards or set()
     card_rules = card_rules or {}
     playable_cards = set(playable_cards) if playable_cards is not None else set(candidates)

@@ -62,7 +62,7 @@ def _build_bdif_report_addons() -> tuple[dict, dict]:
         return {}, {}
 
     from src.ingestion.features import deck_features
-    from src.ingestion.model import fit_h1_misty_variant, fit_model, h1_observations, recommend_best60
+    from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, recommend_best60
     from src.ingestion.store import LimitlessStore
 
     db_path = os.path.join("data", "limitless.db")
@@ -87,16 +87,16 @@ def _build_bdif_report_addons() -> tuple[dict, dict]:
     candidates = sorted({card for values in inclusion.values() for card in values})
     recommendations = {}
     for deck in top_decks:
-        recommendations[deck] = recommend_best60(
-            deck,
-            candidates,
-            coefficients,
-            intervals,
-            inclusion,
-            deck_weights,
+        recommendations[deck] = recommend_best60(Best60Request(
+            archetype=deck,
+            candidates=candidates,
+            coefficients=coefficients,
+            coefficient_intervals=intervals,
+            inclusion=inclusion,
+            meta_weights=deck_weights,
             playable_cards=store.observed_cards(deck),
             skeleton=store.observed_skeleton(deck),
-        )
+        ))
     h1_rows = store.pairings_with_decklists("%alakazam%")
     h1_data = h1_observations(h1_rows)
     h1 = fit_h1_misty_variant(h1_data) if h1_data else {}

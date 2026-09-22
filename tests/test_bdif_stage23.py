@@ -3,9 +3,15 @@ import sqlite3
 import pytest
 
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, validate_recommendation
+from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60 as _recommend_best60, validate_recommendation
 from src.ingestion.store import LimitlessStore
 from src.ingestion.aggregate import build_artifact
+
+
+def recommend_best60(archetype, candidates, coefficients, intervals, inclusion, meta_weights, **kwargs):
+    return _recommend_best60(Best60Request(
+        archetype, candidates, coefficients, intervals, inclusion, meta_weights, **kwargs
+    ))
 
 
 @pytest.mark.unit
