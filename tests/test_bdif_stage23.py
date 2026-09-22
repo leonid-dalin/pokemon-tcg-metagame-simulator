@@ -13,6 +13,9 @@ def test_limitless_client_sends_key_only_as_an_access_header(monkeypatch):
     seen = {}
 
     class Response:
+        status_code = 200
+        content = b"[]"
+
         def raise_for_status(self):
             return None
 
