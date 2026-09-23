@@ -57,6 +57,10 @@ tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_empty_by
 tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_empty_string
 tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_missing_value
 tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_undecodable_bytes
+tests/bdif/test_bdif_cli.py::test_bdif_commands_reject_multiple_operations
+tests/bdif/test_bdif_cli.py::test_bdif_mutating_commands_call_service_without_network[--bdif-ingest-run_ingestion-result0]
+tests/bdif/test_bdif_cli.py::test_bdif_mutating_commands_call_service_without_network[--bdif-refit-refit_card_model-result1]
+tests/bdif/test_bdif_cli.py::test_bdif_status_command_prints_service_result
 tests/bdif/test_bdif_service.py::test_addons_prepare_supplied_store_before_reading
 tests/bdif/test_bdif_service.py::test_addons_report_non_identifiable_for_each_deck
 tests/bdif/test_bdif_service.py::test_addons_skip_store_when_feature_disabled
