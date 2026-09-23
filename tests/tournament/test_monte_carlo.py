@@ -139,6 +139,7 @@ def test_metrics_carry_binomial_monte_carlo_standard_errors(monkeypatch):
     deck = result["metrics"]["a"]
     assert deck["day2_conversion"] == pytest.approx(0.25)
     assert deck["day2_conversion_mc_se"] == pytest.approx((0.25 * 0.75 / 400) ** 0.5)
+    assert deck["top_cut_conversion_mc_se"] == pytest.approx((0.1 * 0.9 / 400) ** 0.5)
     assert deck["win_probability_mc_se"] == pytest.approx((0.01 * 0.99 / 400) ** 0.5)
     assert result["posterior"] == {"draws": 0, "interval_status": "posterior disabled"}
 

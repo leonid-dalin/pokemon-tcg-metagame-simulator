@@ -381,6 +381,7 @@ def test_simulation_job_continues_when_bdif_report_builder_raises(monkeypatch, t
 
 @pytest.mark.unit
 def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_path):
+    posterior = {"draws": 7, "interval_status": "ok"}
     details = {
         ("a", "a"): {"win_rate": 0.5, "match_count": 10},
         ("a", "b"): {"win_rate": 0.6, "match_count": 10},
@@ -399,11 +400,13 @@ def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_p
         "metrics": {},
         "ranked_metrics": {},
         "insufficient_data": [],
-        "posterior": {"draws": 0, "interval_status": "posterior disabled"},
+        "posterior": posterior,
         "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
     })
     monkeypatch.setattr(queue, "_build_bdif_report_addons", lambda: ({}, {}))
     monkeypatch.setattr(queue, "swiss_rounds_from_players", lambda players: 1)
+    report_inputs = []
+    monkeypatch.setattr(queue, "build_bdif_report", lambda mc_res, *args: report_inputs.append(mc_res) or mc_res)
 
     queue.execute_simulation_job.call_local({
         "job_id": "job",
@@ -414,3 +417,4 @@ def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_p
 
     assert received[0]["matchup_details"] == details
     assert received[0]["matchup_details"][("a", "b")]["match_count"] == 10
+    assert report_inputs[0]["posterior"] is posterior
