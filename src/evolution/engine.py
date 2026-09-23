@@ -374,7 +374,10 @@ def find_evolutionary_stable_state(
                     if config.mode == "replicator":
                         payoffs = win_matrix @ current_freq
                     else:
-                        active_indices = [i for i in range(n) if i not in extinct_decks]
+                        active_indices = np.asarray(
+                            [i for i in range(n) if i not in extinct_decks],
+                            dtype=int,
+                        )
                         if len(active_indices) < 2:
                             logger.warning("simulation_aborted", reason="Less than 2 active decks remain.")
                             break
@@ -393,7 +396,11 @@ def find_evolutionary_stable_state(
                                     config.seed + gen * config.num_tournaments_per_gen + i
                                     if config.seed is not None else None
                                 )
-                                tasks.append((active_indices, config.__dict__, win_matrix, matchup_details, seed))
+                                task_config = {
+                                    **config.__dict__,
+                                    "deck_names": deck_names,
+                                }
+                                tasks.append((active_indices, task_config, win_matrix, matchup_details, seed))
 
                             if pool is not None:
                                 # Logic unified using the hoisted worker_func

@@ -1,0 +1,34 @@
+{
+  "archetypes": [
+    "Dragapult",
+    "Mega Excadrill",
+    "Alakazam Dudunsparce",
+    "Dragapult Dusknoir"
+  ],
+  "win_rate_matrix": {
+    "Dragapult": {
+      "Dragapult": {"win_rate": 0.5, "match_count": 0},
+      "Mega Excadrill": {"win_rate": 0.47949291573452646, "match_count": 1341},
+      "Alakazam Dudunsparce": {"win_rate": 0.6175213675213675, "match_count": 1404},
+      "Dragapult Dusknoir": {"win_rate": 0.5203511572226656, "match_count": 1253}
+    },
+    "Mega Excadrill": {
+      "Dragapult": {"win_rate": 0.5205070842654735, "match_count": 1341},
+      "Mega Excadrill": {"win_rate": 0.5, "match_count": 0},
+      "Alakazam Dudunsparce": {"win_rate": 0.26490438695163104, "match_count": 889},
+      "Dragapult Dusknoir": {"win_rate": 0.5616952789699571, "match_count": 932}
+    },
+    "Alakazam Dudunsparce": {
+      "Dragapult": {"win_rate": 0.38247863247863245, "match_count": 1404},
+      "Mega Excadrill": {"win_rate": 0.7350956130483689, "match_count": 889},
+      "Alakazam Dudunsparce": {"win_rate": 0.5, "match_count": 0},
+      "Dragapult Dusknoir": {"win_rate": 0.41751990898748575, "match_count": 879}
+    },
+    "Dragapult Dusknoir": {
+      "Dragapult": {"win_rate": 0.4796488427773344, "match_count": 1253},
+      "Mega Excadrill": {"win_rate": 0.4383047210300429, "match_count": 932},
+      "Alakazam Dudunsparce": {"win_rate": 0.5824800910125142, "match_count": 879},
+      "Dragapult Dusknoir": {"win_rate": 0.5, "match_count": 0}
+    }
+  }
+}

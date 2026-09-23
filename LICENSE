@@ -1,3 +1,9 @@
+Pokemon TCG Metagame Simulator
+A Python and Rust simulator for Pokemon TCG metagame analysis.
+Copyright (C) 2025 Leonid Dalin
+
+The project-specific source and documentation in this repository are licensed under the GNU Affero General Public License as stated below.
+
                     GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 

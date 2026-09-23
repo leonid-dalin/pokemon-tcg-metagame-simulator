@@ -55,10 +55,10 @@ Install the Python dependencies and build the Rust extension with the commands i
 python -m src.ui.cli -i data/input/ea_input.json --mode replicator --gens 10000
 ```
 
-Run the static tournament predictor:
+Run the static tournament predictor with the checked-in four-archetype example:
 
 ```bash
-python -m src.ui.cli -i data/input/ea_input.json --predict --players 512
+python -m src.ui.cli --input examples/predict_input.json --predict --players 512 --no-plot
 ```
 
 The CLI writes timestamped directories under `output/` unless `--output` changes the destination. See [CLI reference](docs/reference/cli.md) for all supported arguments and [CLI guide](docs/how-to/run-cli.md) for complete examples
@@ -77,8 +77,10 @@ The CLI writes timestamped directories under `output/` unless `--output` changes
 | Check configuration values | [Configuration reference](docs/reference/configuration.md) |
 | Understand the service layout | [Architecture explanation](docs/explanation/architecture.md) |
 | Understand the models and evidence rules | [Analytics explanation](docs/explanation/analytics.md) |
+| Understand the system design | [System design](docs/EXPLANATION.md) |
 | Find source entry points | [Code reference](docs/REFERENCE.md) |
 | See what changed | [Changelog](docs/CHANGELOGS.md) |
+| Read acknowledgements for Limitless TCG and other contributors | [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md) |
 
 ## 🧾 Project documents
 
@@ -108,4 +110,6 @@ The Docker build compiles `src/tournament/tcg_engine` with Maturin before instal
 
 ## 📄 Licence
 
-This project is licensed under [GNU AGPL-3.0-or-later](LICENSE)
+Copyright (C) 2025 Leonid Dalin. This project is licensed under [GNU AGPL-3.0-or-later](LICENSE)
+
+The use of any content in this repository for training any artificial intelligence (AI) model, or for any form of AI to remix, adapt, or build upon my works, especially without my explicit permission, is strictly prohibited.

@@ -6,6 +6,33 @@ from src.evolution.engine import find_evolutionary_stable_state
 
 
 @pytest.mark.unit
+def test_tournament_evolution_passes_deck_names_to_worker():
+    config = SimulationConfig(
+        mode="tournament",
+        max_generations=1,
+        extinction_threshold=0.0,
+        stability_threshold=-1.0,
+        convergence_window=1,
+        max_inactive_generations=1,
+        use_bayesian_winrates=False,
+        tournament_size=2,
+        num_tournaments_per_gen=1,
+        num_rounds=1,
+        use_multiproc=False,
+        seed=1234,
+        mutation_rate=0.0,
+        noise_scale=0.0,
+        selection_pressure=1.0,
+    )
+
+    find_evolutionary_stable_state(
+        ["a", "b"],
+        np.array([[0.5, 0.6], [0.4, 0.5]]),
+        {},
+        config,
+    )
+
+
 def test_evolution_uses_the_configured_seed_for_global_random_steps(monkeypatch):
     def unexpected_global_random(*args, **kwargs):
         raise AssertionError("global NumPy randomness was used")

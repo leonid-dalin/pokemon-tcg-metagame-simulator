@@ -8,7 +8,7 @@ The entry point is `python -m src.ui.cli`. Argument parsing lives in `src/ui/cli
 | --- | --- | --- |
 | `-i`, `--input` | `data/input/ea_input.json` | JSON matchup matrix |
 | `-o`, `--output` | `output/` | Result directory root |
-| `-m`, `--min-games` | `100` | Minimum match count for an archetype |
+| `-m`, `--min-games` | `100` | Minimum match count for an archetype in replicator, tournament, and batch modes |
 
 The input path must exist. The output root is created when needed
 
@@ -57,6 +57,8 @@ The input path must exist. The output root is created when needed
 | `-l`, `--log-level` | `INFO` | `DEBUG`, `INFO`, `WARNING`, or `ERROR` |
 
 The parser requires `--batch-config` when `--batch` is present. It rejects extinction thresholds outside `0.0` to `1.0` and negative noise
+
+The prediction path always loads with the module-level `MIN_GAMES` value in `src/ui/cli.py`, so `-m` and `--min-games` have no effect when `--predict` is present
 
 ## Output files
 

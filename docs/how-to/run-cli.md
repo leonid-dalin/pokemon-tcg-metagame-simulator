@@ -19,11 +19,14 @@ The command writes a timestamped result directory below `output/`. Add `--cluste
 
 ```bash
 python -m src.ui.cli \
-  --input data/input/ea_input.json \
+  --input examples/predict_input.json \
   --mode tournament \
+  --gens 1 \
   --tournament-style pure_swiss \
   --tournament-size 32 \
-  --rounds 5
+  --rounds 5 \
+  --no-multiproc \
+  --no-plot
 ```
 
 Use `--tournament-style championship_series` to use the Variant 5 structure selected from the player count
@@ -32,10 +35,10 @@ Use `--tournament-style championship_series` to use the Variant 5 structure sele
 
 ```bash
 python -m src.ui.cli \
-  --input data/input/ea_input.json \
+  --input examples/predict_input.json \
   --predict \
   --players 512 \
-  --meta "Crustle:0.10,Joltik Box:0.15"
+  --no-plot
 ```
 
 Prediction mode bypasses replicator evolution and uses the static tournament solver. The `--meta` value is a comma-separated list of `deck:share` pairs
@@ -57,9 +60,10 @@ Run it with:
 
 ```bash
 python -m src.ui.cli \
-  --input data/input/ea_input.json \
+  --input examples/predict_input.json \
   --batch \
-  --batch-config examples/batch.json
+  --batch-config examples/batch.json \
+  --no-plot
 ```
 
 The batch runner writes `batch_summary.json` below the output directory

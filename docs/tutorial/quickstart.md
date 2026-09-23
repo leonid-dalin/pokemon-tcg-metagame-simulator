@@ -33,7 +33,7 @@ The default precision tier is `3 - STANDARD`, which maps to 25,000 Monte Carlo i
 ## Run the same workflow from the CLI
 
 ```bash
-python -m src.ui.cli -i data/input/ea_input.json --predict --players 512
+python -m src.ui.cli --input examples/predict_input.json --predict --players 512 --no-plot
 ```
 
 The predictor loads the matrix, builds a validated `PredictionRequest`, resolves the field distribution, calculates Swiss structure, and logs the ranked recommendations

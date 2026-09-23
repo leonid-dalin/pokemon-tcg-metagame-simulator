@@ -22,7 +22,7 @@ This page lists the current entry points for the simulator. Read it with the sou
 ### `src/worker/queue.py`
 
 - `execute_simulation_job`: runs the solver, tournament structure selection, Monte Carlo engine, and optional BDIF reports
-- `automated_daily_pipeline`: fetches and validates the live matchup matrix
+- `automated_daily_pipeline`: fetches and validates the live matchup matrix every two hours at minute 0 (`0 */2 * * *`). Each run makes outbound requests to LimitlessTCG
 - `ingest_limitless_results`: stores Limitless tournaments and builds optional model artefacts
 - `_build_bdif_report_addons`: builds Best-60 and H1 reports when the card model flag is enabled
 
@@ -66,7 +66,7 @@ Resolves field constraints, calculates Swiss rounds, chooses Championship Series
 
 Builds posterior matchup matrices, marks insufficient evidence, constructs the matchup panel, and calls the Rust engine
 
-### `src/tournament/tcg_engine/lib.rs`
+### `src/tournament/tcg_engine/src/lib.rs`
 
 Implements the compiled tournament loops and Swiss pairing logic through PyO3 and Rayon
 

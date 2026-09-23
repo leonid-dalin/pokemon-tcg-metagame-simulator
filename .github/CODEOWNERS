@@ -1,3 +1,6 @@
+# Repository-wide default owner
+* @leonid-dalin
+
 # Repository policy and contribution files
 /CONTRIBUTING.md @leonid-dalin
 /SECURITY.md @leonid-dalin
