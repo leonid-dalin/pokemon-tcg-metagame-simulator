@@ -61,6 +61,17 @@ tests/bdif/test_bdif_cli.py::test_bdif_commands_reject_multiple_operations
 tests/bdif/test_bdif_cli.py::test_bdif_mutating_commands_call_service_without_network[--bdif-ingest-run_ingestion-result0]
 tests/bdif/test_bdif_cli.py::test_bdif_mutating_commands_call_service_without_network[--bdif-refit-refit_card_model-result1]
 tests/bdif/test_bdif_cli.py::test_bdif_status_command_prints_service_result
+tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv0]
+tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv1]
+tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv2]
+tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv3]
+tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv4]
+tests/bdif/test_bdif_module_cli.py::test_module_commands_write_json_only_to_stdout[ingest-run_ingestion-result1]
+tests/bdif/test_bdif_module_cli.py::test_module_commands_write_json_only_to_stdout[refit-refit_card_model-result2]
+tests/bdif/test_bdif_module_cli.py::test_module_commands_write_json_only_to_stdout[status-bdif_status-result0]
+tests/bdif/test_bdif_module_cli.py::test_report_uses_local_input_and_bounded_request
+tests/bdif/test_bdif_module_cli.py::test_service_failure_exits_one_with_structured_stderr
+tests/bdif/test_bdif_module_cli.py::test_unavailable_evidence_exits_three
 tests/bdif/test_bdif_service.py::test_addons_prepare_supplied_store_before_reading
 tests/bdif/test_bdif_service.py::test_addons_report_non_identifiable_for_each_deck
 tests/bdif/test_bdif_service.py::test_addons_skip_store_when_feature_disabled
