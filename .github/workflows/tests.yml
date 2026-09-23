@@ -36,3 +36,7 @@ jobs:
         run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.minmatches.json --pythonpath .
       - name: Run remediated mutation sweep
         run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.pr5-remediated.json --pythonpath .
+      - name: Check card-model intervals
+        run: PYTHONPATH=. python tools/qa-harness/interval_sanity.py --spec tools/qa-harness/interval_spec_card_model.py --draws 300
+      - name: Run BDIF statistics mutation sweep
+        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.bdif-statistics.json --pythonpath .
