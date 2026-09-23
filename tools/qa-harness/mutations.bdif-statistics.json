@@ -4,5 +4,17 @@
     "file": "src/tournament/monte_carlo.py",
     "find": "            prior = 1.0 / (1.0 + np.exp(-(_logit(field_i) - _logit(field_j))))",
     "replace": "            prior = (field_i + field_j) / 2.0"
+  },
+  {
+    "name": "task2: ignore the per-draw iteration floor",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "        draw_count = max(1, min(posterior_draws, iterations // BDIF_MIN_ITERATIONS_PER_DRAW))",
+    "replace": "        draw_count = posterior_draws"
+  },
+  {
+    "name": "task2: report intervals from any number of draws",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "    elif len(draw_metrics) >= BDIF_MIN_INTERVAL_DRAWS:",
+    "replace": "    elif len(draw_metrics) >= 1:"
   }
 ]

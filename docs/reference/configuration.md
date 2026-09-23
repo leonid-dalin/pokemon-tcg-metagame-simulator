@@ -26,7 +26,9 @@ The main constants live in `src/core/config.py`. Environment variables are read 
 | `BDIF_COVERAGE_RATIO` | `0.6` | Required covered evidence ratio |
 | `BDIF_PAIR_MIN_GAMES` | `250` | Pair count used for reliable evidence |
 | `BDIF_PRIOR_STRENGTH` | `10.0` | Posterior prior strength |
-| `BDIF_POSTERIOR_DRAWS` | `25` | Posterior matrices sampled per report |
+| `BDIF_POSTERIOR_DRAWS` | `200` | Maximum posterior matrices sampled per report |
+| `BDIF_MIN_ITERATIONS_PER_DRAW` | `100` | Minimum tournament iterations per posterior matrix |
+| `BDIF_MIN_INTERVAL_DRAWS` | `50` | Minimum posterior matrices for reported intervals |
 | `BDIF_PANEL_SHARE_THRESHOLD` | `0.03` | Empirical panel share threshold |
 | `BDIF_PANEL_MAX_DECKS` | `10` | Panel deck cap |
 | `LIMITLESS_INGESTION_ENABLED` | `False` | Limitless ingestion switch |

@@ -336,6 +336,7 @@ def test_simulation_job_reuses_one_bdif_store(monkeypatch, tmp_path):
         "metrics": {},
         "ranked_metrics": {},
         "insufficient_data": [],
+        "posterior": {"draws": 0, "interval_status": "posterior disabled"},
         "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
     })
 
@@ -363,6 +364,7 @@ def test_simulation_job_continues_when_bdif_report_builder_raises(monkeypatch, t
         "metrics": {},
         "ranked_metrics": {},
         "insufficient_data": [],
+        "posterior": {"draws": 0, "interval_status": "posterior disabled"},
         "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
     })
 
@@ -397,6 +399,7 @@ def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_p
         "metrics": {},
         "ranked_metrics": {},
         "insufficient_data": [],
+        "posterior": {"draws": 0, "interval_status": "posterior disabled"},
         "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
     })
     monkeypatch.setattr(queue, "_build_bdif_report_addons", lambda: ({}, {}))

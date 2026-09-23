@@ -14,6 +14,8 @@ from src.api.models import GLOBAL_TIE_RATE
 from src.core.telemetry import tracer
 from src.core.config import (
     BDIF_COVERAGE_RATIO,
+    BDIF_MIN_INTERVAL_DRAWS,
+    BDIF_MIN_ITERATIONS_PER_DRAW,
     BDIF_MIN_MATCHES,
     BDIF_PAIR_MIN_GAMES,
     BDIF_POSTERIOR_DRAWS,
@@ -187,6 +189,7 @@ def run_monte_carlo_analytics(
             "metrics": {},
             "ranked_metrics": {},
             "insufficient_data": [],
+            "posterior": {"draws": 0, "interval_status": "posterior disabled"},
             "matchup_panel": {
                 "rows": {},
                 "unmatched": list(panel_decks if panel_decks is not None else BDIF_PANEL_DECKS),
@@ -210,12 +213,12 @@ def run_monte_carlo_analytics(
         alpha, beta, insufficient_data = build_hierarchical_beta_posteriors(
             deck_names, win_matrix, matchup_details
         )
-        base_iterations, remainder = divmod(iterations, posterior_draws)
+        draw_count = max(1, min(posterior_draws, iterations // BDIF_MIN_ITERATIONS_PER_DRAW))
+        base_iterations, remainder = divmod(iterations, draw_count)
         draw_sizes = [
             base_iterations + (1 if i < remainder else 0)
-            for i in range(posterior_draws)
+            for i in range(draw_count)
         ]
-        draw_count = posterior_draws
 
         def matrix_sampler(draw_index: int) -> np.ndarray:
             rng = np.random.default_rng(seed + draw_index)
@@ -311,6 +314,7 @@ def run_monte_carlo_analytics(
 
     for i, deck in enumerate(deck_names):
         if total_initial[i] > 0:
+            entrants = float(total_initial[i])
             results[deck] = {
                 "day2_conversion": float(day2_conv[i]),
                 "top_cut_conversion": float(topcut_conv[i]),
@@ -318,9 +322,18 @@ def run_monte_carlo_analytics(
                 "day2_share": float(day2_share[i]),
                 "top_cut_share": float(topcut_share[i]),
             }
+            for metric in ("day2_conversion", "top_cut_conversion", "win_probability"):
+                value = results[deck][metric]
+                results[deck][f"{metric}_mc_se"] = float(np.sqrt(value * (1.0 - value) / entrants))
 
     draw_array = {key: np.array([draw[key] for draw in draw_metrics]) for key in ("day2_share", "top_cut_share", "win_probability")}
-    if use_posterior and draw_metrics:
+    if not use_posterior:
+        interval_status = "posterior disabled"
+    elif len(draw_metrics) >= BDIF_MIN_INTERVAL_DRAWS:
+        interval_status = "ok"
+    else:
+        interval_status = "too few posterior draws"
+    if interval_status == "ok":
         for i, deck in enumerate(deck_names):
             if deck not in results:
                 continue
@@ -335,6 +348,10 @@ def run_monte_carlo_analytics(
         "metrics": results,
         "ranked_metrics": ranked_metrics,
         "insufficient_data": insufficient_data,
+        "posterior": {
+            "draws": len(draw_metrics) if use_posterior else 0,
+            "interval_status": interval_status,
+        },
         "matchup_panel": build_matchup_panel(
             deck_names,
             meta_vec,
