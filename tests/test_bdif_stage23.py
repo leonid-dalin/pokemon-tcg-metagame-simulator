@@ -287,10 +287,28 @@ def test_rank_deficient_card_raises_not_identifiable():
 
 @pytest.mark.unit
 def test_separated_card_outcomes_raise_not_identifiable():
-    observations = [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), 1)] * 60
-    observations += [PlayerObservation("b", "a", frozenset(), frozenset({"Tech"}), 0)] * 60
-    with pytest.raises(CardModelNotIdentifiable):
-        fit_card_model(observations, ["X"])
+    observations = []
+    for index in range(200):
+        result = int(index < 199)
+        observations.append(PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), result))
+        observations.append(PlayerObservation("b", "a", frozenset({"Tech"}), frozenset(), result))
+        observations.append(PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 1 - result))
+        observations.append(PlayerObservation("b", "a", frozenset(), frozenset({"Tech"}), 1 - result))
+    with pytest.raises(CardModelNotIdentifiable, match="separated outcomes"):
+        fit_card_model(observations, ["Tech"])
+
+
+@pytest.mark.unit
+def test_card_model_fit_has_no_intercept():
+    observations = (
+        [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), 1)] * 30
+        + [PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 0)] * 10
+        + [PlayerObservation("b", "a", frozenset({"Tech"}), frozenset(), 0)] * 5
+        + [PlayerObservation("b", "a", frozenset(), frozenset({"Tech"}), 1)] * 15
+    )
+    model = fit_card_model(observations, ["Tech"])
+    assert model.estimator.intercept_.tolist() == [0.0]
+    assert model.estimator.coef_[0, 1] == pytest.approx(0.6931471805599453, abs=1e-5)
 
 
 @pytest.mark.unit
