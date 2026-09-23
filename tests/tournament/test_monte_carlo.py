@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import json
+import itertools
 from pathlib import Path
 
 from src.tournament import monte_carlo
@@ -104,7 +105,7 @@ def test_hierarchical_posterior_shrinks_a_six_match_pair_toward_field_prior():
 
     posterior_mean = alpha[0, 1] / (alpha[0, 1] + beta[0, 1])
     reverse_mean = alpha[1, 0] / (alpha[1, 0] + beta[1, 0])
-    assert 0.45 < posterior_mean < 0.6
+    assert posterior_mean == pytest.approx(11 / 16)
     assert posterior_mean + reverse_mean == pytest.approx(1.0)
 
 
@@ -374,3 +375,35 @@ def test_posterior_draws_preserve_requested_iterations(monkeypatch):
     )
 
     assert sum(iterations_seen) == 999
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("order", list(itertools.permutations(["S", "T", "W"])))
+def test_posterior_is_invariant_to_deck_order(order):
+    observed = {("S", "W"): 0.7, ("W", "S"): 0.3, ("T", "W"): 0.7, ("W", "T"): 0.3}
+    details = {
+        (deck, opponent): {
+            "win_rate": observed.get((deck, opponent), 0.5),
+            "match_count": 2_000 if (deck, opponent) in observed else 0,
+        }
+        for deck in order
+        for opponent in order
+        if deck != opponent
+    }
+
+    alpha, beta, _ = monte_carlo.build_hierarchical_beta_posteriors(
+        list(order), np.full((3, 3), 0.5), details,
+    )
+
+    index = {deck: position for position, deck in enumerate(order)}
+    means = {
+        (deck, opponent): alpha[index[deck], index[opponent]]
+        / (alpha[index[deck], index[opponent]] + beta[index[deck], index[opponent]])
+        for deck in order
+        for opponent in order
+        if deck != opponent
+    }
+    assert means[("S", "T")] == pytest.approx(0.5)
+    assert means[("S", "W")] == pytest.approx(means[("T", "W")])
+    for (deck, opponent), value in means.items():
+        assert value + means[(opponent, deck)] == pytest.approx(1.0)

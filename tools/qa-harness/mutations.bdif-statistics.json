@@ -1,0 +1,8 @@
+[
+  {
+    "name": "task1: restore the order-dependent averaged prior",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "            prior = 1.0 / (1.0 + np.exp(-(_logit(field_i) - _logit(field_j))))",
+    "replace": "            prior = (field_i + field_j) / 2.0"
+  }
+]

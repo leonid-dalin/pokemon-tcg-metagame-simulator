@@ -26,6 +26,10 @@ safe_cores = max(1, get_container_cores())
 os.environ["RAYON_NUM_THREADS"] = str(safe_cores)
 
 
+def _logit(p: float) -> float:
+    return float(np.log(p / (1.0 - p)))
+
+
 def build_hierarchical_beta_posteriors(
         deck_names: List[str],
         win_matrix: np.ndarray,
@@ -49,7 +53,6 @@ def build_hierarchical_beta_posteriors(
         if matches >= BDIF_PAIR_MIN_GAMES:
             covered[i] += matches
 
-    field_wr = np.divide(wins, totals, out=np.full(n_decks, 0.5), where=totals > 0)
     coverage = np.divide(covered, totals, out=np.zeros(n_decks), where=totals > 0)
     insufficient = [
         deck for i, deck in enumerate(deck_names)
@@ -78,7 +81,9 @@ def build_hierarchical_beta_posteriors(
             else:
                 observed_wr = float(win_matrix[i, j])
                 effective_matches = 0
-            prior = (float(field_wr[i]) + float(field_wr[j])) / 2.0
+            field_i = (wins[i] - forward_wr * forward_matches + 1.0) / (totals[i] - forward_matches + 2.0)
+            field_j = (wins[j] - reverse_wr * reverse_matches + 1.0) / (totals[j] - reverse_matches + 2.0)
+            prior = 1.0 / (1.0 + np.exp(-(_logit(field_i) - _logit(field_j))))
             pair_alpha = observed_wr * effective_matches + prior_strength * prior
             pair_beta = (1.0 - observed_wr) * effective_matches + prior_strength * (1.0 - prior)
             pair_alpha = max(pair_alpha, np.finfo(float).eps)
