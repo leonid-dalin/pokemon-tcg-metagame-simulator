@@ -3,10 +3,37 @@ import sqlite3
 import pytest
 
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, select_panel_decks, validate_recommendation
-from src.ingestion.store import LimitlessStore
+from src.ingestion.model import Best60Request, _decklist_card_names, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, select_panel_decks, validate_recommendation
+from src.ingestion.store import LimitlessStore, PlayerObservation
 from src.ingestion.aggregate import build_artifact
 from src.core.scraper import normalize_archetype
+
+
+@pytest.mark.unit
+def test_player_observations_include_each_players_card_presence_and_skip_invalid_pairings(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    store.upsert_standings("event", [
+        {"player": "p1", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "A"}, {"name": "Shared"}], "trainer": [{"name": "Shared"}]}},
+        {"player": "p2", "deck": {"id": "b"}, "decklist": {"energy": [{"name": "B"}]}},
+        {"player": "p3", "deck": {"id": "a"}, "decklist": None},
+        {"player": "p4", "deck": {"id": "b"}, "decklist": {}},
+    ])
+    store.upsert_pairings("event", [
+        {"round": 1, "player1": "p1", "player2": "p2", "winner": "p2"},
+        {"round": 2, "player1": "p1", "player2": "p2", "winner": "0"},
+        {"round": 3, "player1": "p3", "player2": "p2", "winner": "p3"},
+        {"round": 4, "player1": "p1", "player2": "p4", "winner": "p1"},
+        {"round": 5, "player1": "p1", "player2": "missing", "winner": "p1"},
+    ])
+
+    assert store.player_observations() == [
+        PlayerObservation("a", "b", frozenset({"A", "Shared"}), frozenset({"B"}), 0),
+    ]
+
+
+@pytest.mark.parametrize("raw", [None, "", "null", "[]", "{", "{\"pokemon\": {}}"])
+def test_decklist_card_names_returns_empty_for_invalid_payloads(raw):
+    assert _decklist_card_names(raw) == frozenset()
 
 
 @pytest.mark.unit
