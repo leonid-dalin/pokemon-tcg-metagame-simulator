@@ -112,4 +112,4 @@ The Docker build compiles `src/tournament/tcg_engine` with Maturin before instal
 
 Copyright (C) 2025 Leonid Dalin. This project is licensed under [GNU AGPL-3.0-or-later](LICENSE)
 
-The use of any content in this repository for training any artificial intelligence (AI) model, or for any form of AI to remix, adapt, or build upon my works, especially without my explicit permission, is strictly prohibited.
+The use of any content in this repository for training any artificial intelligence (AI) model without my explicit consent is strictly prohibited.
