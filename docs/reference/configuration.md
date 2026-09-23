@@ -43,6 +43,6 @@ The main constants live in `src/core/config.py`. Environment variables are read 
 | `API_TOKEN` | API middleware | Empty, which disables token checking |
 | `LIMITLESS_API_KEY` | Limitless client | Empty, which creates an unauthenticated client |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Telemetry | `http://localhost:4317` |
-| `MAX_CORES` | Runtime core limit | Host or container affinity |
+| `MAX_CORES` | Runtime core limit | Explicit override; otherwise cgroup v2 quota, cgroup v1 quota, then half of `os.cpu_count()` with a minimum of 1 |
 
 Do not commit API keys or tokens. Limitless sends `LIMITLESS_API_KEY` in the `X-Access-Key` header
