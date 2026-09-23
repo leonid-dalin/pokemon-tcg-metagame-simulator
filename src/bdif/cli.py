@@ -1,4 +1,5 @@
 import argparse
+import importlib
 import json
 import logging
 import os
@@ -58,7 +59,7 @@ def main() -> int:
     logging.basicConfig(format="%(message)s", stream=sys.stderr, level=getattr(logging, args.log_level), force=True)
     setup_telemetry("tcg-bdif-cli")
     try:
-        from src.bdif import service
+        service = importlib.import_module("src.bdif.service")
         if args.command == "status":
             result = service.bdif_status()
         elif args.command == "ingest":

@@ -37,6 +37,29 @@ def test_module_commands_write_json_only_to_stdout(monkeypatch, capsys, command,
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(("command", "method"), [
+    ("status", "bdif_status"),
+    ("ingest", "run_ingestion"),
+    ("refit", "refit_card_model"),
+])
+def test_module_commands_use_current_service_module(monkeypatch, capsys, command, method):
+    import src.bdif as package
+
+    stale = SimpleNamespace(**{method: lambda: pytest.fail("stale service module used")})
+    current_calls = []
+    current = SimpleNamespace(**{method: lambda: current_calls.append(method) or {"status": "current"}})
+    monkeypatch.setattr(package, "service", stale, raising=False)
+    monkeypatch.setitem(sys.modules, "src.bdif.service", current)
+
+    code, captured = _run(monkeypatch, capsys, [command], current)
+
+    assert code == 0
+    assert current_calls == [method]
+    assert json.loads(captured.out) == {"status": "current"}
+    assert captured.err == ""
+
+
+@pytest.mark.unit
 def test_report_uses_local_input_and_bounded_request(monkeypatch, tmp_path, capsys):
     source = tmp_path / "matrix.json"
     source.write_text("{}", encoding="utf-8")
