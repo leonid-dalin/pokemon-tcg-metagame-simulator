@@ -18,6 +18,8 @@ from slowapi.errors import RateLimitExceeded
 
 from src.api.models import PredictionRequest
 from src.api.stream_helpers import resolve_job_id
+from src.bdif.service import bdif_status
+from src.bdif.settings import BdifSettings
 from src.core.logger import logger
 from src.worker.queue import execute_simulation_job, automated_daily_pipeline, huey
 
@@ -39,6 +41,8 @@ def _log_startup_task_result(task):
 def is_protected_request(request: Request) -> bool:
     path = request.scope.get("path", "").rstrip("/")
     if (request.method, path) == ("POST", "/api/v1/predict"):
+        return True
+    if (request.method, path) == ("GET", "/api/v1/bdif/status"):
         return True
     if request.method != "GET" or not path.startswith("/api/v1/tasks/"):
         return False
@@ -330,3 +334,11 @@ async def stream_task_progress(request: Request, task_id: str):
             "X-Accel-Buffering": "no"
         }
     )
+
+
+@app.get("/api/v1/bdif/status")
+@limiter.limit("60/minute")
+async def get_bdif_status(request: Request):
+    """Report available BDIF inputs without changing local files."""
+    _ = request
+    return await asyncio.to_thread(bdif_status, BdifSettings.from_environment())

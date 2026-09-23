@@ -68,3 +68,21 @@ def test_prediction_request_accepts_tiny_floating_point_symmetry_error():
     )
 
     assert request.matchup_matrix[0][1] == pytest.approx(0.3)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("panel", "message"), [
+    (["c"], "bdif_panel_decks"),
+    (["a", "a"], "unique"),
+])
+def test_panel_decks_must_be_unique_known_decks(panel, message):
+    with pytest.raises(ValidationError, match=message):
+        PredictionRequest(**_request_payload(bdif_panel_decks=panel))
+
+
+@pytest.mark.unit
+def test_panel_decks_are_capped_at_ten():
+    names = [f"d{i}" for i in range(11)]
+    matrix = [[0.5] * 11 for _ in range(11)]
+    with pytest.raises(ValidationError):
+        PredictionRequest(deck_names=names, matchup_matrix=matrix, bdif_panel_decks=names)

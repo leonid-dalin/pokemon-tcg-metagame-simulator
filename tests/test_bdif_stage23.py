@@ -472,6 +472,8 @@ def test_best60_reports_card_evidence_and_partial_status():
         "coefficient": 2.0,
         "contribution": 2.0,
         "interval": (1.0, 3.0),
+        "q_value": pytest.approx(8.854896862420247e-05),
+        "bucket": "signal",
     }
 
 

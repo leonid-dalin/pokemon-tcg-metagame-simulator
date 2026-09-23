@@ -28,15 +28,21 @@ The static predictor first resolves the requested field constraints, then produc
 
 ## BDIF card model
 
-The BDIF path is observational and opt-in. It aggregates Limitless decklists and matchup rows, fits card covariates, and builds legality-aware Best-60 recommendations from observed skeletons
+The BDIF path is observational and opt-in. It aggregates Limitless decklists and matchup rows, then fits a per-player card model. Archetypes use reference coding, the model has no intercept, and the coefficients describe within-archetype card associations after accounting for the observed player-level outcomes
 
-The model applies three evidence checks:
+The model selects cards with at least `BDIF_CARD_MIN_PLAYERS` appearances, which is 50 by default, and with within-archetype presence between `BDIF_CARD_MIN_WITHIN_RATE` and `BDIF_CARD_MAX_WITHIN_RATE`, which are 0.05 and 0.95. Rank guards prevent under-supported inputs from being treated as identified. The separation guard rejects a fit when any absolute logit coefficient exceeds `BDIF_CARD_MAX_ABS_LOGIT`, which is 5.0
 
-- `BDIF_MIN_MATCHES` requires 1,000 total matchup matches for a deck
-- `BDIF_COVERAGE_RATIO` requires 60% of evidence to meet pair coverage
-- `BDIF_PAIR_MIN_GAMES` marks a pair reliable at 250 matches
+The panel selects decks with at least `BDIF_PANEL_SHARE_THRESHOLD` empirical share, which is 0.03, and caps the result at `BDIF_PANEL_MAX_DECKS`, which is 10. Sparse evidence returns an insufficient-data result rather than a fabricated recommendation
 
-The panel selects decks with at least 3% empirical share and caps the result at 10 decks. Sparse evidence returns an insufficient-data result rather than a fabricated recommendation
+The card fit uses an exact zero-sum outcome construction. The A1 report is an archetype-mean approximation: it estimates the expected outcome for the archetype's observed card mix rather than a causal effect for changing one card in isolation. Card inclusion, coefficients, and H1 results remain observational associations
+
+## Posterior intervals
+
+Posterior matchup draws use a maximum budget of `BDIF_POSTERIOR_DRAWS`, 200 matrices, and at least `BDIF_MIN_ITERATIONS_PER_DRAW`, 100 tournament iterations per draw. Intervals are reported only when at least `BDIF_MIN_INTERVAL_DRAWS`, 50 draws, are available. Otherwise the report records `interval_status` as `too few posterior draws`; the UI can show the Monte Carlo standard error as an approximation for the player view. Monte Carlo standard error is not a posterior interval
+
+## Field posterior
+
+The field posterior samples matchup probabilities and estimates each deck's expected win rate against the predicted field. It also reports `best_pick_probability`, the proportion of posterior draws in which that deck has the highest expected field win rate. Field-posterior sampling uses `BDIF_FIELD_POSTERIOR_DRAWS`, 2,000 draws by default
 
 ## Legacy Limitless stores
 
