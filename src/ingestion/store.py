@@ -9,22 +9,13 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from src.core.scraper import normalize_archetype
-from src.ingestion.model import ACE_SPEC_CARDS, _card_limit
+from src.ingestion.model import ACE_SPEC_CARDS, PlayerObservation, _card_limit
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tournaments (id TEXT PRIMARY KEY, game TEXT, format TEXT, name TEXT, date TEXT, players INTEGER, details_json TEXT);
 CREATE TABLE IF NOT EXISTS standings (tournament_id TEXT, player_id TEXT, placing INTEGER, wins INTEGER, losses INTEGER, ties INTEGER, deck_id TEXT, deck_name TEXT, decklist_json TEXT, dropped_round INTEGER, PRIMARY KEY (tournament_id, player_id));
 CREATE TABLE IF NOT EXISTS pairings (tournament_id TEXT, round INTEGER, phase INTEGER, player1 TEXT, player2 TEXT, winner TEXT, PRIMARY KEY (tournament_id, round, phase, player1, player2));
 """
-
-
-@dataclass(frozen=True)
-class PlayerObservation:
-    deck: str
-    opponent: str
-    deck_cards: frozenset[str]
-    opponent_cards: frozenset[str]
-    result: int
 
 
 def _decklist_card_names(raw: str | None) -> frozenset[str]:

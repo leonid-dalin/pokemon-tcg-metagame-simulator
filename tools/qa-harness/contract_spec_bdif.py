@@ -3,8 +3,8 @@ import json, os, sqlite3, tempfile
 from src.core.config import MIN_GAMES
 from src.core.data import load_matchup_data
 from src.ingestion.aggregate import build_artifact
-from src.ingestion.model import fit_card_model, model_artifact
-from src.ingestion.store import PlayerObservation
+from src.ingestion.model import fit_card_model, model_artifact, select_model_cards
+from src.ingestion.model import PlayerObservation
 
 
 def _write(artifact):
@@ -23,7 +23,7 @@ def _produce_card_model():
         result = int((index % 8) < (6 if has_tech else 3))
         observations.append(PlayerObservation("a", "b", a_cards, b_cards, result))
         observations.append(PlayerObservation("b", "a", b_cards, a_cards, 1 - result))
-    return model_artifact(fit_card_model(observations))
+    return model_artifact(fit_card_model(observations, select_model_cards(observations)))
 
 
 def _produce_ingestion():

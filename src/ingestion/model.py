@@ -3,17 +3,24 @@ from __future__ import annotations
 import json
 import warnings
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 from scipy.stats import norm
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 
-if TYPE_CHECKING:
-    from src.ingestion.store import PlayerObservation
 
 from src.core.config import BDIF_CARD_MAX_ABS_LOGIT, BDIF_CARD_MAX_WITHIN_RATE, BDIF_CARD_MIN_PLAYERS, BDIF_CARD_MIN_WITHIN_RATE, BDIF_PANEL_MAX_DECKS, BDIF_PANEL_SHARE_THRESHOLD
+
+@dataclass(frozen=True)
+class PlayerObservation:
+    deck: str
+    opponent: str
+    deck_cards: frozenset[str]
+    opponent_cards: frozenset[str]
+    result: int
+
 
 MIST_ENERGY_NAME = "Mist Energy"
 Z_95 = float(norm.ppf(0.975))
@@ -142,19 +149,35 @@ def _mean_presence(observations: Sequence[PlayerObservation], decks: Sequence[st
     return {deck: {card: means[deck].get(card, 0) / max(1, counts[deck]) for card in cards} for deck in decks}
 
 
-def select_model_cards(observations: Sequence[PlayerObservation]) -> list[str]:
-    cards = sorted({card for row in observations for card in row.deck_cards | row.opponent_cards})
+def select_model_cards(
+    observations: Sequence[PlayerObservation],
+    min_players: int = BDIF_CARD_MIN_PLAYERS,
+    low: float = BDIF_CARD_MIN_WITHIN_RATE,
+    high: float = BDIF_CARD_MAX_WITHIN_RATE,
+) -> list[str]:
+    appearances: dict[str, int] = {}
+    presence: dict[str, dict[str, int]] = {}
+    rows = [
+        (deck, cards)
+        for row in observations
+        for deck, cards in ((row.deck, row.deck_cards), (row.opponent, row.opponent_cards))
+    ]
+    for deck, _ in rows:
+        appearances[deck] = appearances.get(deck, 0) + 1
+    for deck, cards in rows:
+        for card in presence:
+            presence[card].setdefault(deck, 0)
+        for card in cards:
+            presence.setdefault(card, {name: 0 for name in appearances})
+            presence[card][deck] += 1
     selected = []
-    for card in cards:
-        present = 0
-        total = 0
-        for row in observations:
-            present += int(card in row.deck_cards) + int(card in row.opponent_cards)
-            total += 2
-        rate = present / max(1, total)
-        if total >= BDIF_CARD_MIN_PLAYERS and BDIF_CARD_MIN_WITHIN_RATE <= rate <= BDIF_CARD_MAX_WITHIN_RATE:
+    for card, deck_counts in presence.items():
+        if any(
+            count >= min_players and low <= deck_counts.get(deck, 0) / count <= high
+            for deck, count in appearances.items()
+        ):
             selected.append(card)
-    return selected
+    return sorted(selected)
 
 
 def _card_design(observations: Sequence[PlayerObservation], decks: Sequence[str], cards: Sequence[str]) -> np.ndarray:
@@ -168,10 +191,10 @@ def _card_design(observations: Sequence[PlayerObservation], decks: Sequence[str]
     return np.asarray(rows, dtype=float)
 
 
-def fit_card_model(observations: Sequence[PlayerObservation]) -> FittedCardModel:
+def fit_card_model(observations: Sequence[PlayerObservation], cards: Sequence[str]) -> FittedCardModel:
     decks = sorted({deck for row in observations for deck in (row.deck, row.opponent)})
-    cards = select_model_cards(observations)
-    if len(decks) < 2 or not cards:
+    cards = list(cards)
+    if len(decks) < 2 or len({row.result for row in observations}) < 2 or not cards:
         raise CardModelNotIdentifiable("card design has no identifiable covariates")
     inclusion = _mean_presence(observations, decks, cards)
     design = _card_design(observations, decks, cards)

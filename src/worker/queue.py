@@ -19,7 +19,7 @@ from src.core.config import (
     MIN_GAMES,
     RNG_SEED,
 )
-from src.ingestion.store import PlayerObservation
+from src.ingestion.model import PlayerObservation, select_model_cards
 from src.core.data import load_matchup_data
 from src.core.scraper import (
     build_complete_matchup_matrix,
@@ -108,7 +108,7 @@ def _build_bdif_report_addons(store=None) -> tuple[dict, dict]:
     if not BDIF_USE_CARD_MODEL:
         return {}, {}
 
-    from src.ingestion.model import Best60Request, CardModelNotIdentifiable, fit_card_model, fit_h1_misty_variant, h1_observations, recommend_best60, select_panel_decks
+    from src.ingestion.model import Best60Request, CardModelNotIdentifiable, fit_card_model, select_model_cards, fit_h1_misty_variant, h1_observations, recommend_best60, select_panel_decks
     from src.ingestion.store import LimitlessStore
 
     db_path = os.path.join("data", "limitless.db")
@@ -130,7 +130,7 @@ def _build_bdif_report_addons(store=None) -> tuple[dict, dict]:
     if not _has_complete_observations(observations):
         return {deck: {"status": "insufficient stored observations"} for deck in top_decks}, {}
     try:
-        fitted = fit_card_model(observations)
+        fitted = fit_card_model(observations, select_model_cards(observations))
     except CardModelNotIdentifiable as exc:
         return {deck: {"status": "not identifiable", "reason": str(exc)} for deck in top_decks}, {}
     inclusion = fitted.inclusion
@@ -309,7 +309,7 @@ def ingest_limitless_results():
     model_status = "insufficient observations"
     if _has_complete_observations(observations):
         try:
-            fitted = fit_card_model(observations)
+            fitted = fit_card_model(observations, select_model_cards(observations))
         except CardModelNotIdentifiable:
             model_status = "not identifiable"
         else:

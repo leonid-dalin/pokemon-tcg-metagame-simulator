@@ -6,8 +6,7 @@ import pytest
 
 from src.worker import queue
 from src.core.scraper import normalize_archetype
-from src.ingestion.store import PlayerObservation
-from src.ingestion.model import CardModelNotIdentifiable
+from src.ingestion.model import CardModelNotIdentifiable, PlayerObservation
 
 
 @pytest.mark.unit
@@ -302,7 +301,7 @@ def test_bdif_builder_reports_non_identifiable_for_each_deck(monkeypatch, tmp_pa
     monkeypatch.chdir(tmp_path)
     (tmp_path / "data").mkdir()
     (tmp_path / "data" / "limitless.db").touch()
-    monkeypatch.setattr("src.ingestion.model.fit_card_model", lambda observations: (_ for _ in ()).throw(CardModelNotIdentifiable("rank")))
+    monkeypatch.setattr("src.ingestion.model.fit_card_model", lambda observations, cards: (_ for _ in ()).throw(CardModelNotIdentifiable("rank")))
 
     result, _ = queue._build_bdif_report_addons(Store())
     assert result == {"a": {"status": "not identifiable", "reason": "rank"}, "b": {"status": "not identifiable", "reason": "rank"}}

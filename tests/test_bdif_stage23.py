@@ -3,9 +3,9 @@ import sqlite3
 import pytest
 
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import Best60Request, CardModelNotIdentifiable, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, recommend_best60, select_model_cards, select_panel_decks, validate_recommendation
+from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerObservation, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, recommend_best60, select_model_cards, select_panel_decks, validate_recommendation
 from src.api.models import PredictionRequest
-from src.ingestion.store import LimitlessStore, PlayerObservation, _decklist_card_names
+from src.ingestion.store import LimitlessStore, _decklist_card_names
 from src.ingestion.aggregate import build_artifact
 from src.core.scraper import normalize_archetype
 
@@ -243,7 +243,7 @@ def test_fitted_card_model_recovers_within_archetype_tech_effect():
         result = 1 - result if index % 11 == 0 else result
         observations.append(PlayerObservation("a", "b", a_cards, b_cards, result))
         observations.append(PlayerObservation("b", "a", b_cards, a_cards, 1 - result))
-    model = fit_card_model(observations)
+    model = fit_card_model(observations, select_model_cards(observations))
 
     coefficients, intervals = model.coefficient_report()
     assert coefficients["Tech"] > 0
@@ -255,13 +255,13 @@ def test_model_artifact_zero_sum_matrix_is_accepted_by_prediction_request():
     observations = []
     for index in range(120):
         has_tech = index % 2 == 0
-        a_cards = frozenset({"Core", "Tech"} if has_tech else {"Core"})
-        b_cards = frozenset({"Core"})
+        a_cards = frozenset({"Core", "Tech", "Filler"} if has_tech else {"Core", "Filler"})
+        b_cards = frozenset({"Core", "Filler"} if index % 3 == 0 else {"Core"})
         result = int(index % 10 < (8 if has_tech else 2))
         result = 1 - result if index % 11 == 0 else result
         observations.append(PlayerObservation("a", "b", a_cards, b_cards, result))
         observations.append(PlayerObservation("b", "a", b_cards, a_cards, 1 - result))
-    artifact = model_artifact(fit_card_model(observations))
+    artifact = model_artifact(fit_card_model(observations, ["Filler", "Tech"]))
 
     request = PredictionRequest(**{
         "job_id": "job",
@@ -274,15 +274,15 @@ def test_model_artifact_zero_sum_matrix_is_accepted_by_prediction_request():
 
 @pytest.mark.unit
 def test_select_model_cards_drops_constant_presence_card():
-    observations = [PlayerObservation("a", "b", frozenset({"Common"}), frozenset({"Common"}), index % 2) for index in range(20)]
-    assert select_model_cards(observations) == []
+    observations = [PlayerObservation("a", "b", frozenset({"Signature"}), frozenset({"Signature"}), index % 2) for index in range(20)]
+    assert "Signature" not in select_model_cards(observations)
 
 
 @pytest.mark.unit
 def test_rank_deficient_card_raises_not_identifiable():
     observations = [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), index % 2) for index in range(20)]
     with pytest.raises(CardModelNotIdentifiable):
-        fit_card_model(observations)
+        fit_card_model(observations, ["Signature", "Tech"])
 
 
 @pytest.mark.unit
@@ -290,14 +290,14 @@ def test_separated_card_outcomes_raise_not_identifiable():
     observations = [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), 1)] * 60
     observations += [PlayerObservation("b", "a", frozenset(), frozenset({"Tech"}), 0)] * 60
     with pytest.raises(CardModelNotIdentifiable):
-        fit_card_model(observations)
+        fit_card_model(observations, ["X"])
 
 
 @pytest.mark.unit
 def test_card_model_artifact_carries_player_observation_counts():
     observations = [PlayerObservation("a", "b", frozenset({"Core"}), frozenset({"Core"}), 1)] * 10
     observations += [PlayerObservation("b", "a", frozenset({"Core"}), frozenset({"Core"}), 0)] * 10
-    artifact = model_artifact(fit_card_model(observations))
+    artifact = model_artifact(fit_card_model(observations, ["Tech"]))
     assert artifact["win_rate_matrix"]["a"]["b"]["match_count"] == 10
     assert artifact["win_rate_matrix"]["b"]["a"]["match_count"] == 10
 
@@ -491,11 +491,11 @@ def test_card_model_artifact_carries_player_observation_counts(monkeypatch):
     observations = []
     for index in range(10):
         has_tech = index % 2 == 0
-        a_cards = frozenset({"Core", "Tech"} if has_tech else {"Core"})
+        a_cards = frozenset({"Core", "Tech", "Filler"} if has_tech else {"Core", "Filler"})
         b_cards = frozenset({"Core"})
         result = 1 if index % 4 in {0, 1} else 0
         observations.append(PlayerObservation("a", "b", a_cards, b_cards, result))
         observations.append(PlayerObservation("b", "a", b_cards, a_cards, 1 - result))
-    artifact = model_artifact(fit_card_model(observations))
+    artifact = model_artifact(fit_card_model(observations, ["Tech"]))
     assert artifact["win_rate_matrix"]["a"]["b"]["match_count"] == 10
     assert artifact["win_rate_matrix"]["b"]["a"]["match_count"] == 10
