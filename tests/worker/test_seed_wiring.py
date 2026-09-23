@@ -17,11 +17,6 @@ def test_worker_passes_the_configured_seed_to_monte_carlo():
     ]
 
     assert len(calls) == 1
-    assert any(
-        keyword.arg == "seed"
-        and isinstance(keyword.value, ast.Attribute)
-        and keyword.value.attr == "RNG_SEED"
-        and isinstance(keyword.value.value, ast.Name)
-        and keyword.value.value.id == "config"
-        for keyword in calls[0].keywords
-    )
+    seed_keyword = next(keyword for keyword in calls[0].keywords if keyword.arg == "seed")
+    assert "RNG_SEED" in ast.unparse(seed_keyword.value)
+    assert "config" in ast.unparse(seed_keyword.value)

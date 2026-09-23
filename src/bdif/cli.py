@@ -79,7 +79,7 @@ def main() -> int:
                 user_meta_spec=args.meta, tournament_style=args.tournament_style,
                 deck_names=deck_names, matchup_matrix=matrix.tolist(),
             )
-            result = service.run_prediction(request)
+            result = service.run_prediction(request, seed=args.seed)
         print(json.dumps(result, sort_keys=True, default=lambda value: value.value if hasattr(value, "value") else str(value)))
         if args.command == "report" and _evidence_unavailable(result):
             return 3

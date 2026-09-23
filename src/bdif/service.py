@@ -59,7 +59,11 @@ def panel_decks_for_report(deck_names: list[str] | None = None, store=None, sett
         return list(settings.fallback_panel_decks)
     from src.ingestion.model import select_panel_decks
     store = store or open_store(settings)
-    selected = select_panel_decks(store.deck_weights(), threshold=settings.panel_share_threshold)
+    selected = select_panel_decks(
+        store.deck_weights(),
+        threshold=settings.panel_share_threshold,
+        max_decks=settings.panel_max_decks,
+    )
     return map_panel_decks_to_matrix(selected, deck_names or [])
 
 
@@ -181,7 +185,7 @@ def bdif_status(settings: BdifSettings | None = None) -> dict:
     return {"status": "available", "db_path": settings.db_path, "decks": len(store.deck_weights()), "observations": len(store.player_observations())}
 
 
-def run_prediction(request: PredictionRequest, progress_callback=None, settings: BdifSettings | None = None, logger=None) -> dict:
+def run_prediction(request: PredictionRequest, progress_callback=None, settings: BdifSettings | None = None, logger=None, seed: int | None = None) -> dict:
     settings = settings or BdifSettings.from_environment()
     logger = logger or __import__("structlog").get_logger()
     deck_names, matrix, details = load_matchup_data(simulation_input_path(settings), config.MIN_GAMES)
@@ -207,7 +211,7 @@ def run_prediction(request: PredictionRequest, progress_callback=None, settings:
         d1_rounds=d1, cut_points=cut, d2_rounds=d2, top_cut=top_cut, players=players,
         iterations=TIER_MAPPING.get(request.precision_tier, 25_000), match_format=request.match_format,
         use_tie_convergence=request.use_tie_convergence, global_tie_rate=request.global_tie_rate,
-        use_drop_feature=request.use_drop_feature, seed=config.RNG_SEED,
+        use_drop_feature=request.use_drop_feature, seed=config.RNG_SEED if seed is None else seed,
         progress_callback=progress_callback, matchup_details=details, panel_decks=panels,
     )
     return {"solver_results": solver, "mc_results": build_bdif_report(result, recommendations, h1)}
