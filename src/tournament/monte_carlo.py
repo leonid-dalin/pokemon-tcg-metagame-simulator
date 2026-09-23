@@ -21,6 +21,7 @@ from src.core.config import (
     BDIF_POSTERIOR_DRAWS,
     BDIF_PRIOR_STRENGTH,
     BDIF_PANEL_DECKS,
+    BDIF_FIELD_POSTERIOR_DRAWS,
 )
 
 logger = structlog.get_logger()
@@ -156,6 +157,46 @@ def build_matchup_panel(
     return {"rows": rows, "unmatched": unmatched, "opponents": top_decks}
 
 
+def posterior_field_metrics(
+        deck_names: List[str],
+        meta_vector: np.ndarray,
+        alpha: np.ndarray,
+        beta: np.ndarray,
+        match_format: str = "BO3",
+        draws: int = BDIF_FIELD_POSTERIOR_DRAWS,
+        seed: int = 0,
+) -> Dict[str, Dict[str, float]]:
+    """Estimate expected win rates against the field from matchup posteriors."""
+    n_decks = len(deck_names)
+    if n_decks == 0 or draws <= 0:
+        return {}
+    rng = np.random.default_rng(seed)
+    upper_i, upper_j = np.triu_indices(n_decks, k=1)
+    samples = rng.beta(
+        alpha[upper_i, upper_j],
+        beta[upper_i, upper_j],
+        size=(draws, upper_i.size),
+    )
+    matrices = np.full((draws, n_decks, n_decks), 0.5)
+    matrices[:, upper_i, upper_j] = samples
+    matrices[:, upper_j, upper_i] = 1.0 - samples
+    if match_format == "BO3":
+        matrices = 3 * matrices ** 2 - 2 * matrices ** 3
+    expected = matrices @ meta_vector
+    best = expected.max(axis=1, keepdims=True)
+    winners = np.isclose(expected, best)
+    best_pick = (winners / winners.sum(axis=1, keepdims=True)).mean(axis=0)
+    return {
+        deck: {
+            "expected_win_rate": float(expected[:, i].mean()),
+            "expected_win_rate_lower": float(np.quantile(expected[:, i], 0.025)),
+            "expected_win_rate_upper": float(np.quantile(expected[:, i], 0.975)),
+            "best_pick_probability": float(best_pick[i]),
+        }
+        for i, deck in enumerate(deck_names)
+    }
+
+
 def run_monte_carlo_analytics(
         deck_names: List[str],
         win_matrix: np.ndarray,
@@ -190,6 +231,7 @@ def run_monte_carlo_analytics(
             "ranked_metrics": {},
             "insufficient_data": [],
             "posterior": {"draws": 0, "interval_status": "posterior disabled"},
+            "field_posterior": {},
             "matchup_panel": {
                 "rows": {},
                 "unmatched": list(panel_decks if panel_decks is not None else BDIF_PANEL_DECKS),
@@ -344,6 +386,13 @@ def run_monte_carlo_analytics(
         deck: metrics for deck, metrics in results.items()
         if deck not in insufficient_data
     }
+    field_posterior = (
+        posterior_field_metrics(
+            deck_names, meta_vec, alpha, beta,
+            match_format=match_format, seed=seed,
+        )
+        if use_posterior else {}
+    )
     return {
         "metrics": results,
         "ranked_metrics": ranked_metrics,
@@ -352,6 +401,7 @@ def run_monte_carlo_analytics(
             "draws": len(draw_metrics) if use_posterior else 0,
             "interval_status": interval_status,
         },
+        "field_posterior": field_posterior,
         "matchup_panel": build_matchup_panel(
             deck_names,
             meta_vec,
