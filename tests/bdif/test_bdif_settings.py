@@ -24,8 +24,8 @@ def test_from_environment_uses_live_config_defaults(monkeypatch):
     assert settings.panel_max_decks == 12
     assert settings.backfill_limit == 250
     assert settings.db_path == "data/limitless.db"
-    assert settings.ingestion_input_path == "data/limitless_input.json"
-    assert settings.model_input_path == "data/limitless_model_input.json"
+    assert settings.ingestion_input_path == "data/input/limitless_input.json"
+    assert settings.model_input_path == "data/input/limitless_model_input.json"
 
 
 def test_from_environment_parses_boolean_aliases(monkeypatch):
