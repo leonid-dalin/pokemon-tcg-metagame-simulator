@@ -162,6 +162,7 @@ def test_empty_deck_result_keeps_the_engine_report_shape():
         "ranked_metrics": {},
         "insufficient_data": [],
         "posterior": {"draws": 0, "interval_status": "posterior disabled"},
+        "field_posterior": {},
         "matchup_panel": {
             "rows": {},
             "unmatched": ["Unknown deck"],
@@ -233,7 +234,7 @@ def test_winless_deck_pair_gets_positive_posterior_pseudocounts(monkeypatch):
         posterior_draws=1,
     )
 
-    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel", "posterior"}
+    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel", "posterior", "field_posterior"}
 
 
 @pytest.mark.unit
@@ -338,7 +339,7 @@ def test_posterior_report_contains_intervals_and_ranked_split(monkeypatch):
         posterior_draws=50,
     )
 
-    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel", "posterior"}
+    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel", "posterior", "field_posterior"}
     assert result["posterior"] == {"draws": 50, "interval_status": "ok"}
     assert not result["insufficient_data"]
     assert result["ranked_metrics"]["a"]["day2_share_lower"] <= result["ranked_metrics"]["a"]["day2_share_upper"]
@@ -491,3 +492,39 @@ def test_posterior_is_invariant_to_deck_order(order):
     assert means[("S", "W")] == pytest.approx(means[("T", "W")])
     for (deck, opponent), value in means.items():
         assert value + means[(opponent, deck)] == pytest.approx(1.0)
+def _pairwise_posterior(pairs, n_decks):
+    alpha = np.ones((n_decks, n_decks))
+    beta = np.ones((n_decks, n_decks))
+    for (i, j), (p, n) in pairs.items():
+        alpha[i, j], beta[i, j] = p * n, (1 - p) * n
+        alpha[j, i], beta[j, i] = (1 - p) * n, p * n
+    return alpha, beta
+
+
+@pytest.mark.unit
+def test_field_posterior_best_pick_probabilities_sum_to_one_and_follow_evidence():
+    alpha, beta = _pairwise_posterior({(0, 1): (0.6, 2_000), (0, 2): (0.65, 2_000), (1, 2): (0.5, 2_000)}, 3)
+    metrics = monte_carlo.posterior_field_metrics(
+        ["a", "b", "c"], np.full(3, 1 / 3), alpha, beta, match_format="BO1", seed=3,
+    )
+    assert sum(m["best_pick_probability"] for m in metrics.values()) == pytest.approx(1.0)
+    assert metrics["a"]["best_pick_probability"] > 0.99
+    assert metrics["a"]["expected_win_rate"] == pytest.approx((0.5 + 0.6 + 0.65) / 3, abs=0.005)
+    assert metrics["a"]["expected_win_rate_lower"] < metrics["a"]["expected_win_rate"] < metrics["a"]["expected_win_rate_upper"]
+
+
+@pytest.mark.unit
+def test_field_posterior_applies_best_of_three_transform():
+    alpha, beta = _pairwise_posterior({(0, 1): (0.6, 1e7)}, 2)
+    metrics = monte_carlo.posterior_field_metrics(["a", "b"], np.array([0.0, 1.0]), alpha, beta, match_format="BO3")
+    assert metrics["a"]["expected_win_rate"] == pytest.approx(3 * 0.6 ** 2 - 2 * 0.6 ** 3, abs=1e-3)
+
+
+@pytest.mark.unit
+def test_field_posterior_is_reproducible_and_collapses_with_evidence():
+    alpha, beta = _pairwise_posterior({(0, 1): (0.55, 1e7), (0, 2): (0.5, 1e7), (1, 2): (0.45, 1e7)}, 3)
+    meta = np.array([0.5, 0.3, 0.2])
+    first = monte_carlo.posterior_field_metrics(["a", "b", "c"], meta, alpha, beta, seed=11)
+    second = monte_carlo.posterior_field_metrics(["a", "b", "c"], meta, alpha, beta, seed=11)
+    assert first == second
+    assert all(m["expected_win_rate_upper"] - m["expected_win_rate_lower"] < 1e-3 for m in first.values())
