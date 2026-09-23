@@ -82,6 +82,26 @@ def test_report_uses_local_input_and_bounded_request(monkeypatch, tmp_path, caps
 
 
 @pytest.mark.unit
+def test_healthy_report_with_empty_insufficient_data_exits_zero(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "matrix.json"
+    source.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
+    module = SimpleNamespace(run_prediction=lambda req: {
+        "solver_results": {"full_meta": {"A": 0.5, "B": 0.5}},
+        "mc_results": {
+            "metrics": {"A": {"win_rate": 0.5}},
+            "ranked_metrics": {"A": {"win_rate": 0.5}},
+            "insufficient_data": [],
+            "posterior": {"draws": 10, "interval_status": "ok"},
+            "field_posterior": {},
+        },
+    })
+    code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source)], module)
+    assert code == 0
+    assert json.loads(captured.out)["mc_results"]["insufficient_data"] == []
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize("argv", [
     ["report", "--input", "absent.json"],
     ["report", "-P", "3"],
@@ -108,7 +128,20 @@ def test_unavailable_evidence_exits_three(monkeypatch, capsys, tmp_path):
     source = tmp_path / "matrix.json"
     source.write_text("{}", encoding="utf-8")
     monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
-    module = SimpleNamespace(run_prediction=lambda req: {"status": "insufficient_data"})
+    module = SimpleNamespace(run_prediction=lambda req: {
+        "solver_results": {},
+        "mc_results": {
+            "metrics": {},
+            "ranked_metrics": {},
+            "insufficient_data": ["A"],
+            "posterior": {"draws": 0, "interval_status": "ok"},
+            "field_posterior": {},
+            "matchup_panel": {},
+            "best60_recommendations": {},
+            "h1_report": {},
+        },
+    })
     code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source)], module)
     assert code == 3
-    assert json.loads(captured.out) == {"status": "insufficient_data"}
+    output = json.loads(captured.out)
+    assert output["mc_results"]["insufficient_data"] == ["A"]

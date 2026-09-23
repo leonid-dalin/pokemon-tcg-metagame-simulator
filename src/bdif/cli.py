@@ -94,8 +94,27 @@ def main() -> int:
 
 
 def _evidence_unavailable(result: Any) -> bool:
-    text = json.dumps(result, default=str).lower()
-    return any(term in text for term in ("insufficient data", "insufficient_data", "unavailable", "no reliable decks"))
+    if not isinstance(result, dict):
+        return False
+    mc_results = result.get("mc_results")
+    if not isinstance(mc_results, dict):
+        return False
+    if mc_results.get("insufficient_data"):
+        return True
+    for addon_group in ("best60_recommendations", "h1_report"):
+        addon = mc_results.get(addon_group)
+        if not isinstance(addon, dict):
+            continue
+        if addon.get("status") in {"failed", "unavailable", "insufficient_data"}:
+            return True
+        if any(
+            isinstance(value, dict) and value.get("status") in {"failed", "unavailable", "insufficient_data"}
+            for value in addon.values()
+        ):
+            return True
+    posterior = mc_results.get("posterior")
+    interval_status = posterior.get("interval_status") if isinstance(posterior, dict) else None
+    return isinstance(interval_status, str) and interval_status.lower() in {"failed", "unavailable", "insufficient_data"}
 
 
 if __name__ == "__main__":
