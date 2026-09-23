@@ -71,7 +71,7 @@ def test_report_uses_local_input_and_bounded_request(monkeypatch, tmp_path, caps
             self.__dict__.update(kwargs)
     monkeypatch.setattr(cli, "PredictionRequest", Request)
     monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
-    module = SimpleNamespace(run_prediction=lambda req: {"report": req.total_players})
+    module = SimpleNamespace(run_prediction=lambda req, **kwargs: {"report": req.total_players})
     code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source), "--output", str(output), "-P", "64", "--seed", "8", "--meta", "Pikachu:0.2"], module)
     assert code == 0
     assert output.is_dir()
@@ -82,11 +82,26 @@ def test_report_uses_local_input_and_bounded_request(monkeypatch, tmp_path, caps
 
 
 @pytest.mark.unit
+def test_report_passes_seed_to_service(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "matrix.json"
+    source.write_text("{}", encoding="utf-8")
+    seeds = []
+    monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
+    module = SimpleNamespace(run_prediction=lambda request, **kwargs: seeds.append(kwargs["seed"]) or {"report": request.total_players})
+
+    code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source), "--seed", "9876"], module)
+
+    assert code == 0
+    assert seeds == [9876]
+    assert json.loads(captured.out) == {"report": 256}
+
+
+@pytest.mark.unit
 def test_healthy_report_with_empty_insufficient_data_exits_zero(monkeypatch, tmp_path, capsys):
     source = tmp_path / "matrix.json"
     source.write_text("{}", encoding="utf-8")
     monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
-    module = SimpleNamespace(run_prediction=lambda req: {
+    module = SimpleNamespace(run_prediction=lambda req, **kwargs: {
         "solver_results": {"full_meta": {"A": 0.5, "B": 0.5}},
         "mc_results": {
             "metrics": {"A": {"win_rate": 0.5}},
@@ -128,7 +143,7 @@ def test_unavailable_evidence_exits_three(monkeypatch, capsys, tmp_path):
     source = tmp_path / "matrix.json"
     source.write_text("{}", encoding="utf-8")
     monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
-    module = SimpleNamespace(run_prediction=lambda req: {
+    module = SimpleNamespace(run_prediction=lambda req, **kwargs: {
         "solver_results": {},
         "mc_results": {
             "metrics": {},

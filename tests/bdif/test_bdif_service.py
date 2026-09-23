@@ -30,6 +30,28 @@ def test_panel_decks_map_limitless_ids_to_simulation_names(monkeypatch, tmp_path
 
 
 @pytest.mark.unit
+def test_panel_decks_for_report_passes_configured_maximum(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "limitless.db").touch()
+    calls = []
+
+    def select_panel_decks(*args, **kwargs):
+        calls.append(kwargs)
+        return ["a"]
+
+    monkeypatch.setattr("src.ingestion.model.select_panel_decks", select_panel_decks)
+
+    class Store:
+        def deck_weights(self):
+            return {"a": 0.5, "b": 0.3, "c": 0.2}
+
+    service.panel_decks_for_report(["a"], Store(), settings(panel_max_decks=1))
+
+    assert calls == [{"threshold": 0.01, "max_decks": 1}]
+
+
+@pytest.mark.unit
 def test_panel_deck_resolution_strips_unique_suffixes_and_preserves_compounds():
     assert service.map_panel_decks_to_matrix(["slowking-scr", "n-zoroark", "dragapult-dusknoir"], ["Slowking", "N's Zoroark", "Dragapult", "Dragapult Dusknoir"]) == ["Slowking", "N's Zoroark", "Dragapult Dusknoir"]
 
@@ -114,6 +136,24 @@ def test_prediction_passes_matchup_details_and_report_addons(monkeypatch):
     service.run_prediction(request, settings=settings())
     assert seen[0]["matchup_details"] == details
     assert reports == [({"best": 1}, {"h1": 2})]
+
+
+@pytest.mark.unit
+def test_prediction_uses_explicit_seed(monkeypatch):
+    seen = []
+    monkeypatch.setattr(service, "load_matchup_data", lambda *args: (["a", "b"], np.array([[.5,.6],[.4,.5]]), {}))
+    monkeypatch.setattr(service, "predict_best_decks", lambda request: {"full_meta": {"a": .5, "b": .5}})
+    monkeypatch.setattr(service, "swiss_rounds_from_players", lambda players: 1)
+    monkeypatch.setattr(service, "open_store", lambda cfg: None)
+    monkeypatch.setattr(service, "panel_decks_for_report", lambda *args: [])
+    monkeypatch.setattr(service, "build_report_addons", lambda *args: ({}, {}))
+    monkeypatch.setattr(service, "run_monte_carlo_analytics", lambda **kwargs: seen.append(kwargs) or {})
+    monkeypatch.setattr(service, "build_bdif_report", lambda result, *args: result)
+
+    request = PredictionRequest(job_id="job", deck_names=["a", "b"], matchup_matrix=[[.5,.6],[.4,.5]], total_players=4)
+    service.run_prediction(request, settings=settings(), seed=9876)
+
+    assert seen[0]["seed"] == 9876
 
 
 @pytest.mark.unit
