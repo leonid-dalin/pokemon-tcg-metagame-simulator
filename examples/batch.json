@@ -1,0 +1,16 @@
+{
+  "experiments": [
+    {
+      "experiment_id": "baseline",
+      "mode": "replicator",
+      "gens": 1,
+      "seed": 1312
+    },
+    {
+      "experiment_id": "alternate-seed",
+      "mode": "replicator",
+      "gens": 1,
+      "seed": 2025
+    }
+  ]
+}

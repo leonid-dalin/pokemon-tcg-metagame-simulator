@@ -374,7 +374,10 @@ def find_evolutionary_stable_state(
                     if config.mode == "replicator":
                         payoffs = win_matrix @ current_freq
                     else:
-                        active_indices = [i for i in range(n) if i not in extinct_decks]
+                        active_indices = np.asarray(
+                            [i for i in range(n) if i not in extinct_decks],
+                            dtype=int,
+                        )
                         if len(active_indices) < 2:
                             logger.warning("simulation_aborted", reason="Less than 2 active decks remain.")
                             break
@@ -386,27 +389,42 @@ def find_evolutionary_stable_state(
                         )
 
                         with tracer.start_as_current_span("execute_tournament_batch"):
-                            payoffs = np.zeros(n)
+                            deck_wins = np.zeros(n)
+                            deck_matches = np.zeros(n)
+                            active_freq = safe_normalize(current_freq[active_indices])
                             tasks = []
                             for i in range(config.num_tournaments_per_gen):
+                                sampled_active = rng.choice(
+                                    len(active_indices),
+                                    size=config.tournament_size,
+                                    p=active_freq,
+                                )
+                                field_indices = active_indices[sampled_active]
                                 seed = (
                                     config.seed + gen * config.num_tournaments_per_gen + i
                                     if config.seed is not None else None
                                 )
-                                tasks.append((active_indices, config.__dict__, win_matrix, matchup_details, seed))
+                                task_config = {
+                                    **config.__dict__,
+                                    "deck_names": deck_names,
+                                }
+                                tasks.append((field_indices, task_config, win_matrix, matchup_details, seed))
 
                             if pool is not None:
                                 # Logic unified using the hoisted worker_func
                                 chunk_size = max(1, len(tasks) // (safe_cores * 2))
                                 results = pool.imap_unordered(worker_func, tasks, chunksize=chunk_size)
-                                for local_payoffs, _ in results:
-                                    payoffs += local_payoffs
+                                for local_wins, local_matches in results:
+                                    deck_wins += local_wins
+                                    deck_matches += local_matches
                             else:
                                 for task in tasks:
-                                    local_payoffs, _ = worker_func(task)
-                                    payoffs += local_payoffs
+                                    local_wins, local_matches = worker_func(task)
+                                    deck_wins += local_wins
+                                    deck_matches += local_matches
 
-                            payoffs /= config.num_tournaments_per_gen
+                            with np.errstate(divide="ignore", invalid="ignore"):
+                                payoffs = np.where(deck_matches > 0, deck_wins / deck_matches, 0.5)
 
                     if config.noise_scale > 0:
                         noise = rng.normal(0, config.noise_scale, n)

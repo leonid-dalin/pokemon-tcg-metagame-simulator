@@ -1,0 +1,13 @@
+# Acknowledgements
+
+This project stands on the shoulders of giants and would not be possible without the foundational work and data provided by several key members of the competitive metagaming community.
+
+*   **Limitless TCG**: An enormous shoutout to the team at [Limitless](https://limitlesstcg.com/). This entire project is powered by the comprehensive and meticulously maintained Pokémon TCG data scraped from their website. Their platform is an indispensable resource for the global Pokémon TCG community. If you use their tools (and you should!), please consider supporting them on [Patreon](https://patreon.com/limitlesstcg) to ensure they can continue their fantastic work.
+
+*   **Vicious Syndicate**: I personally owe a profound debt to [Vicious Syndicate](https://www.vicioussyndicate.com/) for pioneering rigorous, community-driven data analytics in the digital card game space. Their *Data Reaper Reports* and podcast set the global gold standard for metagame analysis, serving as an indispensable foundation for my own education in competitive modelling. This project’s Power & Meta Scoring metrics are directly inspired by their standardised 0–100 normalisation methodology. Beyond the math, their commitment to transparency and data integrity has been a guiding light for this project’s philosophy and my own development as a human being. :)
+
+*   **Dominic Calkosz & HearthNash**: A massive thank you to **Dominic** for his groundbreaking research on game-theoretic metagame analysis in Hearthstone. His project, [HearthNash](https://dominic-calkosz.com/HearthNash), was a direct inspiration for applying evolutionary dynamics and Nash equilibrium concepts to TCG metagames. His academic approach provided the theoretical bedrock for this simulator.
+
+*   **FPL Analytics Community:** My journey was also profoundly shaped by the Discord community of the **FPL Analytics Community**. Engaging in their discussions, learning from their approach to data, and even experimenting around with meta-solvers such as **[Solio](https://fpl.solioanalytics.com/)** and **[FPL Review](https://fplreview.com/)** provided the foundational inspiration for this project. The concepts of "solving" a dynamic, stochastic game and the importance of probabilistic forecasting were directly translated into the **Monte Carlo tournament engine** and **EV prediction logic** used here. Their insights into data-driven decision-making were invaluable to my development as a developer and analyst.
+
+This project is a synthesis of their collective efforts, and I am deeply grateful for the ecosystems they have created, and the bricks they've placed. 🙇 So, **_thank you_** for existing.
