@@ -3,7 +3,8 @@ import json, os, sqlite3, tempfile
 from src.core.config import MIN_GAMES
 from src.core.data import load_matchup_data
 from src.ingestion.aggregate import build_artifact
-from src.ingestion.model import fit_model, model_artifact
+from src.ingestion.model import fit_card_model, model_artifact
+from src.ingestion.store import PlayerObservation
 
 
 def _write(artifact):
@@ -14,9 +15,15 @@ def _write(artifact):
 
 
 def _produce_card_model():
-    observations = [("a", "b", 1)] * 80 + [("b", "a", 0)] * 20
-    inclusion = {"a": {"Misty": 1.0}, "b": {"Misty": 0.0}}
-    return model_artifact(fit_model(observations, inclusion))
+    observations = []
+    for index in range(120):
+        has_tech = index % 2 == 0
+        a_cards = frozenset({"Core", "Tech"} if has_tech else {"Core"})
+        b_cards = frozenset({"Core"})
+        result = int((index % 8) < (6 if has_tech else 3))
+        observations.append(PlayerObservation("a", "b", a_cards, b_cards, result))
+        observations.append(PlayerObservation("b", "a", b_cards, a_cards, 1 - result))
+    return model_artifact(fit_card_model(observations))
 
 
 def _produce_ingestion():

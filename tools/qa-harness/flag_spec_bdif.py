@@ -3,14 +3,22 @@ import json, os, tempfile
 import src.core.config as config
 import src.worker.queue as queue
 from src.core.data import load_matchup_data
-from src.ingestion.model import fit_model, model_artifact
+from src.ingestion.model import fit_card_model, model_artifact
+from src.ingestion.store import PlayerObservation
 
 FLAGS = ["src.worker.queue.BDIF_USE_CARD_MODEL"]
 
 
 def _seed_card_model_artifact(root):
-    observations = [("a", "b", 1)] * 80 + [("b", "a", 0)] * 20
-    artifact = model_artifact(fit_model(observations, {"a": {"Misty": 1.0}, "b": {"Misty": 0.0}}))
+    observations = []
+    for index in range(120):
+        has_tech = index % 2 == 0
+        a_cards = frozenset({"Core", "Tech"} if has_tech else {"Core"})
+        b_cards = frozenset({"Core"})
+        result = int((index % 8) < (6 if has_tech else 3))
+        observations.append(PlayerObservation("a", "b", a_cards, b_cards, result))
+        observations.append(PlayerObservation("b", "a", b_cards, a_cards, 1 - result))
+    artifact = model_artifact(fit_card_model(observations))
     path = os.path.join(root, "data", "input")
     os.makedirs(path, exist_ok=True)
     with open(os.path.join(path, "limitless_model_input.json"), "w", encoding="utf-8") as handle:

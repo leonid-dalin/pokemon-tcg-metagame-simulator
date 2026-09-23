@@ -6,6 +6,7 @@ import structlog
 from opentelemetry import trace
 from opentelemetry.instrumentation.redis import RedisInstrumentor
 from huey import RedisHuey, crontab
+from typing import Sequence
 
 from src.api.models import ScrapedMatrix, TIER_MAPPING, PredictionRequest
 from src.core.config import (
@@ -18,6 +19,7 @@ from src.core.config import (
     MIN_GAMES,
     RNG_SEED,
 )
+from src.ingestion.store import PlayerObservation
 from src.core.data import load_matchup_data
 from src.core.scraper import (
     build_complete_matchup_matrix,
@@ -56,8 +58,8 @@ def _write_json_atomic(payload: dict, path: str) -> None:
         raise
 
 
-def _has_complete_observations(observations: list[tuple[str, str, int]]) -> bool:
-    return len(observations) >= 4 and len({result for _, _, result in observations}) == 2
+def _has_complete_observations(observations: Sequence[PlayerObservation]) -> bool:
+    return len(observations) >= 4 and len({row.result for row in observations}) == 2
 
 
 def _map_panel_decks_to_matrix(panel_decks: list[str], deck_names: list[str]) -> list[str]:
@@ -106,8 +108,7 @@ def _build_bdif_report_addons(store=None) -> tuple[dict, dict]:
     if not BDIF_USE_CARD_MODEL:
         return {}, {}
 
-    from src.ingestion.features import deck_features
-    from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, recommend_best60, select_panel_decks
+    from src.ingestion.model import Best60Request, CardModelNotIdentifiable, fit_card_model, fit_h1_misty_variant, h1_observations, recommend_best60, select_panel_decks
     from src.ingestion.store import LimitlessStore
 
     db_path = os.path.join("data", "limitless.db")
@@ -125,11 +126,14 @@ def _build_bdif_report_addons(store=None) -> tuple[dict, dict]:
     if not deck_weights:
         return {}, {}
     top_decks = select_panel_decks(deck_weights, threshold=BDIF_PANEL_SHARE_THRESHOLD)
-    inclusion = deck_features(store, top_decks)
-    observations = store.observations()
-    if len(observations) < 4 or len({result for _, _, result in observations}) < 2:
+    observations = store.player_observations()
+    if not _has_complete_observations(observations):
         return {deck: {"status": "insufficient stored observations"} for deck in top_decks}, {}
-    fitted = fit_model(observations, inclusion)
+    try:
+        fitted = fit_card_model(observations)
+    except CardModelNotIdentifiable as exc:
+        return {deck: {"status": "not identifiable", "reason": str(exc)} for deck in top_decks}, {}
+    inclusion = fitted.inclusion
     coefficients, intervals = fitted.coefficient_report()
     candidates = sorted({card for values in inclusion.values() for card in values})
     recommendations = {}
@@ -264,8 +268,7 @@ def ingest_limitless_results():
 
     from src.ingestion.aggregate import build_artifact
     from src.ingestion.client import LimitlessClient
-    from src.ingestion.features import deck_features
-    from src.ingestion.model import fit_model, model_artifact
+    from src.ingestion.model import CardModelNotIdentifiable, fit_card_model, model_artifact
     from src.ingestion.store import LimitlessStore
 
     client = LimitlessClient.from_environment()
@@ -301,13 +304,18 @@ def ingest_limitless_results():
     artifact_path = os.path.join("data", "input", "limitless_input.json")
     os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
     _write_json_atomic(artifact, artifact_path)
-    observations = store.observations()
+    observations = store.player_observations()
     model_path = os.path.join("data", "input", "limitless_model_input.json")
+    model_status = "insufficient observations"
     if _has_complete_observations(observations):
-        inclusion = deck_features(store, artifact["archetypes"])
-        fitted = fit_model(observations, inclusion)
-        _write_json_atomic(model_artifact(fitted), model_path)
-    return {"status": "complete", "events": len(events), "failed_events": failed_events, "path": artifact_path}
+        try:
+            fitted = fit_card_model(observations)
+        except CardModelNotIdentifiable:
+            model_status = "not identifiable"
+        else:
+            _write_json_atomic(model_artifact(fitted), model_path)
+            model_status = "complete"
+    return {"status": "complete", "events": len(events), "failed_events": failed_events, "path": artifact_path, "model_status": model_status}
 
 
 @huey.periodic_task(crontab(minute='0', hour='*/2'))

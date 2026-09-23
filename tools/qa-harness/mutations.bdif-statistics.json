@@ -16,5 +16,23 @@
     "file": "src/tournament/monte_carlo.py",
     "find": "    elif len(draw_metrics) >= BDIF_MIN_INTERVAL_DRAWS:",
     "replace": "    elif len(draw_metrics) >= 1:"
+  },
+  {
+    "name": "task4: drop rank guard",
+    "file": "src/ingestion/model.py",
+    "find": "    if np.linalg.matrix_rank(design) < design.shape[1]:\n        raise CardModelNotIdentifiable(\"card design is rank deficient\")",
+    "replace": "    if False:\n        raise CardModelNotIdentifiable(\"card design is rank deficient\")"
+  },
+  {
+    "name": "task4: drop separation guard",
+    "file": "src/ingestion/model.py",
+    "find": "    if float(np.max(np.abs(estimator.coef_))) > BDIF_CARD_MAX_ABS_LOGIT:\n        raise CardModelNotIdentifiable(\"card model indicates separated outcomes\")",
+    "replace": "    if False:\n        raise CardModelNotIdentifiable(\"card model indicates separated outcomes\")"
+  },
+  {
+    "name": "task4: put intercept back",
+    "file": "src/ingestion/model.py",
+    "find": "LogisticRegression(penalty=None, fit_intercept=False, max_iter=1000, random_state=1312)",
+    "replace": "LogisticRegression(penalty=None, fit_intercept=True, max_iter=1000, random_state=1312)"
   }
 ]

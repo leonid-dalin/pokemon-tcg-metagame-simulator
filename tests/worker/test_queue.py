@@ -6,6 +6,8 @@ import pytest
 
 from src.worker import queue
 from src.core.scraper import normalize_archetype
+from src.ingestion.store import PlayerObservation
+from src.ingestion.model import CardModelNotIdentifiable
 
 
 @pytest.mark.unit
@@ -268,7 +270,7 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
         def upsert_pairings(self, event_id, pairings):
             pass
 
-        def observations(self):
+        def player_observations(self):
             return []
 
     monkeypatch.chdir(tmp_path)
@@ -281,6 +283,29 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
 
     assert result["failed_events"] == [{"id": "bad", "error": "event unavailable"}]
     assert (tmp_path / "data" / "input" / "limitless_input.json").exists()
+    assert result["model_status"] == "insufficient observations"
+
+
+@pytest.mark.unit
+def test_bdif_builder_reports_non_identifiable_for_each_deck(monkeypatch, tmp_path):
+    class Store:
+        def prepare_for_read(self):
+            pass
+
+        def deck_weights(self):
+            return {"a": 0.5, "b": 0.5}
+
+        def player_observations(self):
+            return [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), 1)] * 2 + [PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 0)] * 2
+
+    monkeypatch.setattr(queue, "BDIF_USE_CARD_MODEL", True)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "limitless.db").touch()
+    monkeypatch.setattr("src.ingestion.model.fit_card_model", lambda observations: (_ for _ in ()).throw(CardModelNotIdentifiable("rank")))
+
+    result, _ = queue._build_bdif_report_addons(Store())
+    assert result == {"a": {"status": "not identifiable", "reason": "rank"}, "b": {"status": "not identifiable", "reason": "rank"}}
 
 
 @pytest.mark.unit
