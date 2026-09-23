@@ -45,6 +45,7 @@ def _parser() -> argparse.ArgumentParser:
     report.add_argument("-P", "--players", type=int, default=256)
     report.add_argument("--tournament-style", choices=("pure_swiss", "championship_series"), default="pure_swiss")
     report.add_argument("--meta", type=_meta_spec, default={})
+    report.add_argument("--panel", type=lambda text: [deck.strip() for deck in text.split(",") if deck.strip()], default=None)
     return parser
 
 
@@ -78,6 +79,7 @@ def main() -> int:
                 job_id="bdif_cli_report", total_players=args.players,
                 user_meta_spec=args.meta, tournament_style=args.tournament_style,
                 deck_names=deck_names, matchup_matrix=matrix.tolist(),
+                bdif_panel_decks=args.panel,
             )
             result = service.run_prediction(request)
         print(json.dumps(result, sort_keys=True, default=lambda value: value.value if hasattr(value, "value") else str(value)))

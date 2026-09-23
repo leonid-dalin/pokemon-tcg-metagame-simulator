@@ -137,3 +137,26 @@ def test_service_has_no_worker_or_ui_imports():
     imported = [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)]
     imported += [alias.name for node in ast.walk(tree) if isinstance(node, ast.Import) for alias in node.names]
     assert not any(name and (name.startswith("src.worker") or name.startswith("src.ui")) for name in imported)
+
+
+@pytest.mark.unit
+def test_requested_panel_overrides_automatic_selection(monkeypatch):
+    received = []
+    monkeypatch.setattr(service, "open_store", lambda settings: None)
+    monkeypatch.setattr(service, "panel_decks_for_report", lambda *args: pytest.fail("automatic selection ran"))
+    monkeypatch.setattr(service, "load_matchup_data", lambda *args: (["a", "b"], np.array([[.5, .6], [.4, .5]]), {}))
+    monkeypatch.setattr(service, "predict_best_decks", lambda request: {"full_meta": {"a": .5, "b": .5}})
+    monkeypatch.setattr(service, "swiss_rounds_from_players", lambda players: 1)
+    monkeypatch.setattr(service, "build_report_addons", lambda *args: ({}, {}))
+    monkeypatch.setattr(service, "run_monte_carlo_analytics", lambda **kwargs: received.append(kwargs) or {})
+    monkeypatch.setattr(service, "build_bdif_report", lambda result, *args: result)
+
+    request = PredictionRequest(
+        deck_names=["a", "b"],
+        matchup_matrix=[[.5, .6], [.4, .5]],
+        bdif_panel_decks=["b"],
+        total_players=4,
+    )
+    service.run_prediction(request, settings=settings())
+
+    assert received[0]["panel_decks"] == ["b"]

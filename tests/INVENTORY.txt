@@ -1,292 +1,365 @@
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id--None-200]
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id-None-None-200]
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id-correct-token--401]
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id-correct-token-None-401]
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id-correct-token-correct-token-200]
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id-correct-token-wrong-token-401]
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream--None-200]
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-None-None-200]
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-correct-token--401]
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-correct-token-None-401]
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-correct-token-correct-token-200]
-tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-correct-token-wrong-token-401]
-tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/predict--None-200]
-tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/predict-None-None-200]
-tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/predict-correct-token--401]
-tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/predict-correct-token-None-401]
-tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/predict-correct-token-correct-token-200]
-tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/predict-correct-token-wrong-token-401]
-tests/api/test_main.py::test_authenticated_sse_can_report_the_worker_error[asyncio]
-tests/api/test_main.py::test_authenticated_task_status_can_report_the_worker_error[asyncio]
-tests/api/test_main.py::test_protected_endpoints_accept_the_matching_api_token[asyncio-GET-/api/v1/tasks/task-id/stream]
-tests/api/test_main.py::test_protected_endpoints_accept_the_matching_api_token[asyncio-GET-/api/v1/tasks/task-id]
-tests/api/test_main.py::test_protected_endpoints_accept_the_matching_api_token[asyncio-POST-/api/v1/predict]
-tests/api/test_main.py::test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-GET-/api/v1/tasks/task-id/stream]
-tests/api/test_main.py::test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-GET-/api/v1/tasks/task-id]
-tests/api/test_main.py::test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-POST-/api/v1/predict]
-tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-GET-/api/v1/tasks/task-id/stream]
-tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-GET-/api/v1/tasks/task-id]
-tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-POST-/api/v1/predict]
-tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-GET-/api/v1/tasks/task-id/stream]
-tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-GET-/api/v1/tasks/task-id]
-tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-POST-/api/v1/predict]
-tests/api/test_main.py::test_sse_preserves_a_complete_task_termination[asyncio]
-tests/api/test_main.py::test_sse_redacts_worker_errors[asyncio-None-Task failed]
-tests/api/test_main.py::test_sse_redacts_worker_errors[asyncio-correct-token-worker failed]
-tests/api/test_main.py::test_sse_reports_completion_at_the_injected_deadline[asyncio]
-tests/api/test_main.py::test_sse_stream_exception_is_valid_json[asyncio]
-tests/api/test_main.py::test_sse_terminates_at_the_injected_deadline_without_result[asyncio]
-tests/api/test_main.py::test_startup_scrape_is_dispatched_without_blocking_lifespan[asyncio]
-tests/api/test_main.py::test_task_status_redacts_worker_errors[asyncio-None-Task failed]
-tests/api/test_main.py::test_task_status_redacts_worker_errors[asyncio-correct-token-worker failed]
-tests/api/test_main.py::test_task_status_reports_huey_exceptions_as_failed[asyncio]
-tests/api/test_main.py::test_unauthenticated_sse_reports_a_generic_task_failure[asyncio]
-tests/api/test_main.py::test_unauthenticated_task_status_reports_a_generic_failure[asyncio]
-tests/api/test_main.py::test_unrelated_routes_do_not_require_an_api_token[asyncio]
-tests/api/test_models.py::test_dead_meta_constraints_field_is_rejected
-tests/api/test_models.py::test_prediction_request_accepts_tiny_floating_point_symmetry_error
-tests/api/test_models.py::test_prediction_request_rejects_asymmetric_matchup_matrix
-tests/api/test_models.py::test_prediction_request_rejects_duplicate_deck_names
-tests/api/test_models.py::test_prediction_request_rejects_job_id_longer_than_sixty_four_characters
-tests/api/test_models.py::test_prediction_request_rejects_matrix_with_more_than_sixty_four_decks
-tests/api/test_models.py::test_range_spec_rejects_a_minimum_above_the_maximum
-tests/api/test_models.py::test_tournament_style_accepts_only_supported_values
-tests/api/test_stream_helpers.py::test_resolve_job_id_decodes_utf8_bytes
-tests/api/test_stream_helpers.py::test_resolve_job_id_passes_through_non_empty_string
-tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_empty_bytes
-tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_empty_string
-tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_missing_value
-tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_undecodable_bytes
-tests/bdif/test_bdif_cli.py::test_bdif_commands_reject_multiple_operations
-tests/bdif/test_bdif_cli.py::test_bdif_mutating_commands_call_service_without_network[--bdif-ingest-run_ingestion-result0]
-tests/bdif/test_bdif_cli.py::test_bdif_mutating_commands_call_service_without_network[--bdif-refit-refit_card_model-result1]
-tests/bdif/test_bdif_cli.py::test_bdif_status_command_prints_service_result
-tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv0]
-tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv1]
-tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv2]
-tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv3]
-tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv4]
-tests/bdif/test_bdif_module_cli.py::test_module_commands_use_current_service_module[ingest-run_ingestion]
-tests/bdif/test_bdif_module_cli.py::test_module_commands_use_current_service_module[refit-refit_card_model]
-tests/bdif/test_bdif_module_cli.py::test_module_commands_use_current_service_module[status-bdif_status]
-tests/bdif/test_bdif_module_cli.py::test_module_commands_write_json_only_to_stdout[ingest-run_ingestion-result1]
-tests/bdif/test_bdif_module_cli.py::test_module_commands_write_json_only_to_stdout[refit-refit_card_model-result2]
-tests/bdif/test_bdif_module_cli.py::test_module_commands_write_json_only_to_stdout[status-bdif_status-result0]
-tests/bdif/test_bdif_module_cli.py::test_report_uses_local_input_and_bounded_request
-tests/bdif/test_bdif_module_cli.py::test_service_failure_exits_one_with_structured_stderr
-tests/bdif/test_bdif_module_cli.py::test_unavailable_evidence_exits_three
-tests/bdif/test_bdif_service.py::test_addons_prepare_supplied_store_before_reading
-tests/bdif/test_bdif_service.py::test_addons_report_non_identifiable_for_each_deck
-tests/bdif/test_bdif_service.py::test_addons_skip_store_when_feature_disabled
-tests/bdif/test_bdif_service.py::test_bdif_status_reads_legacy_store_without_writing
-tests/bdif/test_bdif_service.py::test_panel_deck_resolution_drops_ambiguous_and_missing_ids
-tests/bdif/test_bdif_service.py::test_panel_deck_resolution_strips_unique_suffixes_and_preserves_compounds
-tests/bdif/test_bdif_service.py::test_panel_decks_map_limitless_ids_to_simulation_names
-tests/bdif/test_bdif_service.py::test_prediction_passes_matchup_details_and_report_addons
-tests/bdif/test_bdif_service.py::test_prediction_reuses_one_store_and_isolates_addon_failure
-tests/bdif/test_bdif_service.py::test_service_has_no_worker_or_ui_imports
-tests/bdif/test_bdif_settings.py::test_from_environment_overrides_database_path
-tests/bdif/test_bdif_settings.py::test_from_environment_parses_boolean_aliases
-tests/bdif/test_bdif_settings.py::test_from_environment_rejects_invalid_boolean_values[2]
-tests/bdif/test_bdif_settings.py::test_from_environment_rejects_invalid_boolean_values[enabled]
-tests/bdif/test_bdif_settings.py::test_from_environment_rejects_invalid_boolean_values[truth]
-tests/bdif/test_bdif_settings.py::test_from_environment_uses_live_config_defaults
-tests/core/test_data.py::test_distinct_profiles_still_cluster
-tests/core/test_data.py::test_identical_rows_collapse_to_a_single_reported_cluster
-tests/core/test_data.py::test_malformed_matchup_json_returns_empty_result_and_logs_failure
-tests/core/test_data.py::test_missing_matchup_file_returns_empty_result_and_logs_failure
-tests/core/test_data.py::test_safe_normalize_returns_uniform_for_a_negative_sum
-tests/core/test_data.py::test_safe_normalize_returns_uniform_for_an_all_zero_vector
-tests/core/test_data.py::test_safe_normalize_scales_a_positive_vector_to_sum_one
-tests/core/test_data.py::test_undecodable_matchup_file_returns_empty_result_and_logs_failure
-tests/core/test_runtime.py::test_fallback_never_returns_zero
-tests/core/test_runtime.py::test_falls_back_to_half_the_host_when_no_quota_is_set
-tests/core/test_runtime.py::test_malformed_max_cores_falls_through_to_probes
-tests/core/test_runtime.py::test_max_cores_env_var_is_floored_at_one
-tests/core/test_runtime.py::test_max_cores_env_var_wins
-tests/core/test_runtime.py::test_v1_reads_quota_over_period
-tests/core/test_runtime.py::test_v1_returns_none_when_quota_is_unlimited
-tests/core/test_runtime.py::test_v2_floors_a_fractional_quota
-tests/core/test_runtime.py::test_v2_reads_quota_over_period
-tests/core/test_runtime.py::test_v2_returns_none_for_malformed_content
-tests/core/test_runtime.py::test_v2_returns_none_when_file_is_absent
-tests/core/test_runtime.py::test_v2_returns_none_when_unlimited
-tests/core/test_scraper.py::test_a_high_volume_unknown_archetype_is_admitted
-tests/core/test_scraper.py::test_a_known_archetype_is_always_parsed
-tests/core/test_scraper.py::test_a_low_volume_unknown_archetype_is_rejected
-tests/core/test_scraper.py::test_an_observed_half_win_rate_is_not_replaced_by_a_mirrored_result
-tests/core/test_scraper.py::test_discover_live_matchup_urls_filters_resolves_deduplicates_and_sorts
-tests/core/test_scraper.py::test_discover_live_matchup_urls_raises_when_no_eligible_urls_are_found
-tests/core/test_scraper.py::test_discover_live_matchup_urls_raises_when_request_fails
-tests/core/test_scraper.py::test_excluded_opponents_are_skipped_regardless_of_volume
-tests/core/test_scraper.py::test_normalize_archetype_removes_possessive_suffix_for_canonical_matching
-tests/core/test_scraper.py::test_rejecting_a_stranger_does_not_affect_a_known_deck_in_the_same_table
-tests/core/test_scraper.py::test_win_rate_counts_ties_as_half
-tests/evolution/test_engine.py::test_evolution_uses_the_configured_seed_for_global_random_steps
-tests/evolution/test_engine.py::test_tournament_evolution_samples_configured_field_and_returns_fitness
-tests/test_bdif_stage23.py::test_aggregate_normalises_reversed_player_slots_into_one_pair
-tests/test_bdif_stage23.py::test_basic_energy_is_not_limited_to_four_copies
-tests/test_bdif_stage23.py::test_best60_benjamini_hochberg_gate_filters_weak_candidates
-tests/test_bdif_stage23.py::test_best60_fill_target_preserves_exact_sixty_card_contract
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-0]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-12]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-16]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-20]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-24]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-28]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-32]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-36]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-40]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-44]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-48]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-4]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-52]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-56]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-60]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[0-8]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-0]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-12]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-16]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-20]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-24]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-28]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-32]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-36]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-40]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-44]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-48]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-4]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-52]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-56]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-60]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[1-8]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-0]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-12]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-16]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-20]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-24]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-28]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-32]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-36]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-40]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-44]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-48]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-4]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-52]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-56]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-60]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[10-8]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-0]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-12]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-16]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-20]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-24]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-28]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-32]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-36]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-40]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-44]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-48]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-4]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-52]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-56]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-60]
-tests/test_bdif_stage23.py::test_best60_legality_matrix_returns_deck_or_status[2-8]
-tests/test_bdif_stage23.py::test_best60_normalizes_skeleton_copy_and_ace_spec_rules
-tests/test_bdif_stage23.py::test_best60_puts_zero_spanning_interval_in_no_signal_bucket
-tests/test_bdif_stage23.py::test_best60_ranks_positive_pooled_cards_in_score_order
-tests/test_bdif_stage23.py::test_best60_rejects_five_copies
-tests/test_bdif_stage23.py::test_best60_rejects_two_ace_specs
-tests/test_bdif_stage23.py::test_best60_reports_card_evidence_and_partial_status
-tests/test_bdif_stage23.py::test_card_model_artifact_carries_player_observation_counts
-tests/test_bdif_stage23.py::test_card_model_fit_has_no_intercept
-tests/test_bdif_stage23.py::test_decklist_card_names_returns_empty_for_invalid_payloads[None]
-tests/test_bdif_stage23.py::test_decklist_card_names_returns_empty_for_invalid_payloads[[]]
-tests/test_bdif_stage23.py::test_decklist_card_names_returns_empty_for_invalid_payloads[]
-tests/test_bdif_stage23.py::test_decklist_card_names_returns_empty_for_invalid_payloads[null]
-tests/test_bdif_stage23.py::test_decklist_card_names_returns_empty_for_invalid_payloads[{"pokemon": {}}]
-tests/test_bdif_stage23.py::test_decklist_card_names_returns_empty_for_invalid_payloads[{]
-tests/test_bdif_stage23.py::test_fitted_card_model_recovers_within_archetype_tech_effect
-tests/test_bdif_stage23.py::test_h1_misty_report_changes_when_hammer_variant_is_controlled
-tests/test_bdif_stage23.py::test_h1_observations_treats_legacy_json_null_as_empty_deck
-tests/test_bdif_stage23.py::test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag
-tests/test_bdif_stage23.py::test_h1_standard_error_uses_weighted_fisher_information
-tests/test_bdif_stage23.py::test_limitless_client_retries_rate_limit_with_response_contract
-tests/test_bdif_stage23.py::test_limitless_client_sends_key_only_as_an_access_header
-tests/test_bdif_stage23.py::test_model_artifact_zero_sum_matrix_is_accepted_by_prediction_request
-tests/test_bdif_stage23.py::test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec
-tests/test_bdif_stage23.py::test_observed_skeleton_uses_high_frequency_cards
-tests/test_bdif_stage23.py::test_panel_decks_cap_at_ten_after_share_threshold
-tests/test_bdif_stage23.py::test_panel_decks_include_every_empirical_share_above_threshold
-tests/test_bdif_stage23.py::test_player_observations_include_each_players_card_presence_and_skip_invalid_pairings
-tests/test_bdif_stage23.py::test_rank_deficient_card_raises_not_identifiable
-tests/test_bdif_stage23.py::test_readers_prepare_legacy_store_schema
-tests/test_bdif_stage23.py::test_recommendation_requires_exactly_sixty_cards
-tests/test_bdif_stage23.py::test_select_model_cards_drops_constant_presence_card
-tests/test_bdif_stage23.py::test_separated_card_outcomes_raise_not_identifiable
-tests/test_bdif_stage23.py::test_store_construction_does_not_modify_existing_database
-tests/test_bdif_stage23.py::test_store_persists_and_backfills_canonical_deck_names
-tests/test_bdif_stage23.py::test_store_upserts_events_and_counts_unique_card_inclusion
-tests/test_bdif_stage23.py::test_store_writes_missing_decklists_as_sql_null
-tests/tournament/test_monte_carlo.py::test_chunk_seeds_come_from_the_supplied_seed
-tests/tournament/test_monte_carlo.py::test_data_sufficiency_filter_lists_a_low_coverage_deck
-tests/tournament/test_monte_carlo.py::test_data_sufficiency_filter_rejects_low_total_matches_with_full_coverage
-tests/tournament/test_monte_carlo.py::test_data_sufficiency_filter_separates_qualified_and_insufficient_decks
-tests/tournament/test_monte_carlo.py::test_empty_deck_result_keeps_the_engine_report_shape
-tests/tournament/test_monte_carlo.py::test_empty_meta_distribution_uses_a_uniform_field
-tests/tournament/test_monte_carlo.py::test_exposes_matchup_panel
-tests/tournament/test_monte_carlo.py::test_field_posterior_applies_best_of_three_transform
-tests/tournament/test_monte_carlo.py::test_field_posterior_best_pick_probabilities_sum_to_one_and_follow_evidence
-tests/tournament/test_monte_carlo.py::test_field_posterior_is_reproducible_and_collapses_with_evidence
-tests/tournament/test_monte_carlo.py::test_hierarchical_posterior_large_sample_barely_moves_from_observation
-tests/tournament/test_monte_carlo.py::test_hierarchical_posterior_shrinks_a_six_match_pair_toward_field_prior
-tests/tournament/test_monte_carlo.py::test_matchup_panel_marks_thin_pair_unreliable_and_keeps_unknown_decks
-tests/tournament/test_monte_carlo.py::test_metrics_carry_binomial_monte_carlo_standard_errors
-tests/tournament/test_monte_carlo.py::test_posterior_draw_budget_follows_the_precision_tier[1 - BULLET]
-tests/tournament/test_monte_carlo.py::test_posterior_draw_budget_follows_the_precision_tier[2 - BLITZ]
-tests/tournament/test_monte_carlo.py::test_posterior_draw_budget_follows_the_precision_tier[3 - STANDARD]
-tests/tournament/test_monte_carlo.py::test_posterior_draw_budget_follows_the_precision_tier[4 - EXHAUSTIVE]
-tests/tournament/test_monte_carlo.py::test_posterior_draw_budget_follows_the_precision_tier[5 - MAXIMUM]
-tests/tournament/test_monte_carlo.py::test_posterior_draws_keep_matchup_matrix_complementary
-tests/tournament/test_monte_carlo.py::test_posterior_draws_preserve_requested_iterations
-tests/tournament/test_monte_carlo.py::test_posterior_is_invariant_to_deck_order[order0]
-tests/tournament/test_monte_carlo.py::test_posterior_is_invariant_to_deck_order[order1]
-tests/tournament/test_monte_carlo.py::test_posterior_is_invariant_to_deck_order[order2]
-tests/tournament/test_monte_carlo.py::test_posterior_is_invariant_to_deck_order[order3]
-tests/tournament/test_monte_carlo.py::test_posterior_is_invariant_to_deck_order[order4]
-tests/tournament/test_monte_carlo.py::test_posterior_is_invariant_to_deck_order[order5]
-tests/tournament/test_monte_carlo.py::test_posterior_report_contains_intervals_and_ranked_split
-tests/tournament/test_monte_carlo.py::test_winless_deck_pair_gets_positive_posterior_pseudocounts
-tests/tournament/test_reporting.py::test_build_bdif_report_adds_caller_owned_sections
-tests/tournament/test_solver.py::test_a_bare_float_pins_an_exact_share
-tests/tournament/test_solver.py::test_a_range_spec_caps_allocation_at_its_max
-tests/tournament/test_solver.py::test_a_range_spec_floor_is_honoured
-tests/tournament/test_solver.py::test_an_empty_spec_returns_the_normalised_baseline
-tests/tournament/test_solver.py::test_an_exact_spec_model_pins_an_exact_share
-tests/tournament/test_solver.py::test_empirical_baseline_weights_by_match_volume
-tests/tournament/test_solver.py::test_every_deck_capped_below_one_is_rejected_as_infeasible
-tests/tournament/test_solver.py::test_minimum_constraints_cannot_exceed_field_capacity
-tests/tournament/test_solver.py::test_overallocated_minimum_constraints_are_rejected
-tests/tournament/test_solver.py::test_unconstrained_decks_split_the_remainder_by_baseline_weight
-tests/tournament/test_solver.py::test_unknown_deck_names_are_ignored
-tests/ui/test_app.py::test_resolve_auto_fill_reports_infeasible_constraints
-tests/ui/test_app.py::test_submit_prediction_passes_a_timeout
-tests/ui/test_meta_rows.py::test_a_tuple_value_on_an_exact_row_uses_its_first_element
-tests/ui/test_meta_rows.py::test_minimum_share_detects_overallocated_exact_rows
-tests/ui/test_meta_rows.py::test_minimum_share_includes_range_minimums
-tests/ui/test_meta_rows.py::test_no_rows_returns_zero
-tests/ui/test_meta_rows.py::test_percentage_mode_divides_by_one_hundred
-tests/ui/test_meta_rows.py::test_range_rows_are_excluded
-tests/ui/test_meta_rows.py::test_raw_players_mode_divides_by_the_player_count
-tests/ui/test_meta_rows.py::test_spec_maps_deck_names_to_proportions
-tests/ui/test_meta_rows.py::test_spec_omits_range_rows
-tests/ui/test_meta_rows.py::test_spec_omits_rows_with_no_deck_selected
-tests/ui/test_meta_rows.py::test_unparseable_values_are_skipped
-tests/ui/test_meta_rows.py::test_zero_players_in_raw_mode_returns_zero_rather_than_dividing_by_zero
-tests/worker/test_queue.py::test_daily_pipeline_removes_temp_file_when_replace_fails
-tests/worker/test_queue.py::test_daily_pipeline_removes_temp_file_when_write_fails
-tests/worker/test_queue.py::test_daily_pipeline_reraises_scraper_failures
-tests/worker/test_queue.py::test_daily_pipeline_writes_through_same_directory_temp_file_and_replaces_target
-tests/worker/test_queue.py::test_limitless_ingestion_is_disabled_by_default
-tests/worker/test_queue.py::test_limitless_ingestion_records_failed_events_and_writes_partial_artifact
-tests/worker/test_seed_wiring.py::test_worker_passes_the_configured_seed_to_monte_carlo
+============================= test session starts =============================
+platform win32 -- Python 3.11.16, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\DALIN\Documents\projects\python\pokemon-tcg-metagame-simulator-bdif-ui
+configfile: pytest.ini
+testpaths: tests
+plugins: anyio-4.15.1, cov-7.1.0
+collected 326 items
+
+<Dir pokemon-tcg-metagame-simulator-bdif-ui>
+  <Dir tests>
+    <Dir api>
+      <Module test_main.py>
+        <Function test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-POST-/api/v1/predict]>
+        <Function test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-GET-/api/v1/tasks/task-id]>
+        <Function test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-GET-/api/v1/tasks/task-id/stream]>
+        <Function test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-GET-/api/v1/bdif/status]>
+        <Function test_protected_endpoints_accept_the_matching_api_token[asyncio-POST-/api/v1/predict]>
+        <Function test_protected_endpoints_accept_the_matching_api_token[asyncio-GET-/api/v1/tasks/task-id]>
+        <Function test_protected_endpoints_accept_the_matching_api_token[asyncio-GET-/api/v1/tasks/task-id/stream]>
+        <Function test_protected_endpoints_accept_the_matching_api_token[asyncio-GET-/api/v1/bdif/status]>
+        <Function test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-POST-/api/v1/predict]>
+        <Function test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-GET-/api/v1/tasks/task-id]>
+        <Function test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-GET-/api/v1/tasks/task-id/stream]>
+        <Function test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-GET-/api/v1/bdif/status]>
+        <Function test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-POST-/api/v1/predict]>
+        <Function test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-GET-/api/v1/tasks/task-id]>
+        <Function test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-GET-/api/v1/tasks/task-id/stream]>
+        <Function test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-GET-/api/v1/bdif/status]>
+        <Function test_startup_scrape_is_dispatched_without_blocking_lifespan[asyncio]>
+        <Function test_api_token_policy[asyncio-POST-/api/v1/predict-None-None-200]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id-None-None-200]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-None-None-200]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/bdif/status-None-None-200]>
+        <Function test_api_token_policy[asyncio-POST-/api/v1/predict--None-200]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id--None-200]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream--None-200]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/bdif/status--None-200]>
+        <Function test_api_token_policy[asyncio-POST-/api/v1/predict-correct-token-correct-token-200]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id-correct-token-correct-token-200]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-correct-token-correct-token-200]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/bdif/status-correct-token-correct-token-200]>
+        <Function test_api_token_policy[asyncio-POST-/api/v1/predict-correct-token-None-401]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id-correct-token-None-401]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-correct-token-None-401]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/bdif/status-correct-token-None-401]>
+        <Function test_api_token_policy[asyncio-POST-/api/v1/predict-correct-token--401]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id-correct-token--401]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-correct-token--401]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/bdif/status-correct-token--401]>
+        <Function test_api_token_policy[asyncio-POST-/api/v1/predict-correct-token-wrong-token-401]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id-correct-token-wrong-token-401]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-correct-token-wrong-token-401]>
+        <Function test_api_token_policy[asyncio-GET-/api/v1/bdif/status-correct-token-wrong-token-401]>
+        <Function test_unrelated_routes_do_not_require_an_api_token[asyncio]>
+        <Function test_task_status_redacts_worker_errors[asyncio-None-Task failed]>
+        <Function test_task_status_redacts_worker_errors[asyncio-correct-token-worker failed]>
+        <Function test_sse_redacts_worker_errors[asyncio-None-Task failed]>
+        <Function test_sse_redacts_worker_errors[asyncio-correct-token-worker failed]>
+        <Function test_sse_stream_exception_is_valid_json[asyncio]>
+        <Function test_task_status_reports_huey_exceptions_as_failed[asyncio]>
+        <Function test_unauthenticated_task_status_reports_a_generic_failure[asyncio]>
+        <Function test_authenticated_task_status_can_report_the_worker_error[asyncio]>
+        <Function test_sse_terminates_at_the_injected_deadline_without_result[asyncio]>
+        <Function test_sse_reports_completion_at_the_injected_deadline[asyncio]>
+        <Function test_sse_preserves_a_complete_task_termination[asyncio]>
+        <Function test_unauthenticated_sse_reports_a_generic_task_failure[asyncio]>
+        <Function test_authenticated_sse_can_report_the_worker_error[asyncio]>
+      <Module test_models.py>
+        <Function test_dead_meta_constraints_field_is_rejected>
+        <Function test_range_spec_rejects_a_minimum_above_the_maximum>
+        <Function test_tournament_style_accepts_only_supported_values>
+        <Function test_prediction_request_rejects_job_id_longer_than_sixty_four_characters>
+        <Function test_prediction_request_rejects_matrix_with_more_than_sixty_four_decks>
+        <Function test_prediction_request_rejects_duplicate_deck_names>
+        <Function test_prediction_request_rejects_asymmetric_matchup_matrix>
+        <Function test_prediction_request_accepts_tiny_floating_point_symmetry_error>
+        <Function test_panel_decks_must_be_unique_known_decks[panel0-bdif_panel_decks]>
+        <Function test_panel_decks_must_be_unique_known_decks[panel1-unique]>
+        <Function test_panel_decks_are_capped_at_ten>
+      <Module test_stream_helpers.py>
+        <Function test_resolve_job_id_passes_through_non_empty_string>
+        <Function test_resolve_job_id_decodes_utf8_bytes>
+        <Function test_resolve_job_id_uses_fallback_for_undecodable_bytes>
+        <Function test_resolve_job_id_uses_fallback_for_empty_string>
+        <Function test_resolve_job_id_uses_fallback_for_empty_bytes>
+        <Function test_resolve_job_id_uses_fallback_for_missing_value>
+    <Dir bdif>
+      <Module test_bdif_cli.py>
+        <Function test_bdif_status_command_prints_service_result>
+        <Function test_bdif_mutating_commands_call_service_without_network[--bdif-ingest-run_ingestion-result0]>
+        <Function test_bdif_mutating_commands_call_service_without_network[--bdif-refit-refit_card_model-result1]>
+        <Function test_bdif_commands_reject_multiple_operations>
+      <Module test_bdif_module_cli.py>
+        <Function test_module_commands_write_json_only_to_stdout[status-bdif_status-result0]>
+        <Function test_module_commands_write_json_only_to_stdout[ingest-run_ingestion-result1]>
+        <Function test_module_commands_write_json_only_to_stdout[refit-refit_card_model-result2]>
+        <Function test_module_commands_use_current_service_module[status-bdif_status]>
+        <Function test_module_commands_use_current_service_module[ingest-run_ingestion]>
+        <Function test_module_commands_use_current_service_module[refit-refit_card_model]>
+        <Function test_report_uses_local_input_and_bounded_request>
+        <Function test_healthy_report_with_empty_insufficient_data_exits_zero>
+        <Function test_invalid_report_arguments_exit_two[argv0]>
+        <Function test_invalid_report_arguments_exit_two[argv1]>
+        <Function test_invalid_report_arguments_exit_two[argv2]>
+        <Function test_invalid_report_arguments_exit_two[argv3]>
+        <Function test_invalid_report_arguments_exit_two[argv4]>
+        <Function test_service_failure_exits_one_with_structured_stderr>
+        <Function test_unavailable_evidence_exits_three>
+        <Function test_report_panel_argument_sets_requested_decks>
+      <Module test_bdif_service.py>
+        <Function test_panel_decks_map_limitless_ids_to_simulation_names>
+        <Function test_panel_deck_resolution_strips_unique_suffixes_and_preserves_compounds>
+        <Function test_panel_deck_resolution_drops_ambiguous_and_missing_ids>
+        <Function test_addons_report_non_identifiable_for_each_deck>
+        <Function test_addons_skip_store_when_feature_disabled>
+        <Function test_addons_prepare_supplied_store_before_reading>
+        <Function test_prediction_reuses_one_store_and_isolates_addon_failure>
+        <Function test_prediction_passes_matchup_details_and_report_addons>
+        <Function test_bdif_status_reads_legacy_store_without_writing>
+        <Function test_service_has_no_worker_or_ui_imports>
+        <Function test_requested_panel_overrides_automatic_selection>
+      <Module test_bdif_settings.py>
+        <Function test_from_environment_uses_live_config_defaults>
+        <Function test_from_environment_parses_boolean_aliases>
+        <Function test_from_environment_overrides_database_path>
+        <Function test_from_environment_rejects_invalid_boolean_values[enabled]>
+        <Function test_from_environment_rejects_invalid_boolean_values[2]>
+        <Function test_from_environment_rejects_invalid_boolean_values[truth]>
+    <Dir core>
+      <Module test_data.py>
+        <Function test_safe_normalize_scales_a_positive_vector_to_sum_one>
+        <Function test_safe_normalize_returns_uniform_for_an_all_zero_vector>
+        <Function test_safe_normalize_returns_uniform_for_a_negative_sum>
+        <Function test_missing_matchup_file_returns_empty_result_and_logs_failure>
+        <Function test_undecodable_matchup_file_returns_empty_result_and_logs_failure>
+        <Function test_malformed_matchup_json_returns_empty_result_and_logs_failure>
+        <Function test_identical_rows_collapse_to_a_single_reported_cluster>
+        <Function test_distinct_profiles_still_cluster>
+      <Module test_runtime.py>
+        <Function test_v2_reads_quota_over_period>
+        <Function test_v2_floors_a_fractional_quota>
+        <Function test_v2_returns_none_when_unlimited>
+        <Function test_v2_returns_none_for_malformed_content>
+        <Function test_v2_returns_none_when_file_is_absent>
+        <Function test_v1_reads_quota_over_period>
+        <Function test_v1_returns_none_when_quota_is_unlimited>
+        <Function test_max_cores_env_var_wins>
+        <Function test_max_cores_env_var_is_floored_at_one>
+        <Function test_malformed_max_cores_falls_through_to_probes>
+        <Function test_falls_back_to_half_the_host_when_no_quota_is_set>
+        <Function test_fallback_never_returns_zero>
+      <Module test_scraper.py>
+        <Function test_normalize_archetype_removes_possessive_suffix_for_canonical_matching>
+        <Function test_discover_live_matchup_urls_filters_resolves_deduplicates_and_sorts>
+        <Function test_discover_live_matchup_urls_raises_when_request_fails>
+        <Function test_discover_live_matchup_urls_raises_when_no_eligible_urls_are_found>
+        <Function test_a_known_archetype_is_always_parsed>
+        <Function test_a_high_volume_unknown_archetype_is_admitted>
+        <Function test_a_low_volume_unknown_archetype_is_rejected>
+        <Function test_rejecting_a_stranger_does_not_affect_a_known_deck_in_the_same_table>
+        <Function test_excluded_opponents_are_skipped_regardless_of_volume>
+        <Function test_win_rate_counts_ties_as_half>
+        <Function test_an_observed_half_win_rate_is_not_replaced_by_a_mirrored_result>
+    <Dir evolution>
+      <Module test_engine.py>
+        <Function test_tournament_evolution_samples_configured_field_and_returns_fitness>
+        <Function test_evolution_uses_the_configured_seed_for_global_random_steps>
+    <Module test_bdif_stage23.py>
+      <Function test_player_observations_include_each_players_card_presence_and_skip_invalid_pairings>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[None]>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[]>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[null]>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[[]]>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[{]>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[{"pokemon": {}}]>
+      <Function test_limitless_client_sends_key_only_as_an_access_header>
+      <Function test_store_upserts_events_and_counts_unique_card_inclusion>
+      <Function test_store_writes_missing_decklists_as_sql_null>
+      <Function test_store_construction_does_not_modify_existing_database>
+      <Function test_readers_prepare_legacy_store_schema>
+      <Function test_h1_observations_treats_legacy_json_null_as_empty_deck>
+      <Function test_store_persists_and_backfills_canonical_deck_names>
+      <Function test_limitless_client_retries_rate_limit_with_response_contract>
+      <Function test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag>
+      <Function test_observed_skeleton_uses_high_frequency_cards>
+      <Function test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec>
+      <Function test_aggregate_normalises_reversed_player_slots_into_one_pair>
+      <Function test_fitted_card_model_recovers_within_archetype_tech_effect>
+      <Function test_model_artifact_zero_sum_matrix_is_accepted_by_prediction_request>
+      <Function test_select_model_cards_drops_constant_presence_card>
+      <Function test_rank_deficient_card_raises_not_identifiable>
+      <Function test_separated_card_outcomes_raise_not_identifiable>
+      <Function test_card_model_fit_has_no_intercept>
+      <Function test_card_model_artifact_carries_player_observation_counts>
+      <Function test_best60_ranks_positive_pooled_cards_in_score_order>
+      <Function test_best60_normalizes_skeleton_copy_and_ace_spec_rules>
+      <Function test_best60_fill_target_preserves_exact_sixty_card_contract>
+      <Function test_best60_benjamini_hochberg_gate_filters_weak_candidates>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-0]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-4]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-8]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-12]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-16]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-20]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-24]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-28]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-32]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-36]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-40]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-44]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-48]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-52]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-56]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[0-60]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-0]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-4]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-8]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-12]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-16]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-20]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-24]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-28]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-32]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-36]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-40]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-44]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-48]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-52]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-56]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[1-60]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-0]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-4]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-8]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-12]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-16]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-20]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-24]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-28]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-32]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-36]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-40]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-44]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-48]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-52]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-56]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[2-60]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-0]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-4]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-8]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-12]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-16]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-20]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-24]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-28]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-32]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-36]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-40]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-44]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-48]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-52]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-56]>
+      <Function test_best60_legality_matrix_returns_deck_or_status[10-60]>
+      <Function test_best60_rejects_two_ace_specs>
+      <Function test_best60_puts_zero_spanning_interval_in_no_signal_bucket>
+      <Function test_best60_rejects_five_copies>
+      <Function test_recommendation_requires_exactly_sixty_cards>
+      <Function test_panel_decks_include_every_empirical_share_above_threshold>
+      <Function test_panel_decks_cap_at_ten_after_share_threshold>
+      <Function test_best60_reports_card_evidence_and_partial_status>
+      <Function test_basic_energy_is_not_limited_to_four_copies>
+      <Function test_h1_misty_report_changes_when_hammer_variant_is_controlled>
+      <Function test_h1_standard_error_uses_weighted_fisher_information>
+    <Dir tournament>
+      <Module test_monte_carlo.py>
+        <Function test_chunk_seeds_come_from_the_supplied_seed>
+        <Function test_empty_meta_distribution_uses_a_uniform_field>
+        <Function test_posterior_draw_budget_follows_the_precision_tier[1 - BULLET]>
+        <Function test_posterior_draw_budget_follows_the_precision_tier[2 - BLITZ]>
+        <Function test_posterior_draw_budget_follows_the_precision_tier[3 - STANDARD]>
+        <Function test_posterior_draw_budget_follows_the_precision_tier[4 - EXHAUSTIVE]>
+        <Function test_posterior_draw_budget_follows_the_precision_tier[5 - MAXIMUM]>
+        <Function test_metrics_carry_binomial_monte_carlo_standard_errors>
+        <Function test_empty_deck_result_keeps_the_engine_report_shape>
+        <Function test_hierarchical_posterior_shrinks_a_six_match_pair_toward_field_prior>
+        <Function test_winless_deck_pair_gets_positive_posterior_pseudocounts>
+        <Function test_hierarchical_posterior_large_sample_barely_moves_from_observation>
+        <Function test_data_sufficiency_filter_lists_a_low_coverage_deck>
+        <Function test_data_sufficiency_filter_separates_qualified_and_insufficient_decks>
+        <Function test_data_sufficiency_filter_rejects_low_total_matches_with_full_coverage>
+        <Function test_posterior_report_contains_intervals_and_ranked_split>
+        <Function test_matchup_panel_marks_thin_pair_unreliable_and_keeps_unknown_decks>
+        <Function test_exposes_matchup_panel>
+        <Function test_posterior_draws_keep_matchup_matrix_complementary>
+        <Function test_posterior_draws_preserve_requested_iterations>
+        <Function test_posterior_is_invariant_to_deck_order[order0]>
+        <Function test_posterior_is_invariant_to_deck_order[order1]>
+        <Function test_posterior_is_invariant_to_deck_order[order2]>
+        <Function test_posterior_is_invariant_to_deck_order[order3]>
+        <Function test_posterior_is_invariant_to_deck_order[order4]>
+        <Function test_posterior_is_invariant_to_deck_order[order5]>
+        <Function test_field_posterior_best_pick_probabilities_sum_to_one_and_follow_evidence>
+        <Function test_field_posterior_applies_best_of_three_transform>
+        <Function test_field_posterior_is_reproducible_and_collapses_with_evidence>
+      <Module test_reporting.py>
+        <Function test_build_bdif_report_adds_caller_owned_sections>
+      <Module test_solver.py>
+        <Function test_a_bare_float_pins_an_exact_share>
+        <Function test_an_exact_spec_model_pins_an_exact_share>
+        <Function test_unconstrained_decks_split_the_remainder_by_baseline_weight>
+        <Function test_a_range_spec_caps_allocation_at_its_max>
+        <Function test_a_range_spec_floor_is_honoured>
+        <Function test_overallocated_minimum_constraints_are_rejected>
+        <Function test_unknown_deck_names_are_ignored>
+        <Function test_an_empty_spec_returns_the_normalised_baseline>
+        <Function test_every_deck_capped_below_one_is_rejected_as_infeasible>
+        <Function test_minimum_constraints_cannot_exceed_field_capacity>
+        <Function test_empirical_baseline_weights_by_match_volume>
+    <Dir ui>
+      <Module test_app.py>
+        <Function test_api_headers_reflects_optional_api_token[None-expected0]>
+        <Function test_api_headers_reflects_optional_api_token[-expected1]>
+        <Function test_api_headers_reflects_optional_api_token[secret-expected2]>
+        <Function test_submit_prediction_passes_a_timeout>
+        <Function test_submit_prediction_passes_api_headers>
+        <Function test_fetch_bdif_status_degrades_on_request_failures[ConnectionError]>
+        <Function test_fetch_bdif_status_degrades_on_request_failures[HTTPError]>
+        <Function test_fetch_bdif_status_degrades_on_request_failures[JSONDecodeError]>
+        <Function test_fetch_bdif_status_returns_json>
+        <Function test_resolve_auto_fill_reports_infeasible_constraints>
+        <Function test_bdif_tabs_render_status_evidence_and_provenance>
+      <Module test_bdif_view.py>
+        <Function test_tier_help_text_is_generated_from_the_thresholds>
+        <Function test_split_by_evidence_keeps_order_and_labels_thin_decks>
+        <Function test_interval_columns_follow_the_view[Player (Micro)-expected_keys0]>
+        <Function test_interval_columns_follow_the_view[Archetype (Macro)-expected_keys1]>
+        <Function test_interval_columns_fall_back_to_the_monte_carlo_error>
+        <Function test_field_posterior_rows_rank_by_best_pick_and_label_thin_decks>
+        <Function test_best60_view_surfaces_status_evidence_and_no_signal_cards>
+        <Function test_h1_rows_unpack_intervals_from_tuples_or_json_lists>
+        <Function test_panel_rows_preserve_the_eight_report_columns>
+      <Module test_meta_rows.py>
+        <Function test_percentage_mode_divides_by_one_hundred>
+        <Function test_raw_players_mode_divides_by_the_player_count>
+        <Function test_range_rows_are_excluded>
+        <Function test_a_tuple_value_on_an_exact_row_uses_its_first_element>
+        <Function test_zero_players_in_raw_mode_returns_zero_rather_than_dividing_by_zero>
+        <Function test_no_rows_returns_zero>
+        <Function test_unparseable_values_are_skipped>
+        <Function test_spec_maps_deck_names_to_proportions>
+        <Function test_spec_omits_rows_with_no_deck_selected>
+        <Function test_spec_omits_range_rows>
+        <Function test_minimum_share_includes_range_minimums>
+        <Function test_minimum_share_detects_overallocated_exact_rows>
+    <Dir worker>
+      <Module test_queue.py>
+        <Function test_daily_pipeline_reraises_scraper_failures>
+        <Function test_daily_pipeline_writes_through_same_directory_temp_file_and_replaces_target>
+        <Function test_daily_pipeline_removes_temp_file_when_write_fails>
+        <Function test_daily_pipeline_removes_temp_file_when_replace_fails>
+        <Function test_limitless_ingestion_is_disabled_by_default>
+        <Function test_limitless_ingestion_records_failed_events_and_writes_partial_artifact>
+      <Module test_seed_wiring.py>
+        <Function test_worker_passes_the_configured_seed_to_monte_carlo>
+
+======================== 326 tests collected in 1.65s =========================

@@ -311,6 +311,8 @@ def recommend_best60(request: Best60Request) -> dict[str, Any]:
                 )
             ),
             "interval": coefficient_intervals.get(card, (coefficients.get(card, 0.0), coefficients.get(card, 0.0))),
+            "q_value": next((row["q_value"] for row in scored if row["card"] == card), None),
+            "bucket": next((row["bucket"] for row in scored if row["card"] == card), "not scored"),
         }
         for card in candidates
     }

@@ -32,7 +32,21 @@ Set an alternative Redis URL before starting the stack:
 REDIS_URL=redis://redis.example:6379/0 docker compose up -d --build
 ```
 
-The API reads `API_TOKEN` when you provide one in its environment. Protected requests then need an `X-API-Token` header. The checked-in Compose file does not set this variable, so add it through your deployment configuration rather than committing a secret
+When the API uses `API_TOKEN`, pass the same secret to both `api` and `ui`. The UI sends it as `X-API-Token` on prediction, task-stream, and BDIF status requests
+
+Add the variable to both service environment blocks in deployment configuration, for example:
+
+```yaml
+services:
+  api:
+    environment:
+      - API_TOKEN=${API_TOKEN}
+  ui:
+    environment:
+      - API_TOKEN=${API_TOKEN}
+```
+
+Set `API_TOKEN` in the deployment environment before starting the stack. The checked-in Compose file does not set this variable; do not commit a secret
 
 ## Check logs
 

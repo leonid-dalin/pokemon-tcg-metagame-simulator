@@ -192,11 +192,14 @@ def run_prediction(request: PredictionRequest, progress_callback=None, settings:
     else:
         d1, cut, d2, top_cut = swiss_rounds_from_players(players), 99, 0, (8 if players >= 8 else 0)
     store = open_store(settings) if settings.use_card_model else None
-    try:
-        panels = panel_decks_for_report(deck_names, store, settings)
-    except Exception as exc:
-        logger.warning("bdif_panel_selection_failed", error=str(exc), exc_info=True)
-        panels = list(settings.fallback_panel_decks)
+    if request.bdif_panel_decks:
+        panels = list(request.bdif_panel_decks)
+    else:
+        try:
+            panels = panel_decks_for_report(deck_names, store, settings)
+        except Exception as exc:
+            logger.warning("bdif_panel_selection_failed", error=str(exc), exc_info=True)
+            panels = list(settings.fallback_panel_decks)
     try:
         recommendations, h1 = build_report_addons(store, settings)
     except Exception as exc:

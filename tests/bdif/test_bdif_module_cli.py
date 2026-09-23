@@ -145,3 +145,25 @@ def test_unavailable_evidence_exits_three(monkeypatch, capsys, tmp_path):
     assert code == 3
     output = json.loads(captured.out)
     assert output["mc_results"]["insufficient_data"] == ["A"]
+
+
+@pytest.mark.unit
+def test_report_panel_argument_sets_requested_decks(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "matrix.json"
+    source.write_text("{}", encoding="utf-8")
+    requests = []
+
+    class Request:
+        def __init__(self, **kwargs):
+            requests.append(kwargs)
+            self.__dict__.update(kwargs)
+
+    monkeypatch.setattr(cli, "PredictionRequest", Request)
+    monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
+    module = SimpleNamespace(run_prediction=lambda req: {"report": req.bdif_panel_decks})
+
+    code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source), "--panel", "A,B"], module)
+
+    assert code == 0
+    assert requests[0]["bdif_panel_decks"] == ["A", "B"]
+    assert json.loads(captured.out) == {"report": ["A", "B"]}

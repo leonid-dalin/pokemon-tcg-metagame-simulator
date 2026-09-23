@@ -11,6 +11,7 @@ PROTECTED_ENDPOINTS = (
     ("POST", "/api/v1/predict"),
     ("GET", "/api/v1/tasks/task-id"),
     ("GET", "/api/v1/tasks/task-id/stream"),
+    ("GET", "/api/v1/bdif/status"),
 )
 
 

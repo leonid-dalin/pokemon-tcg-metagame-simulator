@@ -1,46 +1,73 @@
 # Enable Limitless and BDIF analytics
 
-BDIF card-model reporting is opt-in. The default configuration keeps the ordinary matchup workflow active and does not fetch or fit the Limitless card model
+BDIF card-model reporting is opt-in. The default configuration keeps the ordinary matchup workflow active, leaves Limitless ingestion disabled, and does not fit the card model
 
-## Enable ingestion
+## Configure the environment
 
-Set `LIMITLESS_INGESTION_ENABLED = True` in `src/core/config.py` for a controlled ingestion run. Provide `LIMITLESS_API_KEY` through the process environment. The client sends it as the `X-Access-Key` header
+Set boolean controls with one of `1`, `true`, `yes`, `on`, `0`, `false`, `no`, or `off`, case-insensitively
 
-Do not put the key in a URL, query parameter, snapshot, log, or committed file
+```bash
+export LIMITLESS_INGESTION_ENABLED=true
+export BDIF_USE_CARD_MODEL=true
+export BDIF_DB_PATH=output/bdif/limitless.db
+export LIMITLESS_API_KEY=replace-with-a-secret-from-your-secret-store
+```
 
-The ingestion task reads up to `LIMITLESS_BACKFILL_TOURNAMENTS` tournaments, which defaults to 200. It writes:
+`BDIF_DB_PATH` defaults to `data/limitless.db`. Use a scratch path for controlled runs. `LIMITLESS_API_KEY` is sent in the `X-Access-Key` header. Do not put the key in a URL, query parameter, snapshot, log, or committed file
 
-- `data/limitless.db`
-- `data/input/limitless_input.json`
-- `data/input/limitless_model_input.json` when the matchup observations meet the model requirements
+## Ingest data
 
-Run the task through the worker entry point after the worker environment has access to the same data volume and credentials
+Run the bounded BDIF ingestion command after the environment has access to the credential and the selected database path
 
-## Enable the card model
+```bash
+python -m src.bdif ingest
+```
 
-Set `BDIF_USE_CARD_MODEL = True` after the model artefact exists. The worker then:
+The command reads up to `LIMITLESS_BACKFILL_TOURNAMENTS` tournaments, which defaults to 200. It writes the ingestion artefact to `data/input/limitless_input.json` and writes a fitted card-model artefact to `data/input/limitless_model_input.json` when the observations identify the model
 
-1. Reads the model input instead of the baseline input when the artefact exists
-2. Selects panel decks using a 3% empirical share threshold, capped at 10 decks
-3. Builds Best-60 recommendations from observed legal skeletons
-4. Adds the H1 Mist Energy report when Alakazam observations are available
+## Check local status
 
-The report is observational. Card inclusion is not a causal estimate of card value
+Use the read-only status command before fitting or reporting
 
-## Data requirements
+```bash
+python -m src.bdif status
+```
 
-The store resolves canonical deck names before readers query standings, matchup rows, deck weights, or decklists. Legacy stores are prepared on first read
+The result reports whether the configured database exists, its path, the number of stored decks, and the number of player observations
 
-Decklists stored as the JSON string `"null"` are treated as empty decklists. New writes use SQL `NULL` for missing decklists
+## Refit the card model
 
-The model requires usable matchup observations. When evidence is too sparse, the worker returns an insufficient-data result for the affected recommendation rather than inventing a list
+Refit from the observations already stored in the configured database
+
+```bash
+python -m src.bdif refit
+```
+
+The command writes `data/input/limitless_model_input.json` when the observations are sufficient and identifiable
+
+## Generate a report
+
+Generate the BDIF report from the configured input data
+
+```bash
+python -m src.bdif report --output output/bdif
+```
+
+Select a panel explicitly with a comma-separated list of deck names. The request accepts at most 10 unique names that exist in the input matrix
+
+```bash
+python -m src.bdif report --panel "Crustle,N's Zoroark" --output output/bdif
+```
+
+The report includes posterior matchup results, field-posterior metrics, card recommendations, H1 output, and provenance when the corresponding evidence is available. A report that lacks required evidence exits with status 3
 
 ## Verify a run
 
-Check that these files exist and inspect their parsed contents before reporting a result:
+Check local inputs and the CLI status without contacting Limitless
 
 ```bash
-python -c "import json; print(json.load(open('data/input/limitless_model_input.json', encoding='utf-8')).keys())"
+python -m src.bdif status
+python -c "import json; print(json.load(open('data/input/limitless_input.json', encoding='utf-8')).keys())"
 ```
 
-Keep the source snapshot and its date with any report. Separate sourced 60-card decklists from model inference
+Keep the source snapshot and its date with any report. Treat card inclusion and fitted coefficients as observational associations, not causal estimates

@@ -30,6 +30,7 @@ from src.core.data import load_matchup_data
 from src.core.config import NASH_EQUILIBRIUM, INPUT_DATA, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, \
     TIER_2_THRESHOLD
 from src.ui.meta_rows import locked_exact_spec, locked_share, minimum_share
+from src.ui import bdif_view
 from src.tournament.solver import swiss_rounds_from_players, get_variant_5_structure, \
     calculate_empirical_baseline, resolve_meta_constraints
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
@@ -135,9 +136,23 @@ def parse_limitless_html(html_str: str, valid_decks: List[str]) -> Tuple[Dict[st
     return parsed_meta, total_players, wildcard_players
 
 
+def api_headers() -> Dict[str, str]:
+    token = os.environ.get("API_TOKEN", "")
+    return {"X-API-Token": token} if token else {}
+
+
+def fetch_bdif_status(api_url: str) -> Dict[str, Any] | None:
+    try:
+        response = requests.get(f"{api_url}/bdif/status", headers=api_headers(), timeout=5)
+        response.raise_for_status()
+        return response.json()
+    except (requests.exceptions.ConnectionError, requests.exceptions.HTTPError, json.JSONDecodeError):
+        return None
+
+
 def submit_prediction(api_url: str, request_model: PredictionRequest) -> str:
     response = requests.post(
-        f"{api_url}/predict", json=request_model.model_dump(mode="json"), timeout=45
+        f"{api_url}/predict", json=request_model.model_dump(mode="json"), headers=api_headers(), timeout=45
     )
     response.raise_for_status()
     return response.json()["task_id"]
@@ -240,61 +255,62 @@ def get_tier(expected_wr: float) -> str:
 
 
 def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
-    matchup_panel = mc_res["matchup_panel"]
-    recommendations = mc_res["best60_recommendations"]
-    h1_report = mc_res["h1_report"]
-    matchup_tab, best60_tab, h1_tab = st.tabs(
-        ["BDIF matchup panel", "Best-60 card recommendations", "H1 report"]
+    field_tab, matchup_tab, best60_tab, h1_tab, provenance_tab = st.tabs(
+        ["Field posterior", "BDIF matchup panel", "Best-60 card recommendations", "H1 report", "Provenance"]
     )
+    with field_tab:
+        rows = bdif_view.field_posterior_rows(mc_res.get("field_posterior", {}), mc_res.get("insufficient_data", []))
+        if rows:
+            st.caption("Expected match win rate against the predicted field, over posterior draws of the matchup matrix.")
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+        else:
+            st.info("Field posterior metrics need matchup match counts in the input.")
     with matchup_tab:
-        panel_rows = []
-        for panel_deck, rows in matchup_panel.get("rows", {}).items():
-            for row in rows:
-                panel_rows.append({
-                    "Deck": panel_deck,
-                    "Opponent": row["opponent"],
-                    "Posterior mean %": round(float(row["mean"]) * 100, 2),
-                    "95% lower %": round(float(row["lower"]) * 100, 2),
-                    "95% upper %": round(float(row["upper"]) * 100, 2),
-                    "Matches": int(row["match_count"]),
-                    "Reliable": "Yes" if row["reliable"] else "Thin sample",
-                    "Mirror": "Yes" if row["mirror"] else "",
-                })
-        if panel_rows:
-            st.caption("Posterior matchup estimates against the six most-played decks in this simulation.")
-            st.dataframe(pd.DataFrame(panel_rows), width="stretch", hide_index=True)
+        matchup_panel = mc_res.get("matchup_panel", {})
+        rows = bdif_view.panel_rows(matchup_panel)
+        if rows:
+            st.caption("Posterior matchup estimates against the selected panel decks.")
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
         if matchup_panel.get("unmatched"):
             st.warning("Unmatched panel decks: " + ", ".join(matchup_panel["unmatched"]))
     with best60_tab:
-        if recommendations:
-            for archetype, recommendation in recommendations.items():
-                st.markdown(f"#### {archetype}")
-                st.caption("Observational associations, not causal effects. Cards whose interval spans zero are no signal.")
-                st.dataframe(pd.DataFrame(recommendation.get("cards", [])), width="stretch", hide_index=True)
-        else:
+        recommendations = mc_res.get("best60_recommendations", {})
+        if not recommendations:
             st.info("Best-60 recommendations require an enabled card model and populated Limitless fixtures.")
+        for archetype, recommendation in recommendations.items():
+            view = bdif_view.best60_view(recommendation)
+            st.markdown(f"#### {archetype}")
+            st.caption("Observational associations, not causal effects.")
+            if view["status"] != "complete":
+                st.warning(f"{archetype}: {view['status']}")
+            if view["cards"]:
+                st.dataframe(pd.DataFrame(view["cards"]), width="stretch", hide_index=True)
+                st.caption(f"{view['total_copies']} cards")
+            if view["evidence"]:
+                with st.expander("Card evidence"):
+                    st.dataframe(pd.DataFrame(view["evidence"]), width="stretch", hide_index=True)
+            if view["no_signal"]:
+                st.caption("No signal: " + ", ".join(view["no_signal"]))
     with h1_tab:
+        h1_report = mc_res.get("h1_report", {})
         if h1_report:
             st.markdown(f"#### H1: {MIST_ENERGY_NAME} vs Alakazam Dudunsparce")
-            st.caption("Flat-Elo observational association. The report is not a causal claim.")
-            interpretation = h1_report.get("interpretation")
-            if interpretation:
-                st.write(interpretation)
-            summary = []
-            for label, result in (
-                ("Without variant control", h1_report.get("without_variant", {})),
-                ("With variant control", h1_report.get("with_variant", {})),
-            ):
-                if result:
-                    summary.append({
-                        "Model": label,
-                        "Beta": float(result.get("beta", 0.0)),
-                        "95% interval": str(result.get("interval", "")),
-                    })
-            if summary:
-                st.dataframe(pd.DataFrame(summary), width="stretch", hide_index=True)
+            st.caption("Observational association from a logistic model, not a causal claim.")
+            if h1_report.get("interpretation"):
+                st.write(h1_report["interpretation"])
+            rows = bdif_view.h1_rows(h1_report)
+            if rows:
+                st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
         else:
             st.info("The H1 report requires populated Limitless fixtures.")
+    with provenance_tab:
+        st.dataframe(pd.DataFrame(bdif_view.provenance_rows(mc_res.get("provenance", {}))), width="stretch", hide_index=True)
+        st.download_button(
+            "Download the full report (JSON)",
+            data=json.dumps(mc_res, indent=2, default=str),
+            file_name="bdif_report.json",
+            mime="application/json",
+        )
 
 
 # --- State Management ---
@@ -320,6 +336,20 @@ def main():
     # ==========================================    
     with st.sidebar:
         st.header("🏟️ Tournament Settings")
+
+        api_url = os.environ.get("API_URL", "http://localhost:8000/api/v1")
+        bdif_status = fetch_bdif_status(api_url)
+        if bdif_status is None:
+            st.caption("BDIF status unavailable")
+        else:
+            st.caption(f"BDIF: {bdif_status.get('status', 'unknown')}")
+        bdif_panel_decks = st.multiselect(
+            "BDIF panel decks",
+            options=get_valid_deck_names(),
+            default=[],
+            max_selections=10,
+            help="Select decks for the BDIF matchup panel. Leave empty for automatic selection.",
+        )
 
         player_field = PredictionRequest.model_fields['total_players']
         tie_field = PredictionRequest.model_fields['global_tie_rate']
@@ -688,11 +718,11 @@ def main():
                         "use_tie_convergence": use_tie_convergence,
                         "use_drop_feature": use_drop_feature,
                         "min_sample_threshold": min_sample_threshold,
+                        "bdif_panel_decks": bdif_panel_decks or None,
                     }
 
                     # 2. Validate client-side, then POST to FastAPI.
                     request_model = PredictionRequest(**payload)
-                    api_url = os.environ.get("API_URL", "http://localhost:8000/api/v1")
                     app_logger.info("dispatching_prediction_request", job_id=job_id, api_url=api_url)
                     task_id = submit_prediction(api_url, request_model)
 
@@ -706,7 +736,7 @@ def main():
                         while retries < max_retries and not is_complete:
                             try:
                                 with requests.get(f"{api_url}/tasks/{task_id}/stream?job_id={job_id}", stream=True,
-                                                  timeout=45) as stream_response:
+                                                  headers=api_headers(), timeout=45) as stream_response:
                                     stream_response.raise_for_status()
 
                                     for line in stream_response.iter_lines():
@@ -807,8 +837,14 @@ def main():
         active_decks = [
             str(d) for d in full_deck_names
             if res["metrics_per_deck"][d]["meta_share"] >= 0.001
-            and str(d) not in mc_insufficient_data
         ]
+        supported_decks, thin_decks = bdif_view.split_by_evidence(active_decks, mc_insufficient_data)
+        show_thin = st.checkbox(
+            f"Show {len(thin_decks)} decks with thin matchup evidence",
+            value=False,
+            help="Thin: fewer than 1,000 recorded matches, or under 60% of matches in pairs with at least 250 games.",
+        ) if thin_decks else False
+        active_decks = supported_decks + (thin_decks if show_thin else [])
         all_decks_sorted = sorted(active_decks, key=lambda d: float(res["metrics_per_deck"][d][sort_key]), reverse=True)
 
         # Calculate Day 2 Expected Win Rates dynamically
@@ -836,6 +872,7 @@ def main():
                 "Deck": str(deck),
                 "Type": "🔒 User" if deck in user_meta else "📈 Base",
                 "Tier": get_tier(float(metrics["expected_win_rate"])),
+                "Evidence": "Thin" if deck in thin_decks else "OK",
                 "Power Score": round(float(metrics["power_score"]), 2),
                 "Freq Score": round(float(metrics["frequency_score"]), 2),
                 "Meta Score": round(float(metrics["base_meta_score"]), 2),
@@ -861,11 +898,12 @@ def main():
                     row_data["Share % (Winner)"] = round(
                         float(mc_metrics.get("win_probability", 0)) * meta_share * players * 100, 2)
 
+            row_data.update(bdif_view.interval_columns(mc_metrics, mc_res["posterior"], odds_view, top_cut, d2_rounds))
             data.append(row_data)
 
         df = pd.DataFrame(data)
 
-        base_cols = ["#", "Deck", "Type", "Tier", "Power Score", "Freq Score", "Meta Score", "Power Ranking (Day 1)"]
+        base_cols = ["#", "Deck", "Type", "Tier", "Evidence", "Power Score", "Freq Score", "Meta Score", "Power Ranking (Day 1)"]
         if d2_rounds > 0 and np.sum(day2_share_vec) > 0:
             base_cols.append("Power Ranking (Day 2)")
 
@@ -878,6 +916,7 @@ def main():
             if top_cut > 0: mc_cols.extend([f"Share % (Top {top_cut})", "Share % (Winner)"])
 
         final_column_order = base_cols + mc_cols
+        final_column_order += [column for column in df.columns if column not in final_column_order]
 
         col_config = {
             "#": st.column_config.TextColumn(width="small"),
@@ -885,7 +924,7 @@ def main():
             "Type": st.column_config.TextColumn(width="small",
                                                 help="Forced by user constraint (🔒) or simulated baseline (📈)."),
             "Tier": st.column_config.TextColumn(width="small",
-                                                help="T0 (≥52.5%), T0.5 (≥50%), T1 (≥47.5%), T2 (≥45%), T3 (≥42.5%), T4 (≥0%)."),
+                                                help=bdif_view.tier_help_text(TIER_THRESHOLDS)),
             "Power Score": st.column_config.NumberColumn(width="small", format="%.2f",
                                                          help="Normalization of Win Rate. 100 is the best performing deck. Can be negative."),
             "Freq Score": st.column_config.NumberColumn(width="small", format="%.2f",
