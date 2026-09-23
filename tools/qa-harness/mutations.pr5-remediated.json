@@ -43,9 +43,9 @@
   },
   {
     "name": "task4: remove the feature-flag gate",
-    "file": "src/worker/queue.py",
-    "find": "    if not BDIF_USE_CARD_MODEL:\n        return {}, {}\n\n",
-    "replace": ""
+    "file": "src/bdif/service.py",
+    "find": "    if not settings.use_card_model or not os.path.exists(settings.db_path):\n        return {}, {}\n",
+    "replace": "    if not os.path.exists(settings.db_path):\n        return {}, {}\n"
   },
   {
     "name": "task4: let addon failures kill the job again",

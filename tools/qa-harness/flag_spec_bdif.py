@@ -1,12 +1,12 @@
 import json, os, tempfile
 
 import src.core.config as config
-import src.worker.queue as queue
+import src.bdif.service as service
 from src.core.data import load_matchup_data
 from src.ingestion.model import fit_card_model, model_artifact, select_model_cards
 from src.ingestion.model import PlayerObservation
 
-FLAGS = ["src.worker.queue.BDIF_USE_CARD_MODEL"]
+FLAGS = ["src.core.config.BDIF_USE_CARD_MODEL"]
 
 
 def _seed_card_model_artifact(root):
@@ -34,17 +34,15 @@ def smoke():
     root = tempfile.mkdtemp()
     baseline = _seed_card_model_artifact(root)
     cwd = os.getcwd()
+    previous_input = config.INPUT_DATA
     os.chdir(root)
+    config.INPUT_DATA = baseline
     try:
-        previous = queue.INPUT_DATA
-        queue.INPUT_DATA = baseline
-        try:
-            chosen = queue._simulation_input_path()
-            names, matrix, details = load_matchup_data(chosen, config.MIN_GAMES)
-        finally:
-            queue.INPUT_DATA = previous
+        chosen = service.simulation_input_path(service.BdifSettings.from_environment())
+        names, matrix, details = load_matchup_data(chosen, config.MIN_GAMES)
     finally:
         os.chdir(cwd)
+        config.INPUT_DATA = previous_input
     if not names:
         return (f"_simulation_input_path() chose {os.path.basename(chosen)}; "
                 f"load_matchup_data returned 0 decks at MIN_GAMES={config.MIN_GAMES}")
