@@ -13,23 +13,6 @@ from src.core.config import BDIF_PANEL_MAX_DECKS, BDIF_PANEL_SHARE_THRESHOLD
 MIST_ENERGY_NAME = "Mist Energy"
 
 
-def _decklist_card_names(raw: str | None) -> frozenset[str]:
-    if not raw or raw == "null":
-        return frozenset()
-    try:
-        payload = json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        return frozenset()
-    if not isinstance(payload, dict):
-        return frozenset()
-    return frozenset(
-        str(card["name"])
-        for group in payload.values()
-        if isinstance(group, list)
-        for card in group
-        if isinstance(card, dict) and card.get("name") is not None and str(card["name"]).strip()
-    )
-
 ACE_SPEC_CARDS = frozenset({
     "Amulet of Hope", "Awakening Drum", "Brilliant Blender", "Dangerous Laser",
     "Deluxe Bomb", "Energy Search Pro", "Enriching Energy", "Grand Tree",

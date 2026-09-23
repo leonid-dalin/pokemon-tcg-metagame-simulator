@@ -3,8 +3,8 @@ import sqlite3
 import pytest
 
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import Best60Request, _decklist_card_names, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, select_panel_decks, validate_recommendation
-from src.ingestion.store import LimitlessStore, PlayerObservation
+from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, select_panel_decks, validate_recommendation
+from src.ingestion.store import LimitlessStore, PlayerObservation, _decklist_card_names
 from src.ingestion.aggregate import build_artifact
 from src.core.scraper import normalize_archetype
 

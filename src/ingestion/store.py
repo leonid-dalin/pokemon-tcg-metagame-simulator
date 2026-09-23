@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from src.core.scraper import normalize_archetype
-from src.ingestion.model import ACE_SPEC_CARDS, _card_limit, _decklist_card_names
+from src.ingestion.model import ACE_SPEC_CARDS, _card_limit
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tournaments (id TEXT PRIMARY KEY, game TEXT, format TEXT, name TEXT, date TEXT, players INTEGER, details_json TEXT);
@@ -25,6 +25,24 @@ class PlayerObservation:
     deck_cards: frozenset[str]
     opponent_cards: frozenset[str]
     result: int
+
+
+def _decklist_card_names(raw: str | None) -> frozenset[str]:
+    if not raw or raw == "null":
+        return frozenset()
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return frozenset()
+    if not isinstance(payload, dict):
+        return frozenset()
+    return frozenset(
+        str(card["name"])
+        for group in payload.values()
+        if isinstance(group, list)
+        for card in group
+        if isinstance(card, dict) and card.get("name") is not None and str(card["name"]).strip()
+    )
 
 
 class LimitlessStore:

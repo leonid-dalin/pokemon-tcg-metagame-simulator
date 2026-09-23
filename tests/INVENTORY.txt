@@ -210,6 +210,13 @@ collected 258 items
       <Function test_h1_misty_report_changes_when_hammer_variant_is_controlled>
       <Function test_h1_standard_error_uses_weighted_fisher_information>
       <Function test_card_model_artifact_carries_observation_counts>
+      <Function test_player_observations_include_each_players_card_presence_and_skip_invalid_pairings>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[None]>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[]>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[null]>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[[]]>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[{]>
+      <Function test_decklist_card_names_returns_empty_for_invalid_payloads[{"pokemon": {}}]>
     <Dir tournament>
       <Module test_monte_carlo.py>
         <Function test_chunk_seeds_come_from_the_supplied_seed>
