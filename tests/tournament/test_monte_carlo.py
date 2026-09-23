@@ -1,8 +1,11 @@
 import numpy as np
 import pytest
 import json
+import itertools
 from pathlib import Path
 
+from src.api.models import PrecisionTier, TIER_MAPPING
+from src.core.config import BDIF_MIN_INTERVAL_DRAWS, BDIF_MIN_ITERATIONS_PER_DRAW, BDIF_POSTERIOR_DRAWS
 from src.tournament import monte_carlo
 
 
@@ -61,6 +64,86 @@ def test_empty_meta_distribution_uses_a_uniform_field(monkeypatch):
     assert distributions == [[0.5, 0.5]]
 
 
+TWO_DECK_DETAILS = {
+    ("a", "b"): {"win_rate": 0.6, "match_count": 2_000},
+    ("b", "a"): {"win_rate": 0.4, "match_count": 2_000},
+}
+
+EXPECTED_DRAWS_BY_TIER = {
+    PrecisionTier.BULLET: 10,
+    PrecisionTier.BLITZ: 100,
+    PrecisionTier.STANDARD: 200,
+    PrecisionTier.EXHAUSTIVE: 200,
+    PrecisionTier.MAXIMUM: 200,
+}
+
+
+@pytest.mark.parametrize("tier", list(PrecisionTier))
+@pytest.mark.unit
+def test_posterior_draw_budget_follows_the_precision_tier(monkeypatch, tier):
+    calls = []
+    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
+    monkeypatch.setattr(
+        monte_carlo.tcg_engine,
+        "run_parallel_monte_carlo",
+        lambda n, *args: (calls.append(n) or ([n, n], [n // 2, n // 2], [1, 1], [1, 1])),
+    )
+
+    result = monte_carlo.run_monte_carlo_analytics(
+        deck_names=["a", "b"],
+        win_matrix=np.array([[0.5, 0.6], [0.4, 0.5]]),
+        meta_distribution={"a": 0.5, "b": 0.5},
+        matchup_details=TWO_DECK_DETAILS,
+        d1_rounds=1,
+        cut_points=1,
+        d2_rounds=1,
+        top_cut=1,
+        iterations=TIER_MAPPING[tier],
+    )
+
+    expected_draws = min(
+        BDIF_POSTERIOR_DRAWS,
+        max(1, TIER_MAPPING[tier] // BDIF_MIN_ITERATIONS_PER_DRAW),
+    )
+    assert len(calls) == expected_draws
+    assert sum(calls) == TIER_MAPPING[tier]
+    assert result["posterior"]["draws"] == expected_draws
+    assert result["posterior"]["interval_status"] == (
+        "ok" if expected_draws >= BDIF_MIN_INTERVAL_DRAWS else "too few posterior draws"
+    )
+    assert ("win_probability_lower" in result["metrics"]["a"]) is (
+        expected_draws >= BDIF_MIN_INTERVAL_DRAWS
+    )
+
+
+@pytest.mark.unit
+def test_metrics_carry_binomial_monte_carlo_standard_errors(monkeypatch):
+    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
+    monkeypatch.setattr(
+        monte_carlo.tcg_engine,
+        "run_parallel_monte_carlo",
+        lambda *args: ([400, 400], [100, 300], [40, 40], [4, 36]),
+    )
+
+    result = monte_carlo.run_monte_carlo_analytics(
+        deck_names=["a", "b"],
+        win_matrix=np.array([[0.5, 0.6], [0.4, 0.5]]),
+        meta_distribution={"a": 0.5, "b": 0.5},
+        d1_rounds=1,
+        cut_points=1,
+        d2_rounds=1,
+        top_cut=1,
+        iterations=10,
+    )
+
+    deck = result["metrics"]["a"]
+    assert deck["day2_conversion"] == pytest.approx(0.25)
+    assert deck["day2_conversion_mc_se"] == pytest.approx((0.25 * 0.75 / 400) ** 0.5)
+    assert deck["top_cut_conversion_mc_se"] == pytest.approx((0.1 * 0.9 / 400) ** 0.5)
+    assert deck["win_probability_mc_se"] == pytest.approx((0.01 * 0.99 / 400) ** 0.5)
+    assert result["posterior"] == {"draws": 0, "interval_status": "posterior disabled"}
+
+
 @pytest.mark.unit
 def test_empty_deck_result_keeps_the_engine_report_shape():
     result = monte_carlo.run_monte_carlo_analytics(
@@ -78,6 +161,7 @@ def test_empty_deck_result_keeps_the_engine_report_shape():
         "metrics": {},
         "ranked_metrics": {},
         "insufficient_data": [],
+        "posterior": {"draws": 0, "interval_status": "posterior disabled"},
         "matchup_panel": {
             "rows": {},
             "unmatched": ["Unknown deck"],
@@ -104,7 +188,7 @@ def test_hierarchical_posterior_shrinks_a_six_match_pair_toward_field_prior():
 
     posterior_mean = alpha[0, 1] / (alpha[0, 1] + beta[0, 1])
     reverse_mean = alpha[1, 0] / (alpha[1, 0] + beta[1, 0])
-    assert 0.45 < posterior_mean < 0.6
+    assert posterior_mean == pytest.approx(11 / 16)
     assert posterior_mean + reverse_mean == pytest.approx(1.0)
 
 
@@ -149,7 +233,7 @@ def test_winless_deck_pair_gets_positive_posterior_pseudocounts(monkeypatch):
         posterior_draws=1,
     )
 
-    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel"}
+    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel", "posterior"}
 
 
 @pytest.mark.unit
@@ -250,11 +334,12 @@ def test_posterior_report_contains_intervals_and_ranked_split(monkeypatch):
         cut_points=1,
         d2_rounds=1,
         top_cut=1,
-        iterations=4,
-        posterior_draws=2,
+        iterations=5_000,
+        posterior_draws=50,
     )
 
-    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel"}
+    assert set(result) == {"metrics", "ranked_metrics", "insufficient_data", "matchup_panel", "posterior"}
+    assert result["posterior"] == {"draws": 50, "interval_status": "ok"}
     assert not result["insufficient_data"]
     assert result["ranked_metrics"]["a"]["day2_share_lower"] <= result["ranked_metrics"]["a"]["day2_share_upper"]
 
@@ -374,3 +459,35 @@ def test_posterior_draws_preserve_requested_iterations(monkeypatch):
     )
 
     assert sum(iterations_seen) == 999
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("order", list(itertools.permutations(["S", "T", "W"])))
+def test_posterior_is_invariant_to_deck_order(order):
+    observed = {("S", "W"): 0.7, ("W", "S"): 0.3, ("T", "W"): 0.7, ("W", "T"): 0.3}
+    details = {
+        (deck, opponent): {
+            "win_rate": observed.get((deck, opponent), 0.5),
+            "match_count": 2_000 if (deck, opponent) in observed else 0,
+        }
+        for deck in order
+        for opponent in order
+        if deck != opponent
+    }
+
+    alpha, beta, _ = monte_carlo.build_hierarchical_beta_posteriors(
+        list(order), np.full((3, 3), 0.5), details,
+    )
+
+    index = {deck: position for position, deck in enumerate(order)}
+    means = {
+        (deck, opponent): alpha[index[deck], index[opponent]]
+        / (alpha[index[deck], index[opponent]] + beta[index[deck], index[opponent]])
+        for deck in order
+        for opponent in order
+        if deck != opponent
+    }
+    assert means[("S", "T")] == pytest.approx(0.5)
+    assert means[("S", "W")] == pytest.approx(means[("T", "W")])
+    for (deck, opponent), value in means.items():
+        assert value + means[(opponent, deck)] == pytest.approx(1.0)

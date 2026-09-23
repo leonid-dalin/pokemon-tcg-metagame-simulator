@@ -3,10 +3,38 @@ import sqlite3
 import pytest
 
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import Best60Request, fit_h1_misty_variant, fit_model, h1_observations, model_artifact, recommend_best60, select_panel_decks, validate_recommendation
-from src.ingestion.store import LimitlessStore
+from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerObservation, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, recommend_best60, select_model_cards, select_panel_decks, validate_recommendation
+from src.api.models import PredictionRequest
+from src.ingestion.store import LimitlessStore, _decklist_card_names
 from src.ingestion.aggregate import build_artifact
 from src.core.scraper import normalize_archetype
+
+
+@pytest.mark.unit
+def test_player_observations_include_each_players_card_presence_and_skip_invalid_pairings(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    store.upsert_standings("event", [
+        {"player": "p1", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "A"}, {"name": "Shared"}], "trainer": [{"name": "Shared"}]}},
+        {"player": "p2", "deck": {"id": "b"}, "decklist": {"energy": [{"name": "B"}]}},
+        {"player": "p3", "deck": {"id": "a"}, "decklist": None},
+        {"player": "p4", "deck": {"id": "b"}, "decklist": {}},
+    ])
+    store.upsert_pairings("event", [
+        {"round": 1, "player1": "p1", "player2": "p2", "winner": "p2"},
+        {"round": 2, "player1": "p1", "player2": "p2", "winner": "0"},
+        {"round": 3, "player1": "p3", "player2": "p2", "winner": "p3"},
+        {"round": 4, "player1": "p1", "player2": "p4", "winner": "p1"},
+        {"round": 5, "player1": "p1", "player2": "missing", "winner": "p1"},
+    ])
+
+    assert store.player_observations() == [
+        PlayerObservation("a", "b", frozenset({"A", "Shared"}), frozenset({"B"}), 0),
+    ]
+
+
+@pytest.mark.parametrize("raw", [None, "", "null", "[]", "{", "{\"pokemon\": {}}"])
+def test_decklist_card_names_returns_empty_for_invalid_payloads(raw):
+    assert _decklist_card_names(raw) == frozenset()
 
 
 @pytest.mark.unit
@@ -205,14 +233,91 @@ def test_aggregate_normalises_reversed_player_slots_into_one_pair():
 
 
 @pytest.mark.unit
-def test_fitted_card_model_recovers_positive_card_edge():
-    observations = [("a", "b", 1)] * 80 + [("b", "a", 0)] * 20
-    model = fit_model(
-        observations,
-        {"a": {"Misty": 1.0}, "b": {"Misty": 0.0}},
-    )
+def test_fitted_card_model_recovers_within_archetype_tech_effect():
+    observations = []
+    for index in range(120):
+        has_tech = index % 2 == 0
+        a_cards = frozenset({"Core", "Tech"} if has_tech else {"Core"})
+        b_cards = frozenset({"Core"})
+        result = int(index % 10 < (8 if has_tech else 2))
+        result = 1 - result if index % 11 == 0 else result
+        observations.append(PlayerObservation("a", "b", a_cards, b_cards, result))
+        observations.append(PlayerObservation("b", "a", b_cards, a_cards, 1 - result))
+    model = fit_card_model(observations, select_model_cards(observations))
 
-    assert model.probability("a", "b") > 0.5
+    coefficients, intervals = model.coefficient_report()
+    assert coefficients["Tech"] > 0
+    assert intervals["Tech"][0] > 0
+
+
+@pytest.mark.unit
+def test_model_artifact_zero_sum_matrix_is_accepted_by_prediction_request():
+    observations = []
+    for index in range(120):
+        has_tech = index % 2 == 0
+        a_cards = frozenset({"Core", "Tech", "Filler"} if has_tech else {"Core", "Filler"})
+        b_cards = frozenset({"Core", "Filler"} if index % 3 == 0 else {"Core"})
+        result = int(index % 10 < (8 if has_tech else 2))
+        result = 1 - result if index % 11 == 0 else result
+        observations.append(PlayerObservation("a", "b", a_cards, b_cards, result))
+        observations.append(PlayerObservation("b", "a", b_cards, a_cards, 1 - result))
+    artifact = model_artifact(fit_card_model(observations, ["Filler", "Tech"]))
+
+    request = PredictionRequest(**{
+        "job_id": "job",
+        "deck_names": artifact["archetypes"],
+        "matchup_matrix": [[artifact["win_rate_matrix"][left][right]["win_rate"] for right in artifact["archetypes"]] for left in artifact["archetypes"]],
+        "total_players": 4,
+    })
+    assert request.matchup_matrix[0][1] + request.matchup_matrix[1][0] == pytest.approx(1.0)
+
+
+@pytest.mark.unit
+def test_select_model_cards_drops_constant_presence_card():
+    observations = [PlayerObservation("a", "b", frozenset({"Signature"}), frozenset({"Signature"}), index % 2) for index in range(20)]
+    assert "Signature" not in select_model_cards(observations)
+
+
+@pytest.mark.unit
+def test_rank_deficient_card_raises_not_identifiable():
+    observations = [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), index % 2) for index in range(20)]
+    with pytest.raises(CardModelNotIdentifiable):
+        fit_card_model(observations, ["Signature", "Tech"])
+
+
+@pytest.mark.unit
+def test_separated_card_outcomes_raise_not_identifiable():
+    observations = []
+    for index in range(200):
+        result = int(index < 199)
+        observations.append(PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), result))
+        observations.append(PlayerObservation("b", "a", frozenset({"Tech"}), frozenset(), result))
+        observations.append(PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 1 - result))
+        observations.append(PlayerObservation("b", "a", frozenset(), frozenset({"Tech"}), 1 - result))
+    with pytest.raises(CardModelNotIdentifiable, match="separated outcomes"):
+        fit_card_model(observations, ["Tech"])
+
+
+@pytest.mark.unit
+def test_card_model_fit_has_no_intercept():
+    observations = (
+        [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), 1)] * 30
+        + [PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 0)] * 10
+        + [PlayerObservation("b", "a", frozenset({"Tech"}), frozenset(), 0)] * 5
+        + [PlayerObservation("b", "a", frozenset(), frozenset({"Tech"}), 1)] * 15
+    )
+    model = fit_card_model(observations, ["Tech"])
+    assert model.estimator.intercept_.tolist() == [0.0]
+    assert model.estimator.coef_[0, 1] == pytest.approx(0.6931471805599453, abs=1e-5)
+
+
+@pytest.mark.unit
+def test_card_model_artifact_carries_player_observation_counts():
+    observations = [PlayerObservation("a", "b", frozenset({"Core"}), frozenset({"Core"}), 1)] * 10
+    observations += [PlayerObservation("b", "a", frozenset({"Core"}), frozenset({"Core"}), 0)] * 10
+    artifact = model_artifact(fit_card_model(observations, ["Tech"]))
+    assert artifact["win_rate_matrix"]["a"]["b"]["match_count"] == 10
+    assert artifact["win_rate_matrix"]["b"]["a"]["match_count"] == 10
 
 
 @pytest.mark.unit
@@ -399,11 +504,16 @@ def test_h1_standard_error_uses_weighted_fisher_information():
     assert report["without_variant"]["interval"][1] - report["without_variant"]["interval"][0] < 2.0
 
 
-def test_card_model_artifact_carries_observation_counts():
-    model = fit_model(
-        [("a", "b", 1)] * 5 + [("b", "a", 0)] * 5,
-        {"a": {"Misty": 1.0}, "b": {"Misty": 0.0}},
-    )
-    artifact = model_artifact(model)
+def test_card_model_artifact_carries_player_observation_counts(monkeypatch):
+    monkeypatch.setattr("src.ingestion.model.BDIF_CARD_MIN_PLAYERS", 1)
+    observations = []
+    for index in range(10):
+        has_tech = index % 2 == 0
+        a_cards = frozenset({"Core", "Tech", "Filler"} if has_tech else {"Core", "Filler"})
+        b_cards = frozenset({"Core"})
+        result = 1 if index % 4 in {0, 1} else 0
+        observations.append(PlayerObservation("a", "b", a_cards, b_cards, result))
+        observations.append(PlayerObservation("b", "a", b_cards, a_cards, 1 - result))
+    artifact = model_artifact(fit_card_model(observations, ["Tech"]))
     assert artifact["win_rate_matrix"]["a"]["b"]["match_count"] == 10
     assert artifact["win_rate_matrix"]["b"]["a"]["match_count"] == 10

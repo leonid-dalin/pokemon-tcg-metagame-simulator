@@ -6,6 +6,7 @@ import pytest
 
 from src.worker import queue
 from src.core.scraper import normalize_archetype
+from src.ingestion.model import CardModelNotIdentifiable, PlayerObservation
 
 
 @pytest.mark.unit
@@ -268,7 +269,7 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
         def upsert_pairings(self, event_id, pairings):
             pass
 
-        def observations(self):
+        def player_observations(self):
             return []
 
     monkeypatch.chdir(tmp_path)
@@ -281,6 +282,29 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
 
     assert result["failed_events"] == [{"id": "bad", "error": "event unavailable"}]
     assert (tmp_path / "data" / "input" / "limitless_input.json").exists()
+    assert result["model_status"] == "insufficient observations"
+
+
+@pytest.mark.unit
+def test_bdif_builder_reports_non_identifiable_for_each_deck(monkeypatch, tmp_path):
+    class Store:
+        def prepare_for_read(self):
+            pass
+
+        def deck_weights(self):
+            return {"a": 0.5, "b": 0.5}
+
+        def player_observations(self):
+            return [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), 1)] * 2 + [PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 0)] * 2
+
+    monkeypatch.setattr(queue, "BDIF_USE_CARD_MODEL", True)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "limitless.db").touch()
+    monkeypatch.setattr("src.ingestion.model.fit_card_model", lambda observations, cards: (_ for _ in ()).throw(CardModelNotIdentifiable("rank")))
+
+    result, _ = queue._build_bdif_report_addons(Store())
+    assert result == {"a": {"status": "not identifiable", "reason": "rank"}, "b": {"status": "not identifiable", "reason": "rank"}}
 
 
 @pytest.mark.unit
@@ -336,6 +360,7 @@ def test_simulation_job_reuses_one_bdif_store(monkeypatch, tmp_path):
         "metrics": {},
         "ranked_metrics": {},
         "insufficient_data": [],
+        "posterior": {"draws": 0, "interval_status": "posterior disabled"},
         "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
     })
 
@@ -363,6 +388,7 @@ def test_simulation_job_continues_when_bdif_report_builder_raises(monkeypatch, t
         "metrics": {},
         "ranked_metrics": {},
         "insufficient_data": [],
+        "posterior": {"draws": 0, "interval_status": "posterior disabled"},
         "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
     })
 
@@ -379,6 +405,7 @@ def test_simulation_job_continues_when_bdif_report_builder_raises(monkeypatch, t
 
 @pytest.mark.unit
 def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_path):
+    posterior = {"draws": 7, "interval_status": "ok"}
     details = {
         ("a", "a"): {"win_rate": 0.5, "match_count": 10},
         ("a", "b"): {"win_rate": 0.6, "match_count": 10},
@@ -397,10 +424,13 @@ def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_p
         "metrics": {},
         "ranked_metrics": {},
         "insufficient_data": [],
+        "posterior": posterior,
         "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
     })
     monkeypatch.setattr(queue, "_build_bdif_report_addons", lambda: ({}, {}))
     monkeypatch.setattr(queue, "swiss_rounds_from_players", lambda players: 1)
+    report_inputs = []
+    monkeypatch.setattr(queue, "build_bdif_report", lambda mc_res, *args: report_inputs.append(mc_res) or mc_res)
 
     queue.execute_simulation_job.call_local({
         "job_id": "job",
@@ -411,3 +441,4 @@ def test_simulation_job_passes_matchup_details_to_monte_carlo(monkeypatch, tmp_p
 
     assert received[0]["matchup_details"] == details
     assert received[0]["matchup_details"][("a", "b")]["match_count"] == 10
+    assert report_inputs[0]["posterior"] is posterior
