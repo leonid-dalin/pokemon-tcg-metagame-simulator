@@ -1,0 +1,91 @@
+import json
+import logging
+import sys
+from types import SimpleNamespace
+
+import pytest
+
+from src.bdif import cli
+
+
+def _run(monkeypatch, capsys, argv, module):
+    monkeypatch.setattr(sys, "argv", ["python -m src.bdif", *argv])
+    from src.core import logger as logger_module
+    monkeypatch.setattr(logger_module, "setup_structured_logging", lambda: None)
+    monkeypatch.setattr(logger_module.logger, "error", lambda *args, **kwargs: print('{"event": "bdif_command_failed"}', file=sys.stderr))
+    monkeypatch.setattr(cli, "setup_structured_logging", lambda: None)
+    monkeypatch.setattr(cli, "setup_telemetry", lambda name: None)
+    monkeypatch.setitem(sys.modules, "src.bdif.service", module)
+    return_code = cli.main()
+    return return_code, capsys.readouterr()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("command", "method", "result"), [
+    ("status", "bdif_status", {"status": "missing"}),
+    ("ingest", "run_ingestion", {"status": "disabled"}),
+    ("refit", "refit_card_model", {"status": "complete"}),
+])
+def test_module_commands_write_json_only_to_stdout(monkeypatch, capsys, command, method, result):
+    calls = []
+    module = SimpleNamespace(**{method: lambda: calls.append(method) or result})
+    code, captured = _run(monkeypatch, capsys, [command], module)
+    assert code == 0
+    assert calls == [method]
+    assert json.loads(captured.out) == result
+    assert captured.err == ""
+
+
+@pytest.mark.unit
+def test_report_uses_local_input_and_bounded_request(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "matrix.json"
+    source.write_text("{}", encoding="utf-8")
+    output = tmp_path / "new-output"
+    requests = []
+    class Request:
+        def __init__(self, **kwargs):
+            requests.append(kwargs)
+            self.__dict__.update(kwargs)
+    monkeypatch.setattr(cli, "PredictionRequest", Request)
+    monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
+    module = SimpleNamespace(run_prediction=lambda req: {"report": req.total_players})
+    code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source), "--output", str(output), "-P", "64", "--seed", "8", "--meta", "Pikachu:0.2"], module)
+    assert code == 0
+    assert output.is_dir()
+    assert requests[0]["total_players"] == 64
+    assert requests[0]["user_meta_spec"] == {"Pikachu": 0.2}
+    assert json.loads(captured.out) == {"report": 64}
+    assert captured.err == ""
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("argv", [
+    ["report", "--input", "absent.json"],
+    ["report", "-P", "3"],
+    ["report", "--meta", "bad"],
+    ["report", "--meta", "Deck:nope"],
+    ["report", "--tournament-style", "other"],
+])
+def test_invalid_report_arguments_exit_two(monkeypatch, capsys, argv):
+    with pytest.raises(SystemExit) as error:
+        _run(monkeypatch, capsys, argv, SimpleNamespace())
+    assert error.value.code == 2
+
+
+@pytest.mark.unit
+def test_service_failure_exits_one_with_structured_stderr(monkeypatch, capsys):
+    code, captured = _run(monkeypatch, capsys, ["status"], SimpleNamespace(bdif_status=lambda: (_ for _ in ()).throw(RuntimeError("failed"))))
+    assert code == 1
+    assert captured.out == ""
+    assert '"event": "bdif_command_failed"' in captured.err
+
+
+@pytest.mark.unit
+def test_unavailable_evidence_exits_three(monkeypatch, capsys, tmp_path):
+    source = tmp_path / "matrix.json"
+    source.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
+    module = SimpleNamespace(run_prediction=lambda req: {"status": "insufficient_data"})
+    code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source)], module)
+    assert code == 3
+    assert json.loads(captured.out) == {"status": "insufficient_data"}
