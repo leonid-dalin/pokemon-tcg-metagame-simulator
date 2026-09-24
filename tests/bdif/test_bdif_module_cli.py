@@ -175,7 +175,7 @@ def test_report_panel_argument_sets_requested_decks(monkeypatch, tmp_path, capsy
 
     monkeypatch.setattr(cli, "PredictionRequest", Request)
     monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
-    module = SimpleNamespace(run_prediction=lambda req: {"report": req.bdif_panel_decks})
+    module = SimpleNamespace(run_prediction=lambda req, **kwargs: {"report": req.bdif_panel_decks})
 
     code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source), "--panel", "A,B"], module)
 
