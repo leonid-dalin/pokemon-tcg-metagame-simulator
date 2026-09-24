@@ -3,18 +3,37 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from dataclasses import dataclass
 from contextlib import closing
 from pathlib import Path
 from typing import Any, Iterable
 
 from src.core.scraper import normalize_archetype
-from src.ingestion.model import ACE_SPEC_CARDS, _card_limit
+from src.ingestion.model import ACE_SPEC_CARDS, PlayerObservation, _card_limit
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tournaments (id TEXT PRIMARY KEY, game TEXT, format TEXT, name TEXT, date TEXT, players INTEGER, details_json TEXT);
 CREATE TABLE IF NOT EXISTS standings (tournament_id TEXT, player_id TEXT, placing INTEGER, wins INTEGER, losses INTEGER, ties INTEGER, deck_id TEXT, deck_name TEXT, decklist_json TEXT, dropped_round INTEGER, PRIMARY KEY (tournament_id, player_id));
 CREATE TABLE IF NOT EXISTS pairings (tournament_id TEXT, round INTEGER, phase INTEGER, player1 TEXT, player2 TEXT, winner TEXT, PRIMARY KEY (tournament_id, round, phase, player1, player2));
 """
+
+
+def _decklist_card_names(raw: str | None) -> frozenset[str]:
+    if not raw or raw == "null":
+        return frozenset()
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return frozenset()
+    if not isinstance(payload, dict):
+        return frozenset()
+    return frozenset(
+        str(card["name"])
+        for group in payload.values()
+        if isinstance(group, list)
+        for card in group
+        if isinstance(card, dict) and card.get("name") is not None and str(card["name"]).strip()
+    )
 
 
 class LimitlessStore:
@@ -184,6 +203,37 @@ class LimitlessStore:
             elif str(winner) == str(player2):
                 rows.append((str(deck1), str(deck2), 0))
         return rows
+
+    def player_observations(self) -> list[PlayerObservation]:
+        self.prepare_for_read()
+        query = """
+        SELECT s1.deck_name, s2.deck_name, s1.decklist_json, s2.decklist_json,
+               p.winner, p.player1, p.player2
+        FROM pairings p
+        JOIN standings s1 ON s1.tournament_id=p.tournament_id AND s1.player_id=p.player1
+        JOIN standings s2 ON s2.tournament_id=p.tournament_id AND s2.player_id=p.player2
+        WHERE p.player1 != '' AND p.player2 != '' AND p.winner NOT IN ('0', '-1', '')
+          AND s1.deck_name IS NOT NULL AND s2.deck_name IS NOT NULL
+          AND s1.decklist_json IS NOT NULL AND s2.decklist_json IS NOT NULL
+        """
+        with self.connect() as conn:
+            rows = conn.execute(query).fetchall()
+        observations = []
+        for deck, opponent, decklist, opponent_decklist, winner, player1, player2 in rows:
+            deck_cards = _decklist_card_names(decklist)
+            opponent_cards = _decklist_card_names(opponent_decklist)
+            if not deck_cards or not opponent_cards:
+                continue
+            if str(winner) == str(player1):
+                result = 1
+            elif str(winner) == str(player2):
+                result = 0
+            else:
+                continue
+            observations.append(PlayerObservation(
+                str(deck), str(opponent), deck_cards, opponent_cards, result,
+            ))
+        return observations
 
     def observed_skeleton(self, archetype: str) -> list[dict[str, object]]:
         counts: dict[str, int] = {}

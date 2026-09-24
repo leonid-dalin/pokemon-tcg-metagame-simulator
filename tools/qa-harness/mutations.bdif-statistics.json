@@ -1,0 +1,38 @@
+[
+  {
+    "name": "task1: restore the order-dependent averaged prior",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "            prior = 1.0 / (1.0 + np.exp(-(_logit(field_i) - _logit(field_j))))",
+    "replace": "            prior = (field_i + field_j) / 2.0"
+  },
+  {
+    "name": "task2: ignore the per-draw iteration floor",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "        draw_count = max(1, min(posterior_draws, iterations // BDIF_MIN_ITERATIONS_PER_DRAW))",
+    "replace": "        draw_count = posterior_draws"
+  },
+  {
+    "name": "task2: report intervals from any number of draws",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "    elif len(draw_metrics) >= BDIF_MIN_INTERVAL_DRAWS:",
+    "replace": "    elif len(draw_metrics) >= 1:"
+  },
+  {
+    "name": "task4: drop rank guard",
+    "file": "src/ingestion/model.py",
+    "find": "    if np.linalg.matrix_rank(design) < design.shape[1]:\n        raise CardModelNotIdentifiable(\"card design is rank deficient\")",
+    "replace": "    if False:\n        raise CardModelNotIdentifiable(\"card design is rank deficient\")"
+  },
+  {
+    "name": "task4: drop separation guard",
+    "file": "src/ingestion/model.py",
+    "find": "    if float(np.max(np.abs(estimator.coef_))) > BDIF_CARD_MAX_ABS_LOGIT:\n        raise CardModelNotIdentifiable(\"card model indicates separated outcomes\")",
+    "replace": "    if False:\n        raise CardModelNotIdentifiable(\"card model indicates separated outcomes\")"
+  },
+  {
+    "name": "task4: put intercept back",
+    "file": "src/ingestion/model.py",
+    "find": "LogisticRegression(penalty=None, fit_intercept=False, max_iter=1000, random_state=1312)",
+    "replace": "LogisticRegression(penalty=None, fit_intercept=True, max_iter=1000, random_state=1312)"
+  }
+]

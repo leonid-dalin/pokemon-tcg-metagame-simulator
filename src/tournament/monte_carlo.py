@@ -14,16 +14,23 @@ from src.api.models import GLOBAL_TIE_RATE
 from src.core.telemetry import tracer
 from src.core.config import (
     BDIF_COVERAGE_RATIO,
+    BDIF_MIN_INTERVAL_DRAWS,
+    BDIF_MIN_ITERATIONS_PER_DRAW,
     BDIF_MIN_MATCHES,
     BDIF_PAIR_MIN_GAMES,
     BDIF_POSTERIOR_DRAWS,
     BDIF_PRIOR_STRENGTH,
     BDIF_PANEL_DECKS,
+    BDIF_FIELD_POSTERIOR_DRAWS,
 )
 
 logger = structlog.get_logger()
 safe_cores = max(1, get_container_cores())
 os.environ["RAYON_NUM_THREADS"] = str(safe_cores)
+
+
+def _logit(p: float) -> float:
+    return float(np.log(p / (1.0 - p)))
 
 
 def build_hierarchical_beta_posteriors(
@@ -49,7 +56,6 @@ def build_hierarchical_beta_posteriors(
         if matches >= BDIF_PAIR_MIN_GAMES:
             covered[i] += matches
 
-    field_wr = np.divide(wins, totals, out=np.full(n_decks, 0.5), where=totals > 0)
     coverage = np.divide(covered, totals, out=np.zeros(n_decks), where=totals > 0)
     insufficient = [
         deck for i, deck in enumerate(deck_names)
@@ -78,7 +84,9 @@ def build_hierarchical_beta_posteriors(
             else:
                 observed_wr = float(win_matrix[i, j])
                 effective_matches = 0
-            prior = (float(field_wr[i]) + float(field_wr[j])) / 2.0
+            field_i = (wins[i] - forward_wr * forward_matches + 1.0) / (totals[i] - forward_matches + 2.0)
+            field_j = (wins[j] - reverse_wr * reverse_matches + 1.0) / (totals[j] - reverse_matches + 2.0)
+            prior = 1.0 / (1.0 + np.exp(-(_logit(field_i) - _logit(field_j))))
             pair_alpha = observed_wr * effective_matches + prior_strength * prior
             pair_beta = (1.0 - observed_wr) * effective_matches + prior_strength * (1.0 - prior)
             pair_alpha = max(pair_alpha, np.finfo(float).eps)
@@ -149,6 +157,46 @@ def build_matchup_panel(
     return {"rows": rows, "unmatched": unmatched, "opponents": top_decks}
 
 
+def posterior_field_metrics(
+        deck_names: List[str],
+        meta_vector: np.ndarray,
+        alpha: np.ndarray,
+        beta: np.ndarray,
+        match_format: str = "BO3",
+        draws: int = BDIF_FIELD_POSTERIOR_DRAWS,
+        seed: int = 0,
+) -> Dict[str, Dict[str, float]]:
+    """Estimate expected win rates against the field from matchup posteriors."""
+    n_decks = len(deck_names)
+    if n_decks == 0 or draws <= 0:
+        return {}
+    rng = np.random.default_rng(seed)
+    upper_i, upper_j = np.triu_indices(n_decks, k=1)
+    samples = rng.beta(
+        alpha[upper_i, upper_j],
+        beta[upper_i, upper_j],
+        size=(draws, upper_i.size),
+    )
+    matrices = np.full((draws, n_decks, n_decks), 0.5)
+    matrices[:, upper_i, upper_j] = samples
+    matrices[:, upper_j, upper_i] = 1.0 - samples
+    if match_format == "BO3":
+        matrices = 3 * matrices ** 2 - 2 * matrices ** 3
+    expected = matrices @ meta_vector
+    best = expected.max(axis=1, keepdims=True)
+    winners = np.isclose(expected, best)
+    best_pick = (winners / winners.sum(axis=1, keepdims=True)).mean(axis=0)
+    return {
+        deck: {
+            "expected_win_rate": float(expected[:, i].mean()),
+            "expected_win_rate_lower": float(np.quantile(expected[:, i], 0.025)),
+            "expected_win_rate_upper": float(np.quantile(expected[:, i], 0.975)),
+            "best_pick_probability": float(best_pick[i]),
+        }
+        for i, deck in enumerate(deck_names)
+    }
+
+
 def run_monte_carlo_analytics(
         deck_names: List[str],
         win_matrix: np.ndarray,
@@ -182,6 +230,8 @@ def run_monte_carlo_analytics(
             "metrics": {},
             "ranked_metrics": {},
             "insufficient_data": [],
+            "posterior": {"draws": 0, "interval_status": "posterior disabled"},
+            "field_posterior": {},
             "matchup_panel": {
                 "rows": {},
                 "unmatched": list(panel_decks if panel_decks is not None else BDIF_PANEL_DECKS),
@@ -205,12 +255,12 @@ def run_monte_carlo_analytics(
         alpha, beta, insufficient_data = build_hierarchical_beta_posteriors(
             deck_names, win_matrix, matchup_details
         )
-        base_iterations, remainder = divmod(iterations, posterior_draws)
+        draw_count = max(1, min(posterior_draws, iterations // BDIF_MIN_ITERATIONS_PER_DRAW))
+        base_iterations, remainder = divmod(iterations, draw_count)
         draw_sizes = [
             base_iterations + (1 if i < remainder else 0)
-            for i in range(posterior_draws)
+            for i in range(draw_count)
         ]
-        draw_count = posterior_draws
 
         def matrix_sampler(draw_index: int) -> np.ndarray:
             rng = np.random.default_rng(seed + draw_index)
@@ -306,6 +356,7 @@ def run_monte_carlo_analytics(
 
     for i, deck in enumerate(deck_names):
         if total_initial[i] > 0:
+            entrants = float(total_initial[i])
             results[deck] = {
                 "day2_conversion": float(day2_conv[i]),
                 "top_cut_conversion": float(topcut_conv[i]),
@@ -313,9 +364,18 @@ def run_monte_carlo_analytics(
                 "day2_share": float(day2_share[i]),
                 "top_cut_share": float(topcut_share[i]),
             }
+            for metric in ("day2_conversion", "top_cut_conversion", "win_probability"):
+                value = results[deck][metric]
+                results[deck][f"{metric}_mc_se"] = float(np.sqrt(value * (1.0 - value) / entrants))
 
     draw_array = {key: np.array([draw[key] for draw in draw_metrics]) for key in ("day2_share", "top_cut_share", "win_probability")}
-    if use_posterior and draw_metrics:
+    if not use_posterior:
+        interval_status = "posterior disabled"
+    elif len(draw_metrics) >= BDIF_MIN_INTERVAL_DRAWS:
+        interval_status = "ok"
+    else:
+        interval_status = "too few posterior draws"
+    if interval_status == "ok":
         for i, deck in enumerate(deck_names):
             if deck not in results:
                 continue
@@ -326,10 +386,22 @@ def run_monte_carlo_analytics(
         deck: metrics for deck, metrics in results.items()
         if deck not in insufficient_data
     }
+    field_posterior = (
+        posterior_field_metrics(
+            deck_names, meta_vec, alpha, beta,
+            match_format=match_format, seed=seed,
+        )
+        if use_posterior else {}
+    )
     return {
         "metrics": results,
         "ranked_metrics": ranked_metrics,
         "insufficient_data": insufficient_data,
+        "posterior": {
+            "draws": len(draw_metrics) if use_posterior else 0,
+            "interval_status": interval_status,
+        },
+        "field_posterior": field_posterior,
         "matchup_panel": build_matchup_panel(
             deck_names,
             meta_vec,

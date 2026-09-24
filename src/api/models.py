@@ -1,6 +1,6 @@
 # src/api/models.py
 from pydantic import BaseModel, Field, model_validator, ConfigDict
-from typing import Dict, Union, List, Any, Literal
+from typing import Dict, Union, List, Any, Literal, Optional
 from enum import Enum
 
 
@@ -109,6 +109,9 @@ class PredictionRequest(BaseModel):
     use_tie_convergence: bool = Field(default=True)
     use_drop_feature: bool = Field(default=False)
 
+    # 7. BDIF reporting
+    bdif_panel_decks: Optional[List[str]] = Field(default=None, max_length=10)
+
     @model_validator(mode='after')
     def validate_matrix_integrity(self):
         """
@@ -142,6 +145,13 @@ class PredictionRequest(BaseModel):
                     raise ValueError(
                         f"Matchup matrix must be symmetric around 0.5 at [{i}][{j}] and [{j}][i]."
                     )
+
+        if self.bdif_panel_decks is not None:
+            unknown = [deck for deck in self.bdif_panel_decks if deck not in self.deck_names]
+            if unknown:
+                raise ValueError(f"bdif_panel_decks contains decks missing from deck_names: {unknown}")
+            if len(set(self.bdif_panel_decks)) != len(self.bdif_panel_decks):
+                raise ValueError("bdif_panel_decks must be unique")
 
         return self
 

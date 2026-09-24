@@ -6,7 +6,7 @@ import pytest
 
 @pytest.mark.unit
 def test_worker_passes_the_configured_seed_to_monte_carlo():
-    source = Path("src/worker/queue.py").read_text(encoding="utf-8")
+    source = Path("src/bdif/service.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     calls = [
         node
@@ -17,9 +17,6 @@ def test_worker_passes_the_configured_seed_to_monte_carlo():
     ]
 
     assert len(calls) == 1
-    assert any(
-        keyword.arg == "seed"
-        and isinstance(keyword.value, ast.Name)
-        and keyword.value.id == "RNG_SEED"
-        for keyword in calls[0].keywords
-    )
+    seed_keyword = next(keyword for keyword in calls[0].keywords if keyword.arg == "seed")
+    assert "RNG_SEED" in ast.unparse(seed_keyword.value)
+    assert "config" in ast.unparse(seed_keyword.value)

@@ -292,9 +292,32 @@ def run_batch_experiments(args: Args):
 # ----------------------------
 def main():
     """Main entry point for the simulator, initialising standard telemetry."""
+    import argparse
+    import sys
+    command_names = ("--bdif-status", "--bdif-ingest", "--bdif-refit")
+    if any(option in sys.argv[1:] for option in command_names):
+        setup_structured_logging()
+        setup_telemetry("tcg-cli")
+        parser = argparse.ArgumentParser(description="Bounded BDIF data operations")
+        group = parser.add_mutually_exclusive_group(required=True)
+        group.add_argument("--bdif-status", action="store_true", help="Show local BDIF data status.")
+        group.add_argument("--bdif-ingest", action="store_true", help="Ingest bounded BDIF data.")
+        group.add_argument("--bdif-refit", action="store_true", help="Refit from local BDIF data.")
+        arguments = parser.parse_args()
+        if arguments.bdif_status:
+            from src.bdif.service import bdif_status
+            result = bdif_status()
+        elif arguments.bdif_ingest:
+            from src.bdif.service import run_ingestion
+            result = run_ingestion()
+        else:
+            from src.bdif.service import refit_card_model
+            result = refit_card_model()
+        print(json.dumps(result, sort_keys=True))
+        return
+
     setup_structured_logging()
     setup_telemetry("tcg-cli")
-
     args = parse_args()
 
     # --- Prediction Mode ---

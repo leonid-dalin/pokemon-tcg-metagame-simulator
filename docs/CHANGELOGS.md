@@ -2,7 +2,23 @@
 
 ## September 2026
 
-The September release cycle added live matchup discovery, stronger request and matrix validation, Redis-backed SSE reliability, reproducible simulation seeds, the data-backed BDIF card model, and the QA gates that protect those paths
+The September release cycle added live matchup discovery, stronger request and matrix validation, Redis-backed SSE reliability, reproducible simulation seeds, the data-backed BDIF card model, posterior field analytics, the BDIF command line, and the dashboard views that expose those results
+
+### BDIF statistics and CLI
+
+- Replaced the earlier aggregate card-analysis path with a per-player, reference-coded card model with no intercept, identifiability guards, and observational reporting
+- Added posterior matchup intervals with a 200-draw report budget, 100 minimum tournament iterations per draw, a 50-draw interval threshold, and an explicit Monte Carlo standard-error fallback when intervals are unavailable
+- Added the 2,000-draw field posterior, which reports expected win rate against the predicted field and best-pick probability
+- Added `python -m src.bdif` commands for `status`, `ingest`, `refit`, and `report`, including `report --panel` for an explicit panel of up to 10 known decks
+- Added configuration for card-model evidence thresholds, panel selection, posterior budgets, `BDIF_USE_CARD_MODEL`, `LIMITLESS_INGESTION_ENABLED`, and `BDIF_DB_PATH`
+
+### BDIF UI integration
+
+- Added the BDIF status endpoint and request-level panel selection while preserving token protection and rate limits
+- Added thin-evidence labelling, posterior interval columns, tier-threshold help text, and a field-posterior view to the dashboard
+- Added five BDIF tabs: Field posterior, BDIF matchup panel, Best-60 card recommendations, H1 report, and Provenance
+- Added card evidence q-values and verdicts, H1 interval and odds-ratio rows, provenance display, and full-report JSON download
+- Added `API_TOKEN` forwarding from the UI to prediction, task-stream, and BDIF status requests; Compose deployments must set the same token on `api` and `ui`
 
 ### API, deployment, and data pipeline
 
@@ -12,14 +28,6 @@ The September release cycle added live matchup discovery, stronger request and m
 - Dispatched the startup scrape asynchronously and persisted refreshed data atomically
 - Preserved structured SSE failure events, reported failed task status, bounded streams, and centralised Redis Pub/Sub handling
 - Added cgroup-aware CPU limits, unprivileged Compose setup, volume ownership ordering, and the Python and Rust CI workflow
-
-### BDIF analytics
-
-- Added empirical panel selection, posterior matchup evidence, data-backed Best-60 recommendations, and H1 Misty reporting
-- Separated Monte Carlo results from report assembly and simplified the BDIF report renderer
-- Added canonical Limitless deck-name resolution at the storage boundary
-- Prepared legacy SQLite stores on their first read and handled legacy JSON `"null"` decklists in H1 observations
-- Added evidence thresholds for minimum matches, pair coverage, and reliable matchup counts
 
 ### Verification and repository hygiene
 

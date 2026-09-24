@@ -10,6 +10,8 @@ def build_bdif_report(
         "metrics": monte_carlo_result["metrics"],
         "ranked_metrics": monte_carlo_result["ranked_metrics"],
         "insufficient_data": monte_carlo_result["insufficient_data"],
+        "posterior": monte_carlo_result["posterior"],
+        "field_posterior": monte_carlo_result["field_posterior"],
         "matchup_panel": monte_carlo_result["matchup_panel"],
         "best60_recommendations": best60_recommendations or {},
         "h1_report": h1_report or {},

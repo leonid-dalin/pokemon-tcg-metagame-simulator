@@ -6,6 +6,8 @@ def test_build_bdif_report_adds_caller_owned_sections():
         "metrics": {"a": {"win_probability": 0.5}},
         "ranked_metrics": {"a": {"win_probability": 0.5}},
         "insufficient_data": [],
+        "posterior": {"draws": 0, "interval_status": "posterior disabled"},
+        "field_posterior": {},
         "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
     }
 
