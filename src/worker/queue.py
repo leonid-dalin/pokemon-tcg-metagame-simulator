@@ -277,14 +277,19 @@ def ingest_limitless_results():
         if deck.get("name") and (deck.get("identifier") or deck.get("id"))
     }
     store.backfill_deck_names(deck_names)
-    events = client.tournaments(
+    events = list(client.iter_tournaments(
         game="PTCG",
         format="STANDARD",
         limit=LIMITLESS_BACKFILL_TOURNAMENTS,
-    )
+    ))
+    existing_ids = store.existing_tournament_ids()
     failed_events = []
+    skipped_events = 0
     for event in events:
         event_id = str(event["id"])
+        if event_id in existing_ids:
+            skipped_events += 1
+            continue
         try:
             details, standings, pairings = client.fetch_event_bundle(event_id)
             store.upsert_tournament(event, details)
@@ -307,7 +312,7 @@ def ingest_limitless_results():
         inclusion = deck_features(store, artifact["archetypes"])
         fitted = fit_model(observations, inclusion)
         _write_json_atomic(model_artifact(fitted), model_path)
-    return {"status": "complete", "events": len(events), "failed_events": failed_events, "path": artifact_path}
+    return {"status": "complete", "events": len(events), "skipped_events": skipped_events, "failed_events": failed_events, "path": artifact_path}
 
 
 @huey.periodic_task(crontab(minute='0', hour='*/2'))

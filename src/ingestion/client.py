@@ -67,6 +67,27 @@ class LimitlessClient:
     def tournaments(self, **params: Any) -> list[dict[str, Any]]:
         return self._get_list("tournaments", "tournaments", **params)
 
+    def iter_tournaments(
+        self,
+        *,
+        limit: int,
+        page_size: int = 50,
+        **params: Any,
+    ) -> list[dict[str, Any]]:
+        if limit <= 0 or page_size <= 0:
+            return []
+        results = []
+        page = 1
+        while len(results) < limit:
+            rows = self.tournaments(**params, limit=page_size, page=page)
+            if not rows:
+                break
+            results.extend(rows[: limit - len(results)])
+            if len(rows) < page_size:
+                break
+            page += 1
+        return results
+
     def event_details(self, event_id: str) -> dict[str, Any]:
         result = self._get(f"tournaments/{event_id}/details")
         if not isinstance(result, dict):
@@ -84,6 +105,6 @@ class LimitlessClient:
 
     def fetch_event_bundle(self, event_id: str) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
         details = self.event_details(event_id)
-        standings = self.standings(event_id)
+        standings = self.standings(event_id) if details.get("decklists", True) else []
         pairings = self.pairings(event_id)
         return details, standings, pairings

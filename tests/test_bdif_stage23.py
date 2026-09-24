@@ -141,6 +141,54 @@ def test_limitless_client_retries_rate_limit_with_response_contract(monkeypatch)
 
 
 @pytest.mark.unit
+def test_limitless_client_paginates_tournaments(monkeypatch):
+    pages = iter([
+        [{"id": "one"}, {"id": "two"}],
+        [{"id": "three"}],
+    ])
+    calls = []
+
+    class Response:
+        status_code = 200
+        headers = {}
+        content = b"[]"
+
+        def json(self):
+            return next(pages)
+
+    def fake_get(url, **kwargs):
+        calls.append(kwargs["params"])
+        return Response()
+
+    monkeypatch.setattr("src.ingestion.client.requests.get", fake_get)
+    client = LimitlessClient(min_delay=0)
+
+    assert list(client.iter_tournaments(game="PTCG", format="STANDARD", limit=3, page_size=2)) == [
+        {"id": "one"}, {"id": "two"}, {"id": "three"},
+    ]
+    assert calls == [
+        {"game": "PTCG", "format": "STANDARD", "limit": 2, "page": 1},
+        {"game": "PTCG", "format": "STANDARD", "limit": 2, "page": 2},
+    ]
+
+
+@pytest.mark.unit
+def test_fetch_event_bundle_without_decklists_preserves_pairings(monkeypatch):
+    client = LimitlessClient(min_delay=0)
+    calls = []
+    monkeypatch.setattr(client, "event_details", lambda event_id: {"id": event_id, "decklists": False})
+    monkeypatch.setattr(client, "standings", lambda event_id: calls.append("standings") or [])
+    monkeypatch.setattr(client, "pairings", lambda event_id: calls.append("pairings") or [{"player1": "p1", "player2": "p2"}])
+
+    details, standings, pairings = client.fetch_event_bundle("event")
+
+    assert details["decklists"] is False
+    assert standings == []
+    assert pairings == [{"player1": "p1", "player2": "p2"}]
+    assert calls == ["pairings"]
+
+
+@pytest.mark.unit
 def test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag(tmp_path):
     store = LimitlessStore(tmp_path / "limitless.db")
     store.upsert_standings("event", [

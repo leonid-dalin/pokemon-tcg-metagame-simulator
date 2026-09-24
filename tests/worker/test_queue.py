@@ -238,7 +238,7 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
         def from_environment(cls):
             return cls()
 
-        def tournaments(self, **params):
+        def iter_tournaments(self, **params):
             return [{"id": "good"}, {"id": "bad"}]
 
         def game_decks(self):
@@ -258,6 +258,9 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
 
         def backfill_deck_names(self, deck_names):
             pass
+
+        def existing_tournament_ids(self):
+            return set()
 
         def upsert_tournament(self, event, details):
             pass
@@ -281,6 +284,68 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
 
     assert result["failed_events"] == [{"id": "bad", "error": "event unavailable"}]
     assert (tmp_path / "data" / "input" / "limitless_input.json").exists()
+
+
+@pytest.mark.unit
+def test_limitless_ingestion_paginates_skips_stored_events_and_preserves_pairings(monkeypatch, tmp_path):
+    fetched = []
+    stored_ids = {"stored"}
+    pairings = []
+
+    class Client:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def iter_tournaments(self, **params):
+            return iter([{"id": "stored"}, {"id": "fresh"}])
+
+        def game_decks(self):
+            return []
+
+        def fetch_event_bundle(self, event_id):
+            fetched.append(event_id)
+            return ({"decklists": False}, [], [{"player1": "p1", "player2": "p2"}])
+
+    class Store:
+        def __init__(self, path):
+            self.path = path
+
+        def ensure_schema(self):
+            pass
+
+        def backfill_deck_names(self, deck_names):
+            pass
+
+        def existing_tournament_ids(self):
+            return set(stored_ids)
+
+        def upsert_tournament(self, event, details):
+            stored_ids.add(event["id"])
+
+        def upsert_standings(self, event_id, standings):
+            assert standings == []
+
+        def upsert_pairings(self, event_id, rows):
+            pairings.extend(rows)
+
+        def observations(self):
+            return []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(queue, "LIMITLESS_INGESTION_ENABLED", True)
+    monkeypatch.setattr(queue, "LIMITLESS_BACKFILL_TOURNAMENTS", 200)
+    monkeypatch.setattr("src.ingestion.client.LimitlessClient", Client)
+    monkeypatch.setattr("src.ingestion.store.LimitlessStore", Store)
+    monkeypatch.setattr("src.ingestion.aggregate.build_artifact", lambda store: {"archetypes": []})
+
+    first = queue.ingest_limitless_results.call_local()
+    second = queue.ingest_limitless_results.call_local()
+
+    assert fetched == ["fresh"]
+    assert pairings == [{"player1": "p1", "player2": "p2"}]
+    assert first["skipped_events"] == 1
+    assert second["skipped_events"] == 2
 
 
 @pytest.mark.unit
