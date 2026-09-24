@@ -5,6 +5,7 @@ def build_bdif_report(
     monte_carlo_result: Dict[str, Any],
     best60_recommendations: Dict[str, Any],
     h1_report: Dict[str, Any],
+    provenance: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     return {
         "metrics": monte_carlo_result["metrics"],
@@ -15,4 +16,5 @@ def build_bdif_report(
         "matchup_panel": monte_carlo_result["matchup_panel"],
         "best60_recommendations": best60_recommendations or {},
         "h1_report": h1_report or {},
+        "provenance": provenance or {},
     }

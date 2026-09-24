@@ -81,7 +81,7 @@ def main() -> int:
                 deck_names=deck_names, matchup_matrix=matrix.tolist(),
                 bdif_panel_decks=args.panel,
             )
-            result = service.run_prediction(request, seed=args.seed)
+            result = service.run_prediction(request, seed=args.seed, input_path=args.input)
         print(json.dumps(result, sort_keys=True, default=lambda value: value.value if hasattr(value, "value") else str(value)))
         if args.command == "report" and _evidence_unavailable(result):
             return 3

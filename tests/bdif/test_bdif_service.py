@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import os
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import pytest
 from src.api.models import PredictionRequest
 from src.bdif import service
 from src.bdif.settings import BdifSettings
+from src.core import config
 from src.ingestion.model import CardModelNotIdentifiable, PlayerObservation
 
 
@@ -131,11 +133,57 @@ def test_prediction_passes_matchup_details_and_report_addons(monkeypatch):
     monkeypatch.setattr(service, "panel_decks_for_report", lambda *args: [])
     monkeypatch.setattr(service, "build_report_addons", lambda *args: ({"best": 1}, {"h1": 2}))
     monkeypatch.setattr(service, "run_monte_carlo_analytics", lambda **kwargs: seen.append(kwargs) or {})
-    monkeypatch.setattr(service, "build_bdif_report", lambda result, *args: reports.append(args) or result)
+    monkeypatch.setattr(service, "build_bdif_report", lambda result, *args: reports.append(args[:2]) or result)
     request = PredictionRequest(job_id="job", deck_names=["a", "b"], matchup_matrix=[[.5,.6],[.4,.5]], total_players=4)
     service.run_prediction(request, settings=settings())
     assert seen[0]["matchup_details"] == details
     assert reports == [({"best": 1}, {"h1": 2})]
+
+
+@pytest.mark.unit
+def test_prediction_without_a_seed_uses_the_configured_seed(monkeypatch):
+    seen = []
+    monkeypatch.setattr(service, "load_matchup_data", lambda *args: (["a", "b"], np.array([[.5, .6], [.4, .5]]), {}))
+    monkeypatch.setattr(service, "predict_best_decks", lambda request: {"full_meta": {"a": .5, "b": .5}})
+    monkeypatch.setattr(service, "swiss_rounds_from_players", lambda players: 1)
+    monkeypatch.setattr(service, "open_store", lambda cfg: None)
+    monkeypatch.setattr(service, "panel_decks_for_report", lambda *args: [])
+    monkeypatch.setattr(service, "build_report_addons", lambda *args: ({}, {}))
+    monkeypatch.setattr(service, "run_monte_carlo_analytics", lambda **kwargs: seen.append(kwargs["seed"]) or {})
+    monkeypatch.setattr(service, "build_bdif_report", lambda result, *args: result)
+    monkeypatch.setattr(config, "RNG_SEED", 4242)
+    request = PredictionRequest(deck_names=["a", "b"], matchup_matrix=[[.5, .6], [.4, .5]], total_players=4)
+
+    service.run_prediction(request, settings=settings())
+
+    assert seen == [4242]
+
+
+@pytest.mark.unit
+def test_prediction_reports_its_provenance(monkeypatch, tmp_path):
+    source = tmp_path / "input.json"
+    source.write_bytes(b"matrix bytes")
+    monkeypatch.setattr(service, "load_matchup_data", lambda *args: (["a", "b"], np.array([[.5, .6], [.4, .5]]), {}))
+    monkeypatch.setattr(service, "predict_best_decks", lambda request: {"full_meta": {"a": .5, "b": .5}})
+    monkeypatch.setattr(service, "swiss_rounds_from_players", lambda players: 1)
+    monkeypatch.setattr(service, "open_store", lambda cfg: None)
+    monkeypatch.setattr(service, "panel_decks_for_report", lambda *args: ["a"])
+    monkeypatch.setattr(service, "build_report_addons", lambda *args: ({}, {}))
+    monkeypatch.setattr(service, "run_monte_carlo_analytics", lambda **kwargs: {"posterior": {"draws": 40}})
+    monkeypatch.setattr(service, "build_bdif_report", lambda result, best, h1, provenance: provenance)
+    request = PredictionRequest(deck_names=["a", "b"], matchup_matrix=[[.5, .6], [.4, .5]], total_players=4, precision_tier="1 - BULLET")
+
+    provenance = service.run_prediction(request, settings=settings(use_card_model=False), seed=77, input_path=str(source))["mc_results"]
+
+    assert provenance == {
+        "input_path": str(source),
+        "input_sha256": hashlib.sha256(b"matrix bytes").hexdigest(),
+        "seed": 77,
+        "iterations": 1_000,
+        "posterior_draws": 40,
+        "use_card_model": False,
+        "panel_decks": ["a"],
+    }
 
 
 @pytest.mark.unit

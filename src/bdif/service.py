@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 from copy import deepcopy
@@ -15,6 +16,16 @@ from src.tournament.reporting import build_bdif_report
 from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
 
 _MODEL_CACHE: dict[tuple[str, float], tuple[dict, dict]] = {}
+
+
+def _file_sha256(path: str) -> str | None:
+    if not os.path.isfile(path):
+        return None
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _has_complete_observations(observations: Sequence[PlayerObservation]) -> bool:
@@ -191,10 +202,11 @@ def bdif_status(settings: BdifSettings | None = None) -> dict:
     return {"status": "available", "db_path": settings.db_path, "decks": len(store.deck_weights()), "observations": len(store.player_observations())}
 
 
-def run_prediction(request: PredictionRequest, progress_callback=None, settings: BdifSettings | None = None, logger=None, seed: int | None = None) -> dict:
+def run_prediction(request: PredictionRequest, progress_callback=None, settings: BdifSettings | None = None, logger=None, seed: int | None = None, input_path: str | None = None) -> dict:
     settings = settings or BdifSettings.from_environment()
     logger = logger or __import__("structlog").get_logger()
-    deck_names, matrix, details = load_matchup_data(simulation_input_path(settings), config.MIN_GAMES)
+    source = input_path or simulation_input_path(settings)
+    deck_names, matrix, details = load_matchup_data(source, config.MIN_GAMES)
     solver = predict_best_decks(request)
     players = request.total_players
     if request.tournament_style == "championship_series":
@@ -215,12 +227,23 @@ def run_prediction(request: PredictionRequest, progress_callback=None, settings:
     except Exception as exc:
         logger.warning("bdif_report_addons_failed", error=str(exc), exc_info=True)
         recommendations, h1 = {}, {}
+    run_seed = config.RNG_SEED if seed is None else seed
+    iterations = TIER_MAPPING.get(request.precision_tier, 25_000)
     result = run_monte_carlo_analytics(
         deck_names=deck_names, win_matrix=matrix, meta_distribution=solver["full_meta"],
         d1_rounds=d1, cut_points=cut, d2_rounds=d2, top_cut=top_cut, players=players,
-        iterations=TIER_MAPPING.get(request.precision_tier, 25_000), match_format=request.match_format,
+        iterations=iterations, match_format=request.match_format,
         use_tie_convergence=request.use_tie_convergence, global_tie_rate=request.global_tie_rate,
-        use_drop_feature=request.use_drop_feature, seed=config.RNG_SEED if seed is None else seed,
+        use_drop_feature=request.use_drop_feature, seed=run_seed,
         progress_callback=progress_callback, matchup_details=details, panel_decks=panels,
     )
-    return {"solver_results": solver, "mc_results": build_bdif_report(result, recommendations, h1)}
+    provenance = {
+        "input_path": source,
+        "input_sha256": _file_sha256(source),
+        "seed": run_seed,
+        "iterations": iterations,
+        "posterior_draws": (result.get("posterior") or {}).get("draws"),
+        "use_card_model": settings.use_card_model,
+        "panel_decks": list(panels),
+    }
+    return {"solver_results": solver, "mc_results": build_bdif_report(result, recommendations, h1, provenance)}
