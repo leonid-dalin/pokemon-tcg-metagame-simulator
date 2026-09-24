@@ -32,7 +32,7 @@ def test_chunk_seeds_come_from_the_supplied_seed(monkeypatch):
     monte_carlo.run_monte_carlo_analytics(**kwargs)
     monte_carlo.run_monte_carlo_analytics(**kwargs)
 
-    assert seeds == [1234, 1235, 1234, 1235]
+    assert seeds == [1234, 11234, 1234, 11234]
 
 
 @pytest.mark.unit
@@ -374,3 +374,27 @@ def test_posterior_draws_preserve_requested_iterations(monkeypatch):
     )
 
     assert sum(iterations_seen) == 999
+
+
+@pytest.mark.integration
+def test_chunked_run_simulates_the_same_tournaments_as_one_engine_call():
+    decks = ["a", "b", "c", "d"]
+    matrix = np.array([
+        [0.5, 0.6, 0.45, 0.55],
+        [0.4, 0.5, 0.65, 0.5],
+        [0.55, 0.35, 0.5, 0.6],
+        [0.45, 0.5, 0.4, 0.5],
+    ])
+    meta = [0.25, 0.25, 0.25, 0.25]
+    result = monte_carlo.run_monte_carlo_analytics(
+        deck_names=decks, win_matrix=matrix, meta_distribution=dict(zip(decks, meta)),
+        d1_rounds=5, cut_points=99, d2_rounds=0, top_cut=8, players=32,
+        iterations=25_000, match_format="BO1", seed=1312,
+    )
+    initial, _, _, champions = monte_carlo.tcg_engine.run_parallel_monte_carlo(
+        25_000, 32, meta, matrix.tolist(), 5, 99, 0, 8, 1312, True, monte_carlo.GLOBAL_TIE_RATE, False,
+    )
+
+    assert [result["metrics"][deck]["win_probability"] for deck in decks] == pytest.approx(
+        [champion / entrants for champion, entrants in zip(champions, initial)], abs=1e-12,
+    )
