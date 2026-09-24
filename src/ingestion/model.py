@@ -1,16 +1,34 @@
 from __future__ import annotations
 
 import json
+import warnings
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 import numpy as np
 from scipy.stats import norm
+from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 
-from src.core.config import BDIF_PANEL_MAX_DECKS, BDIF_PANEL_SHARE_THRESHOLD
+
+from src.core.config import BDIF_CARD_MAX_ABS_LOGIT, BDIF_CARD_MAX_WITHIN_RATE, BDIF_CARD_MIN_PLAYERS, BDIF_CARD_MIN_WITHIN_RATE, BDIF_PANEL_MAX_DECKS, BDIF_PANEL_SHARE_THRESHOLD
+
+@dataclass(frozen=True)
+class PlayerObservation:
+    deck: str
+    opponent: str
+    deck_cards: frozenset[str]
+    opponent_cards: frozenset[str]
+    result: int
+
 
 MIST_ENERGY_NAME = "Mist Energy"
+Z_95 = float(norm.ppf(0.975))
+
+
+class CardModelNotIdentifiable(ValueError):
+    pass
+
 
 ACE_SPEC_CARDS = frozenset({
     "Amulet of Hope", "Awakening Drum", "Brilliant Blender", "Dangerous Laser",
@@ -78,24 +96,29 @@ class FittedCardModel:
     inclusion: Mapping[str, Mapping[str, float]]
     standard_errors: Mapping[str, float]
     match_counts: Mapping[tuple[str, str], int]
+    reference_deck: str
+
+    @property
+    def deck_column_count(self) -> int:
+        return len(self.decks) - 1
 
     def coefficient_report(self) -> tuple[dict[str, float], dict[str, tuple[float, float]]]:
-        offset = len(self.decks)
+        offset = len(self.decks) - 1
         coefficients = {
             card: float(self.estimator.coef_[0, offset + index])
             for index, card in enumerate(self.cards)
         }
-        intervals = {card: (value - 1.96 * self.standard_errors.get(card, 1.0), value + 1.96 * self.standard_errors.get(card, 1.0)) for card, value in coefficients.items()}
+        intervals = {card: (value - Z_95 * self.standard_errors.get(card, 1.0), value + Z_95 * self.standard_errors.get(card, 1.0)) for card, value in coefficients.items()}
         return coefficients, intervals
 
     def probability(self, deck_i: str, deck_j: str) -> float:
-        row = np.zeros((1, len(self.decks) + len(self.cards)), dtype=float)
-        deck_indices = {deck: index for index, deck in enumerate(self.decks)}
-        if deck_i in deck_indices:
+        row = np.zeros((1, self.deck_column_count + len(self.cards)), dtype=float)
+        deck_indices = {deck: index for index, deck in enumerate(self.decks[:-1])}
+        if deck_i in deck_indices and deck_i != self.reference_deck:
             row[0, deck_indices[deck_i]] = 1.0
-        if deck_j in deck_indices:
+        if deck_j in deck_indices and deck_j != self.reference_deck:
             row[0, deck_indices[deck_j]] = -1.0
-        offset = len(self.decks)
+        offset = len(self.decks) - 1
         for index, card in enumerate(self.cards):
             row[0, offset + index] = self.inclusion.get(deck_i, {}).get(card, 0.0) - self.inclusion.get(deck_j, {}).get(card, 0.0)
         return float(self.estimator.predict_proba(row)[0, 1])
@@ -115,31 +138,84 @@ class Best60Request:
     skeleton: Sequence[Mapping[str, Any]] | None = None
 
 
-def fit_model(observations: list[tuple[str, str, int]], inclusion: Mapping[str, Mapping[str, float]]) -> FittedCardModel:
-    decks = sorted({deck for row in observations for deck in row[:2]})
-    cards = sorted({card for values in inclusion.values() for card in values})
+def _mean_presence(observations: Sequence[PlayerObservation], decks: Sequence[str], cards: Sequence[str]) -> dict[str, dict[str, float]]:
+    means = {deck: {} for deck in decks}
+    counts = {deck: 0 for deck in decks}
+    for row in observations:
+        for deck, deck_cards in ((row.deck, row.deck_cards), (row.opponent, row.opponent_cards)):
+            counts[deck] += 1
+            for card in cards:
+                means[deck][card] = means[deck].get(card, 0) + int(card in deck_cards)
+    return {deck: {card: means[deck].get(card, 0) / max(1, counts[deck]) for card in cards} for deck in decks}
+
+
+def select_model_cards(
+    observations: Sequence[PlayerObservation],
+    min_players: int = BDIF_CARD_MIN_PLAYERS,
+    low: float = BDIF_CARD_MIN_WITHIN_RATE,
+    high: float = BDIF_CARD_MAX_WITHIN_RATE,
+) -> list[str]:
+    appearances: dict[str, int] = {}
+    presence: dict[str, dict[str, int]] = {}
+    rows = [
+        (deck, cards)
+        for row in observations
+        for deck, cards in ((row.deck, row.deck_cards), (row.opponent, row.opponent_cards))
+    ]
+    for deck, _ in rows:
+        appearances[deck] = appearances.get(deck, 0) + 1
+    for deck, cards in rows:
+        for card in presence:
+            presence[card].setdefault(deck, 0)
+        for card in cards:
+            presence.setdefault(card, {name: 0 for name in appearances})
+            presence[card][deck] += 1
+    selected = []
+    for card, deck_counts in presence.items():
+        if any(
+            count >= min_players and low <= deck_counts.get(deck, 0) / count <= high
+            for deck, count in appearances.items()
+        ):
+            selected.append(card)
+    return sorted(selected)
+
+
+def _card_design(observations: Sequence[PlayerObservation], decks: Sequence[str], cards: Sequence[str]) -> np.ndarray:
     rows = []
-    labels = []
-    deck_indices = {deck: index for index, deck in enumerate(decks)}
-    for deck_i, deck_j, result in observations:
-        row = np.zeros(len(decks) + len(cards), dtype=float)
-        row[deck_indices[deck_i]] = 1.0
-        row[deck_indices[deck_j]] = -1.0
-        for index, card in enumerate(cards):
-            row[len(decks) + index] = inclusion.get(deck_i, {}).get(card, 0.0) - inclusion.get(deck_j, {}).get(card, 0.0)
+    for observation in observations:
+        row = []
+        for deck in decks[:-1]:
+            row.append(float(observation.deck == deck) - float(observation.opponent == deck))
+        row.extend(float(card in observation.deck_cards) - float(card in observation.opponent_cards) for card in cards)
         rows.append(row)
-        labels.append(int(result))
-    estimator = LogisticRegression(C=1.0, max_iter=1000, random_state=1312)
-    design = np.asarray(rows)
-    target = np.asarray(labels)
-    estimator.fit(design, target)
+    return np.asarray(rows, dtype=float)
+
+
+def fit_card_model(observations: Sequence[PlayerObservation], cards: Sequence[str]) -> FittedCardModel:
+    decks = sorted({deck for row in observations for deck in (row.deck, row.opponent)})
+    cards = list(cards)
+    if len(decks) < 2 or len({row.result for row in observations}) < 2 or not cards:
+        raise CardModelNotIdentifiable("card design has no identifiable covariates")
+    inclusion = _mean_presence(observations, decks, cards)
+    design = _card_design(observations, decks, cards)
+    target = np.asarray([row.result for row in observations], dtype=int)
+    if np.linalg.matrix_rank(design) < design.shape[1]:
+        raise CardModelNotIdentifiable("card design is rank deficient")
+    estimator = LogisticRegression(penalty=None, fit_intercept=False, max_iter=1000, random_state=1312)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ConvergenceWarning)
+        estimator.fit(design, target)
+    if any(issubclass(warning.category, ConvergenceWarning) for warning in caught):
+        raise CardModelNotIdentifiable("card model did not converge")
+    if float(np.max(np.abs(estimator.coef_))) > BDIF_CARD_MAX_ABS_LOGIT:
+        raise CardModelNotIdentifiable("card model indicates separated outcomes")
     standard_errors_array = _logistic_standard_errors(estimator, design)
-    standard_errors = {card: float(standard_errors_array[len(decks) + index]) for index, card in enumerate(cards)}
+    standard_errors = {card: float(standard_errors_array[len(decks) - 1 + index]) for index, card in enumerate(cards)}
     match_counts: dict[tuple[str, str], int] = {}
-    for deck_i, deck_j, _ in observations:
-        pair = tuple(sorted((deck_i, deck_j)))
+    for row in observations:
+        pair = (row.deck, row.opponent)
         match_counts[pair] = match_counts.get(pair, 0) + 1
-    return FittedCardModel(decks, cards, estimator, inclusion, standard_errors, match_counts)
+    return FittedCardModel(decks, cards, estimator, inclusion, standard_errors, match_counts, decks[-1])
 
 
 def model_artifact(model: FittedCardModel) -> dict[str, Any]:
@@ -235,6 +311,8 @@ def recommend_best60(request: Best60Request) -> dict[str, Any]:
                 )
             ),
             "interval": coefficient_intervals.get(card, (coefficients.get(card, 0.0), coefficients.get(card, 0.0))),
+            "q_value": next((row["q_value"] for row in scored if row["card"] == card), None),
+            "bucket": next((row["bucket"] for row in scored if row["card"] == card), "not scored"),
         }
         for card in candidates
     }

@@ -43,15 +43,15 @@
   },
   {
     "name": "task4: remove the feature-flag gate",
-    "file": "src/worker/queue.py",
-    "find": "    if not BDIF_USE_CARD_MODEL:\n        return {}, {}\n\n",
-    "replace": ""
+    "file": "src/bdif/service.py",
+    "find": "    if not settings.use_card_model or not os.path.exists(settings.db_path):\n        return {}, {}\n",
+    "replace": "    if not os.path.exists(settings.db_path):\n        return {}, {}\n"
   },
   {
     "name": "task4: let addon failures kill the job again",
-    "file": "src/worker/queue.py",
-    "find": "            try:\n                best60_recommendations, h1_report = _build_bdif_report_addons(bdif_store)\n            except Exception as exc:\n                log.warning(\"bdif_report_addons_failed\", error=str(exc), exc_info=True)\n                best60_recommendations, h1_report = {}, {}",
-    "replace": "            best60_recommendations, h1_report = _build_bdif_report_addons()"
+    "file": "src/bdif/service.py",
+    "find": "    try:\n        recommendations, h1 = build_report_addons(store, settings)\n    except Exception as exc:\n        logger.warning(\"bdif_report_addons_failed\", error=str(exc), exc_info=True)\n        recommendations, h1 = {}, {}",
+    "replace": "    recommendations, h1 = build_report_addons(store, settings)"
   },
   {
     "name": "task5: zero the carried match counts again",
