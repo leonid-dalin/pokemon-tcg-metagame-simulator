@@ -187,7 +187,7 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
         def from_environment(cls):
             return cls()
 
-        def tournaments(self, **params):
+        def iter_tournaments(self, **params):
             return [{"id": "good"}, {"id": "bad"}]
 
         def game_decks(self):
@@ -207,6 +207,9 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
 
         def backfill_deck_names(self, deck_names):
             pass
+
+        def existing_tournament_ids(self):
+            return set()
 
         def upsert_tournament(self, event, details):
             pass

@@ -114,6 +114,11 @@ class LimitlessStore:
                 row["id"], row.get("game"), row.get("format"), row.get("name"), row.get("date"), row.get("players"), json.dumps(details)
             ))
 
+    def existing_tournament_ids(self) -> set[str]:
+        self.ensure_schema()
+        with self.connect() as conn:
+            return {str(row[0]) for row in conn.execute("SELECT id FROM tournaments")}
+
     def upsert_standings(
         self,
         tournament_id: str,

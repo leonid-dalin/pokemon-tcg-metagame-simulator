@@ -148,15 +148,21 @@ def run_ingestion(settings: BdifSettings | None = None) -> dict:
     store.ensure_schema()
     names = {str(row.get("identifier") or row.get("id")): str(row["name"]) for row in client.game_decks() if row.get("name") and (row.get("identifier") or row.get("id"))}
     store.backfill_deck_names(names)
-    events = client.tournaments(game="PTCG", format="STANDARD", limit=settings.backfill_limit)
+    events = list(client.iter_tournaments(game="PTCG", format="STANDARD", limit=settings.backfill_limit))
+    existing_ids = store.existing_tournament_ids()
     failed = []
+    skipped_events = 0
     for event in events:
         event_id = str(event["id"])
+        if event_id in existing_ids:
+            skipped_events += 1
+            continue
         try:
             details, standings, pairings = client.fetch_event_bundle(event_id)
             store.upsert_tournament(event, details)
             store.upsert_standings(event_id, standings, names) if names else store.upsert_standings(event_id, standings)
             store.upsert_pairings(event_id, pairings)
+            existing_ids.add(event_id)
         except Exception as exc:
             failed.append({"id": event_id, "error": str(exc)})
             logger.warning("limitless_event_failed", event_id=event_id, error=str(exc))
@@ -173,7 +179,7 @@ def run_ingestion(settings: BdifSettings | None = None) -> dict:
         else:
             write_json_atomic(model_artifact(fitted), settings.model_input_path)
             status = "complete"
-    return {"status": "complete", "events": len(events), "failed_events": failed, "path": artifact_path, "model_status": status}
+    return {"status": "complete", "events": len(events), "skipped_events": skipped_events, "failed_events": failed, "path": artifact_path, "model_status": status}
 
 
 def bdif_status(settings: BdifSettings | None = None) -> dict:

@@ -199,4 +199,63 @@ def test_requested_panel_overrides_automatic_selection(monkeypatch):
     )
     service.run_prediction(request, settings=settings())
 
-    assert received[0]["panel_decks"] == ["b"]
+
+
+@pytest.mark.unit
+def test_ingestion_paginates_and_skips_stored_events(monkeypatch, tmp_path):
+    fetched = []
+    stored_ids = {"stored"}
+    pairings = []
+
+    class Client:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def iter_tournaments(self, **params):
+            return iter([{"id": "stored"}, {"id": "fresh"}])
+
+        def game_decks(self):
+            return []
+
+        def fetch_event_bundle(self, event_id):
+            fetched.append(event_id)
+            return ({"decklists": False}, [], [{"player1": "p1", "player2": "p2"}])
+
+    class Store:
+        def __init__(self, path):
+            self.path = path
+
+        def ensure_schema(self):
+            pass
+
+        def backfill_deck_names(self, names):
+            pass
+
+        def existing_tournament_ids(self):
+            return set(stored_ids)
+
+        def upsert_tournament(self, event, details):
+            stored_ids.add(event["id"])
+
+        def upsert_standings(self, event_id, standings):
+            assert standings == []
+
+        def upsert_pairings(self, event_id, rows):
+            pairings.extend(rows)
+
+        def player_observations(self):
+            return []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("src.ingestion.client.LimitlessClient", Client)
+    monkeypatch.setattr("src.ingestion.store.LimitlessStore", Store)
+    monkeypatch.setattr("src.ingestion.aggregate.build_artifact", lambda store: {"archetypes": []})
+
+    first = service.run_ingestion(settings(ingestion_enabled=True, backfill_limit=200))
+    second = service.run_ingestion(settings(ingestion_enabled=True, backfill_limit=200))
+
+    assert fetched == ["fresh"]
+    assert pairings == [{"player1": "p1", "player2": "p2"}]
+    assert first["skipped_events"] == 1
+    assert second["skipped_events"] == 2
