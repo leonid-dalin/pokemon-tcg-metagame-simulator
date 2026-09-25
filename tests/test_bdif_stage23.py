@@ -453,15 +453,6 @@ def test_card_model_fit_has_no_intercept():
 
 
 @pytest.mark.unit
-def test_card_model_artifact_carries_player_observation_counts():
-    observations = [PlayerObservation("a", "b", frozenset({"Core"}), frozenset({"Core"}), 1)] * 10
-    observations += [PlayerObservation("b", "a", frozenset({"Core"}), frozenset({"Core"}), 0)] * 10
-    artifact = model_artifact(fit_card_model(observations, ["Tech"]))
-    assert artifact["win_rate_matrix"]["a"]["b"]["match_count"] == 10
-    assert artifact["win_rate_matrix"]["b"]["a"]["match_count"] == 10
-
-
-@pytest.mark.unit
 def test_best60_ranks_positive_pooled_cards_in_score_order():
     result = recommend_best60(Best60Request(
         archetype="a",
@@ -647,16 +638,21 @@ def test_h1_standard_error_uses_weighted_fisher_information():
     assert report["without_variant"]["interval"][1] - report["without_variant"]["interval"][0] < 2.0
 
 
-def test_card_model_artifact_carries_player_observation_counts(monkeypatch):
-    monkeypatch.setattr("src.ingestion.model.BDIF_CARD_MIN_PLAYERS", 1)
-    observations = []
-    for index in range(10):
-        has_tech = index % 2 == 0
-        a_cards = frozenset({"Core", "Tech", "Filler"} if has_tech else {"Core", "Filler"})
-        b_cards = frozenset({"Core"})
-        result = 1 if index % 4 in {0, 1} else 0
-        observations.append(PlayerObservation("a", "b", a_cards, b_cards, result))
-        observations.append(PlayerObservation("b", "a", b_cards, a_cards, 1 - result))
-    artifact = model_artifact(fit_card_model(observations, ["Tech"]))
-    assert artifact["win_rate_matrix"]["a"]["b"]["match_count"] == 10
-    assert artifact["win_rate_matrix"]["b"]["a"]["match_count"] == 10
+def test_card_model_artifact_counts_matches_in_both_orientations():
+    forward = [
+        PlayerObservation("a", "b", frozenset({"Tech"} if index % 2 else set()), frozenset(), int(index % 3 == 0))
+        for index in range(30)
+    ]
+    reverse = [
+        PlayerObservation("b", "a", frozenset(), frozenset({"Tech"} if index % 3 else set()), int(index % 2 == 0))
+        for index in range(30)
+    ]
+    artifact = model_artifact(fit_card_model(forward + reverse, ["Tech"]))
+    only_reverse = model_artifact(fit_card_model(
+        [PlayerObservation(o.opponent, o.deck, o.opponent_cards, o.deck_cards, 1 - o.result) for o in forward] + reverse,
+        ["Tech"],
+    ))
+
+    assert artifact["win_rate_matrix"]["a"]["b"]["match_count"] == 60
+    assert artifact["win_rate_matrix"]["b"]["a"]["match_count"] == 60
+    assert only_reverse["win_rate_matrix"]["a"]["b"]["match_count"] == 60

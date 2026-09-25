@@ -213,7 +213,7 @@ def fit_card_model(observations: Sequence[PlayerObservation], cards: Sequence[st
     standard_errors = {card: float(standard_errors_array[len(decks) - 1 + index]) for index, card in enumerate(cards)}
     match_counts: dict[tuple[str, str], int] = {}
     for row in observations:
-        pair = (row.deck, row.opponent)
+        pair = tuple(sorted((row.deck, row.opponent)))
         match_counts[pair] = match_counts.get(pair, 0) + 1
     return FittedCardModel(decks, cards, estimator, inclusion, standard_errors, match_counts, decks[-1])
 
