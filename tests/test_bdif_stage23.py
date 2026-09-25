@@ -1,18 +1,111 @@
 import sqlite3
+from pathlib import Path
 
 import pytest
 
+from src.bdif import service
+from src.bdif.settings import BdifSettings
 from src.ingestion.client import LimitlessClient
 from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerObservation, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, recommend_best60, select_model_cards, select_panel_decks, validate_recommendation
 from src.api.models import PredictionRequest
 from src.ingestion.store import LimitlessStore, _decklist_card_names
 from src.ingestion.aggregate import build_artifact
+from src.ingestion.mapping import coverage_report, extract_recorded_deck_ids, load_archetype_map, resolve_archetype
 from src.core.scraper import normalize_archetype
+SYNTHETIC_DECK_MAPPING = {"a": "a", "alakazam": "Alakazam", "b": "b", "crustle": "Crustle"}
+
+
+
+@pytest.mark.unit
+def test_baltimore_limitless_deck_ids_have_explicit_mapping_coverage():
+    fixture = Path("data/input/limitless_baltimore_0072_decks.html")
+    observed = extract_recorded_deck_ids(fixture)
+    report = coverage_report(observed)
+
+    assert len(observed) == 90
+    assert set(load_archetype_map()) == observed
+    assert report.unmapped == ["conkeldurr-twm", "other"]
+    assert report.mapped == sorted(observed - set(report.unmapped))
+    assert resolve_archetype("mega-abomasnow-ex") == "Mega Abomasnow"
+
+
+@pytest.mark.unit
+def test_ingestion_reports_newly_observed_unmapped_deck_ids(monkeypatch, tmp_path):
+    class Client:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def game_decks(self):
+            return []
+
+        def iter_tournaments(self, **params):
+            return [{"id": "new-event"}]
+
+        def fetch_event_bundle(self, event_id):
+            return ({"decklists": True}, [{"player": "p1", "deck": {"id": "newly-observed-id"}}], [])
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("src.ingestion.client.LimitlessClient", Client)
+    monkeypatch.setattr("src.ingestion.aggregate.build_artifact", lambda store: {"archetypes": []})
+
+    result = service.run_ingestion(BdifSettings(
+        use_card_model=True,
+        ingestion_enabled=True,
+        db_path=str(tmp_path / "limitless.db"),
+        baseline_input_path="input.json",
+        ingestion_input_path=str(tmp_path / "limitless_input.json"),
+        model_input_path=str(tmp_path / "limitless_model_input.json"),
+        panel_share_threshold=0.01,
+        panel_max_decks=10,
+        fallback_panel_decks=("fallback",),
+        backfill_limit=10,
+    ))
+
+    assert result["unmapped_deck_ids"] == ["newly-observed-id"]
+
+
+@pytest.mark.unit
+def test_unknown_limitless_ids_without_catalogue_names_stay_unmapped(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db", canonical_names=["Known"])
+
+    assert store._resolve_deck_name("unknown") is None
+
+
+@pytest.mark.unit
+def test_unknown_limitless_deck_ids_are_reported_as_unmapped():
+    report = coverage_report({"crustle-dri", "unknown-deck"})
+
+    assert report.mapped == ["crustle-dri"]
+    assert report.unmapped == ["unknown-deck"]
+
+
+@pytest.mark.unit
+def test_backfill_keeps_catalogue_name_for_id_outside_static_map_and_observes_it(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    store.upsert_standings("event", [
+        {"player": "p1", "deck": {"id": "outside-baltimore"}, "decklist": {"pokemon": [{"name": "A", "count": 1}]}},
+        {"player": "p2", "deck": {"id": "crustle-dri"}, "decklist": {"pokemon": [{"name": "B", "count": 1}]}},
+        {"player": "p3", "deck": {"id": "other"}, "decklist": {"pokemon": [{"name": "C", "count": 1}]}},
+    ])
+    store.backfill_deck_names({
+        "outside-baltimore": "Outside Baltimore",
+        "crustle-dri": "Provider Crustle",
+        "other": "Other",
+    })
+    store.upsert_pairings("event", [{"round": 1, "player1": "p1", "player2": "p2", "winner": "p1"}])
+
+    with sqlite3.connect(store.path) as connection:
+        names = dict(connection.execute("SELECT player_id, deck_name FROM standings"))
+    assert names == {"p1": "Outside Baltimore", "p2": "Crustle", "p3": None}
+    assert store.player_observations() == [
+        PlayerObservation("Outside Baltimore", "Crustle", frozenset({"A"}), frozenset({"B"}), 1),
+    ]
 
 
 @pytest.mark.unit
 def test_player_observations_include_each_players_card_presence_and_skip_invalid_pairings(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db")
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
     store.upsert_standings("event", [
         {"player": "p1", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "A"}, {"name": "Shared"}], "trainer": [{"name": "Shared"}]}},
         {"player": "p2", "deck": {"id": "b"}, "decklist": {"energy": [{"name": "B"}]}},
@@ -65,7 +158,7 @@ def test_limitless_client_sends_key_only_as_an_access_header(monkeypatch):
 
 @pytest.mark.unit
 def test_store_upserts_events_and_counts_unique_card_inclusion(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db")
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
     event = {"id": "event-1", "game": "PTCG", "format": "STANDARD", "name": "Test", "date": "2026-09-20", "players": 2}
     standings = [
         {"player": "p1", "placing": 1, "record": {"wins": 1}, "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Misty", "count": 2}]}},
@@ -84,7 +177,7 @@ def test_store_upserts_events_and_counts_unique_card_inclusion(tmp_path):
 
 @pytest.mark.unit
 def test_store_writes_missing_decklists_as_sql_null(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db")
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
     store.upsert_standings("event", [{"player": "p1", "deck": {"id": "a"}, "decklist": None}])
 
     with sqlite3.connect(tmp_path / "limitless.db") as conn:
@@ -114,7 +207,7 @@ def test_readers_prepare_legacy_store_schema(tmp_path):
         conn.execute("INSERT INTO standings VALUES ('event', 'p1', 'a', '{\"pokemon\": []}')")
         conn.commit()
 
-    store = LimitlessStore(path, canonical_names=["a"])
+    store = LimitlessStore(path, canonical_names=["a"], deck_mapping=SYNTHETIC_DECK_MAPPING)
     assert list(store.matchup_rows()) == []
 
     with sqlite3.connect(path) as conn:
@@ -218,7 +311,7 @@ def test_fetch_event_bundle_without_decklists_preserves_pairings(monkeypatch):
 
 @pytest.mark.unit
 def test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db")
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
     store.upsert_standings("event", [
         {"player": "p1", "deck": {"id": "alakazam"}, "decklist": {"pokemon": [{"name": "Alakazam"}, {"name": "Dedenne"}], "trainer": [{"name": "Enhanced Hammer"}]}},
         {"player": "p2", "deck": {"id": "crustle"}, "decklist": {"energy": [{"name": "Mist Energy"}]}},
@@ -230,7 +323,7 @@ def test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag(tmp_path):
 
 @pytest.mark.unit
 def test_observed_skeleton_uses_high_frequency_cards(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db")
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
     store.upsert_standings("event", [
         {"player": "p1", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 2}]}},
         {"player": "p2", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 2}]}},
@@ -239,7 +332,7 @@ def test_observed_skeleton_uses_high_frequency_cards(tmp_path):
 
 
 def test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db")
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
     standings = []
     for index in range(4):
         standings.append({

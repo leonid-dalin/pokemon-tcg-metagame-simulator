@@ -169,6 +169,9 @@ def run_ingestion(settings: BdifSettings | None = None) -> dict:
     artifact_path = settings.ingestion_input_path
     os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
     write_json_atomic(build_artifact(store), artifact_path)
+    unmapped_deck_ids = store.unmapped_deck_ids()
+    if unmapped_deck_ids:
+        logger.warning("ingest_unmapped_archetypes", deck_ids=unmapped_deck_ids)
     observations = store.player_observations()
     status = "insufficient observations"
     if _has_complete_observations(observations):
@@ -179,7 +182,7 @@ def run_ingestion(settings: BdifSettings | None = None) -> dict:
         else:
             write_json_atomic(model_artifact(fitted), settings.model_input_path)
             status = "complete"
-    return {"status": "complete", "events": len(events), "skipped_events": skipped_events, "failed_events": failed, "path": artifact_path, "model_status": status}
+    return {"status": "complete", "events": len(events), "skipped_events": skipped_events, "failed_events": failed, "unmapped_deck_ids": unmapped_deck_ids, "path": artifact_path, "model_status": status}
 
 
 def bdif_status(settings: BdifSettings | None = None) -> dict:

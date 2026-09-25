@@ -6,9 +6,9 @@ import sqlite3
 from dataclasses import dataclass
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
-from src.core.scraper import normalize_archetype
+from src.ingestion.mapping import load_archetype_map, resolve_archetype
 from src.ingestion.model import ACE_SPEC_CARDS, PlayerObservation, _card_limit
 
 SCHEMA = """
@@ -37,9 +37,10 @@ def _decklist_card_names(raw: str | None) -> frozenset[str]:
 
 
 class LimitlessStore:
-    def __init__(self, path: str | Path, canonical_names: Iterable[str] | None = None):
+    def __init__(self, path: str | Path, canonical_names: Iterable[str] | None = None, deck_mapping: Mapping[str, str | None] | None = None):
         self.path = str(path)
         self.canonical_names = list(canonical_names) if canonical_names is not None else self._load_canonical_names()
+        self.deck_mapping = dict(deck_mapping) if deck_mapping is not None else load_archetype_map()
         self._schema_ready = False
         self._read_ready = False
 
@@ -73,24 +74,10 @@ class LimitlessStore:
     def _resolve_deck_name(self, deck_id: str | None, display_name: str | None = None) -> str | None:
         if not deck_id or deck_id == "other":
             return None
-        candidates = [display_name, deck_id]
-        normalised = {normalize_archetype(name): name for name in self.canonical_names}
-        for candidate in candidates:
-            if not candidate:
-                continue
-            candidate_text = str(candidate).replace("-", " ")
-            normalised_candidate = normalize_archetype(candidate_text)
-            variants = [normalised_candidate]
-            variants.append(re.sub(r"\b([a-z]+)s(?=\s)", r"\1", normalised_candidate))
-            for variant in variants:
-                tokens = variant.split()
-                for end in range(len(tokens), 0, -1):
-                    match = normalised.get(" ".join(tokens[:end]))
-                    if match:
-                        return match
-        if "-" not in deck_id and " " not in deck_id:
-            return display_name or deck_id
-        return None
+        explicit = resolve_archetype(str(deck_id), self.deck_mapping)
+        if str(deck_id) in self.deck_mapping:
+            return explicit
+        return display_name if display_name and display_name.strip() else None
 
 
     def connect(self):
@@ -119,6 +106,16 @@ class LimitlessStore:
         with self.connect() as conn:
             return {str(row[0]) for row in conn.execute("SELECT id FROM tournaments")}
 
+    def unmapped_deck_ids(self) -> list[str]:
+        self.ensure_schema()
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT deck_id FROM standings "
+                "WHERE deck_id IS NOT NULL AND deck_name IS NULL "
+                "ORDER BY deck_id"
+            )
+        return [str(row[0]) for row in rows]
+
     def upsert_standings(
         self,
         tournament_id: str,
@@ -144,22 +141,41 @@ class LimitlessStore:
         self.ensure_schema()
         if deck_names is None:
             with self.connect() as conn:
-                rows = conn.execute("SELECT tournament_id, player_id, deck_id FROM standings WHERE deck_id IS NOT NULL").fetchall()
+                rows = conn.execute(
+                    "SELECT tournament_id, player_id, deck_id, deck_name FROM standings WHERE deck_id IS NOT NULL"
+                ).fetchall()
             with self.connect() as conn:
                 conn.executemany(
                     "UPDATE standings SET deck_name=? WHERE tournament_id=? AND player_id=?",
-                    [(self._resolve_deck_name(deck_id), tournament_id, player_id) for tournament_id, player_id, deck_id in rows],
+                    [
+                        (
+                            self._existing_deck_name(deck_id, deck_name),
+                            tournament_id,
+                            player_id,
+                        )
+                        for tournament_id, player_id, deck_id, deck_name in rows
+                    ],
                 )
             return len(rows)
         updated = 0
         with self.connect() as conn:
-            for deck_id, deck_name in deck_names.items():
+            for deck_id in deck_names:
+                deck_name = self._resolve_deck_name(deck_id, deck_names[deck_id])
+                if deck_name is None:
+                    continue
                 cursor = conn.execute(
                     "UPDATE standings SET deck_name=? WHERE deck_id=? AND (deck_name IS NULL OR deck_name=deck_id)",
                     (deck_name, deck_id),
                 )
                 updated += cursor.rowcount
         return updated
+
+    def _existing_deck_name(self, deck_id: str | None, deck_name: str | None) -> str | None:
+        if not deck_id or deck_id == "other":
+            return None
+        if str(deck_id) in self.deck_mapping:
+            return resolve_archetype(str(deck_id), self.deck_mapping)
+        return deck_name if deck_name and deck_name.strip() else None
 
     def upsert_pairings(self, tournament_id: str, rows: Iterable[dict[str, Any]]) -> None:
         with self.connect() as conn:
