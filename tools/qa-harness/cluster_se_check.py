@@ -24,16 +24,22 @@ def _observations(seed: int, fits: int) -> list[PlayerObservation]:
 def main() -> int:
     estimates = []
     reported = []
+    standard_error_kinds = []
     for seed in range(40):
         model = fit_card_model(_observations(seed, 1), ["Tech"])
         estimates.append(model.estimator.coef_[0, 1])
         reported.append(model.standard_errors["Tech"])
+        standard_error_kinds.append(model.standard_error_kind)
     true_se = float(np.std(estimates, ddof=1))
     reported_se = float(np.mean(reported))
     ratio = reported_se / true_se
     coverage = float(np.mean([abs(estimate - 1.1) <= 1.96 * error for estimate, error in zip(estimates, reported)]))
     print(f"fits={len(estimates)} true_se={true_se:.4f} reported_se={reported_se:.4f} ratio={ratio:.3f} coverage={coverage:.3f}")
-    return int(not (0.8 <= ratio <= 1.25 and coverage >= 0.9))
+    return int(not (
+        all(kind == "player-clustered" for kind in standard_error_kinds)
+        and 0.8 <= ratio <= 1.25
+        and coverage >= 0.9
+    ))
 
 
 if __name__ == "__main__":
