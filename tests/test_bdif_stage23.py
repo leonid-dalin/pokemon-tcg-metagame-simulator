@@ -29,6 +29,18 @@ def test_recorded_limitless_deck_ids_have_explicit_mapping_coverage():
 
 
 @pytest.mark.unit
+def test_baltimore_limitless_deck_ids_have_explicit_mapping_coverage():
+    fixture = Path("data/input/limitless_baltimore_0072_decks.html")
+    observed = extract_recorded_deck_ids(fixture)
+    report = coverage_report(observed)
+
+    assert len(observed) == 90
+    assert report.unmapped == ["conkeldurr-twm", "other"]
+    assert report.mapped == sorted(observed - set(report.unmapped))
+    assert resolve_archetype("mega-abomasnow-ex") == "Mega Abomasnow"
+
+
+@pytest.mark.unit
 def test_ingestion_reports_newly_observed_unmapped_deck_ids(monkeypatch, tmp_path):
     class Client:
         @classmethod
