@@ -244,6 +244,9 @@ def test_ingestion_paginates_and_skips_stored_events(monkeypatch, tmp_path):
         def upsert_pairings(self, event_id, rows):
             pairings.extend(rows)
 
+        def unmapped_deck_ids(self):
+            return []
+
         def player_observations(self):
             return []
 

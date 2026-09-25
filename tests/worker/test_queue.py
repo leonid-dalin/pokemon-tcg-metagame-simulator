@@ -220,6 +220,9 @@ def test_limitless_ingestion_records_failed_events_and_writes_partial_artifact(m
         def upsert_pairings(self, event_id, pairings):
             pass
 
+        def unmapped_deck_ids(self):
+            return []
+
         def player_observations(self):
             return []
 

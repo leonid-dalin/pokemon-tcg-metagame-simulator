@@ -106,6 +106,16 @@ class LimitlessStore:
         with self.connect() as conn:
             return {str(row[0]) for row in conn.execute("SELECT id FROM tournaments")}
 
+    def unmapped_deck_ids(self) -> list[str]:
+        self.ensure_schema()
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT deck_id FROM standings "
+                "WHERE deck_id IS NOT NULL AND deck_name IS NULL "
+                "ORDER BY deck_id"
+            )
+        return [str(row[0]) for row in rows]
+
     def upsert_standings(
         self,
         tournament_id: str,
@@ -140,7 +150,10 @@ class LimitlessStore:
             return len(rows)
         updated = 0
         with self.connect() as conn:
-            for deck_id, deck_name in deck_names.items():
+            for deck_id in deck_names:
+                deck_name = self._resolve_deck_name(deck_id)
+                if deck_name is None:
+                    continue
                 cursor = conn.execute(
                     "UPDATE standings SET deck_name=? WHERE deck_id=? AND (deck_name IS NULL OR deck_name=deck_id)",
                     (deck_name, deck_id),

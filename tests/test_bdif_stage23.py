@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pytest
 
+from src.bdif import service
+from src.bdif.settings import BdifSettings
 from src.ingestion.client import LimitlessClient
 from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerObservation, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, recommend_best60, select_model_cards, select_panel_decks, validate_recommendation
 from src.api.models import PredictionRequest
@@ -16,7 +18,7 @@ SYNTHETIC_DECK_MAPPING = {"a": "a", "alakazam": "Alakazam", "b": "b", "crustle":
 
 @pytest.mark.unit
 def test_recorded_limitless_deck_ids_have_explicit_mapping_coverage():
-    fixture = next(Path("data").glob("Decks_*.htm"))
+    fixture = Path("data/Decks_ Regional Championship Prague – Limitless Labs.htm")
     observed = extract_recorded_deck_ids(fixture)
     report = coverage_report(observed)
 
@@ -24,6 +26,42 @@ def test_recorded_limitless_deck_ids_have_explicit_mapping_coverage():
     assert report.unmapped == ["farigiraf-milotic", "ogerpon-box", "other"]
     assert report.mapped == sorted(observed - set(report.unmapped))
     assert resolve_archetype("crustle-dri") == "Crustle"
+
+
+@pytest.mark.unit
+def test_ingestion_reports_newly_observed_unmapped_deck_ids(monkeypatch, tmp_path):
+    class Client:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def game_decks(self):
+            return []
+
+        def iter_tournaments(self, **params):
+            return [{"id": "new-event"}]
+
+        def fetch_event_bundle(self, event_id):
+            return ({"decklists": True}, [{"player": "p1", "deck": {"id": "newly-observed-id"}}], [])
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("src.ingestion.client.LimitlessClient", Client)
+    monkeypatch.setattr("src.ingestion.aggregate.build_artifact", lambda store: {"archetypes": []})
+
+    result = service.run_ingestion(BdifSettings(
+        use_card_model=True,
+        ingestion_enabled=True,
+        db_path=str(tmp_path / "limitless.db"),
+        baseline_input_path="input.json",
+        ingestion_input_path=str(tmp_path / "limitless_input.json"),
+        model_input_path=str(tmp_path / "limitless_model_input.json"),
+        panel_share_threshold=0.01,
+        panel_max_decks=10,
+        fallback_panel_decks=("fallback",),
+        backfill_limit=10,
+    ))
+
+    assert result["unmapped_deck_ids"] == ["newly-observed-id"]
 
 
 @pytest.mark.unit
