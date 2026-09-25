@@ -8,7 +8,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from src.ingestion.mapping import resolve_archetype
+from src.ingestion.mapping import load_archetype_map, resolve_archetype
 from src.ingestion.model import ACE_SPEC_CARDS, PlayerObservation, _card_limit
 
 SCHEMA = """
@@ -40,7 +40,7 @@ class LimitlessStore:
     def __init__(self, path: str | Path, canonical_names: Iterable[str] | None = None, deck_mapping: Mapping[str, str | None] | None = None):
         self.path = str(path)
         self.canonical_names = list(canonical_names) if canonical_names is not None else self._load_canonical_names()
-        self.deck_mapping = deck_mapping
+        self.deck_mapping = dict(deck_mapping) if deck_mapping is not None else load_archetype_map()
         self._schema_ready = False
         self._read_ready = False
 
@@ -75,9 +75,9 @@ class LimitlessStore:
         if not deck_id or deck_id == "other":
             return None
         explicit = resolve_archetype(str(deck_id), self.deck_mapping)
-        if explicit is not None:
+        if str(deck_id) in self.deck_mapping:
             return explicit
-        return None
+        return display_name if display_name and display_name.strip() else None
 
 
     def connect(self):
@@ -141,17 +141,26 @@ class LimitlessStore:
         self.ensure_schema()
         if deck_names is None:
             with self.connect() as conn:
-                rows = conn.execute("SELECT tournament_id, player_id, deck_id FROM standings WHERE deck_id IS NOT NULL").fetchall()
+                rows = conn.execute(
+                    "SELECT tournament_id, player_id, deck_id, deck_name FROM standings WHERE deck_id IS NOT NULL"
+                ).fetchall()
             with self.connect() as conn:
                 conn.executemany(
                     "UPDATE standings SET deck_name=? WHERE tournament_id=? AND player_id=?",
-                    [(self._resolve_deck_name(deck_id), tournament_id, player_id) for tournament_id, player_id, deck_id in rows],
+                    [
+                        (
+                            self._existing_deck_name(deck_id, deck_name),
+                            tournament_id,
+                            player_id,
+                        )
+                        for tournament_id, player_id, deck_id, deck_name in rows
+                    ],
                 )
             return len(rows)
         updated = 0
         with self.connect() as conn:
             for deck_id in deck_names:
-                deck_name = self._resolve_deck_name(deck_id)
+                deck_name = self._resolve_deck_name(deck_id, deck_names[deck_id])
                 if deck_name is None:
                     continue
                 cursor = conn.execute(
@@ -160,6 +169,13 @@ class LimitlessStore:
                 )
                 updated += cursor.rowcount
         return updated
+
+    def _existing_deck_name(self, deck_id: str | None, deck_name: str | None) -> str | None:
+        if not deck_id or deck_id == "other":
+            return None
+        if str(deck_id) in self.deck_mapping:
+            return resolve_archetype(str(deck_id), self.deck_mapping)
+        return deck_name if deck_name and deck_name.strip() else None
 
     def upsert_pairings(self, tournament_id: str, rows: Iterable[dict[str, Any]]) -> None:
         with self.connect() as conn:

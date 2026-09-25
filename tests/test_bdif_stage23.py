@@ -66,10 +66,10 @@ def test_ingestion_reports_newly_observed_unmapped_deck_ids(monkeypatch, tmp_pat
 
 
 @pytest.mark.unit
-def test_unknown_single_token_limitless_ids_stay_unmapped(tmp_path):
+def test_unknown_limitless_ids_without_catalogue_names_stay_unmapped(tmp_path):
     store = LimitlessStore(tmp_path / "limitless.db", canonical_names=["Known"])
 
-    assert store._resolve_deck_name("unknown", "Unknown") is None
+    assert store._resolve_deck_name("unknown") is None
 
 
 @pytest.mark.unit
@@ -78,6 +78,29 @@ def test_unknown_limitless_deck_ids_are_reported_as_unmapped():
 
     assert report.mapped == ["crustle-dri"]
     assert report.unmapped == ["unknown-deck"]
+
+
+@pytest.mark.unit
+def test_backfill_keeps_catalogue_name_for_id_outside_static_map_and_observes_it(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    store.upsert_standings("event", [
+        {"player": "p1", "deck": {"id": "outside-baltimore"}, "decklist": {"pokemon": [{"name": "A", "count": 1}]}},
+        {"player": "p2", "deck": {"id": "crustle-dri"}, "decklist": {"pokemon": [{"name": "B", "count": 1}]}},
+        {"player": "p3", "deck": {"id": "other"}, "decklist": {"pokemon": [{"name": "C", "count": 1}]}},
+    ])
+    store.backfill_deck_names({
+        "outside-baltimore": "Outside Baltimore",
+        "crustle-dri": "Provider Crustle",
+        "other": "Other",
+    })
+    store.upsert_pairings("event", [{"round": 1, "player1": "p1", "player2": "p2", "winner": "p1"}])
+
+    with sqlite3.connect(store.path) as connection:
+        names = dict(connection.execute("SELECT player_id, deck_name FROM standings"))
+    assert names == {"p1": "Outside Baltimore", "p2": "Crustle", "p3": None}
+    assert store.player_observations() == [
+        PlayerObservation("Outside Baltimore", "Crustle", frozenset({"A"}), frozenset({"B"}), 1),
+    ]
 
 
 @pytest.mark.unit
