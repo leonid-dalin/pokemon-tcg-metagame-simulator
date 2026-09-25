@@ -287,6 +287,7 @@ def run_monte_carlo_analytics(
             return win_matrix.copy()
 
     draw_specs = [(size, i) for i, size in enumerate(draw_sizes)]
+    draw_starts = np.cumsum([0, *draw_sizes[:-1]]).tolist()
 
     # Init empty tracking arrays for the aggregated totals
     total_initial = np.zeros(n_decks, dtype=int)
@@ -303,8 +304,8 @@ def run_monte_carlo_analytics(
         if current_chunk == 0:
             continue
 
-        # Ensure a unique, deterministic seed per chunk
-        base_seed = (seed + draw_index) % (1 << 32)
+        # Ensure a unique, deterministic seed per tournament
+        base_seed = (seed + int(draw_starts[draw_index])) % (1 << 32)
 
         with tracer.start_as_current_span("rust_tcg_engine_batch") as rust_span:
             rust_span.set_attribute("chunk.size", current_chunk)
