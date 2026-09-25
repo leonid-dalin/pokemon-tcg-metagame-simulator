@@ -6,7 +6,7 @@ import sqlite3
 from dataclasses import dataclass
 from contextlib import closing
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from src.ingestion.mapping import resolve_archetype
 from src.ingestion.model import ACE_SPEC_CARDS, PlayerObservation, _card_limit
@@ -37,9 +37,10 @@ def _decklist_card_names(raw: str | None) -> frozenset[str]:
 
 
 class LimitlessStore:
-    def __init__(self, path: str | Path, canonical_names: Iterable[str] | None = None):
+    def __init__(self, path: str | Path, canonical_names: Iterable[str] | None = None, deck_mapping: Mapping[str, str | None] | None = None):
         self.path = str(path)
         self.canonical_names = list(canonical_names) if canonical_names is not None else self._load_canonical_names()
+        self.deck_mapping = deck_mapping
         self._schema_ready = False
         self._read_ready = False
 
@@ -73,11 +74,9 @@ class LimitlessStore:
     def _resolve_deck_name(self, deck_id: str | None, display_name: str | None = None) -> str | None:
         if not deck_id or deck_id == "other":
             return None
-        explicit = resolve_archetype(str(deck_id))
+        explicit = resolve_archetype(str(deck_id), self.deck_mapping)
         if explicit is not None:
             return explicit
-        if "-" not in deck_id and " " not in deck_id:
-            return display_name or deck_id
         return None
 
 
