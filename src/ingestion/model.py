@@ -20,6 +20,7 @@ class PlayerObservation:
     deck_cards: frozenset[str]
     opponent_cards: frozenset[str]
     result: int
+    players: tuple[str, str] | None = None
 
 
 MIST_ENERGY_NAME = "Mist Energy"
@@ -97,6 +98,7 @@ class FittedCardModel:
     standard_errors: Mapping[str, float]
     match_counts: Mapping[tuple[str, str], int]
     reference_deck: str
+    standard_error_kind: str = "model-based"
 
     @property
     def deck_column_count(self) -> int:
@@ -191,6 +193,36 @@ def _card_design(observations: Sequence[PlayerObservation], decks: Sequence[str]
     return np.asarray(rows, dtype=float)
 
 
+def _player_clustered_standard_errors(
+    estimator: LogisticRegression,
+    observations: Sequence[PlayerObservation],
+    design: np.ndarray,
+    model_standard_errors: np.ndarray,
+) -> np.ndarray:
+    probabilities = estimator.predict_proba(design)[:, 1]
+    scores = design * (np.asarray([row.result for row in observations]) - probabilities)[:, None]
+    clusters: dict[str, np.ndarray] = {}
+    pairs: dict[tuple[str, str], np.ndarray] = {}
+    for row, score in zip(observations, scores):
+        player1, player2 = row.players
+        clusters.setdefault(player1, np.zeros(design.shape[1]))
+        clusters.setdefault(player2, np.zeros(design.shape[1]))
+        clusters[player1] += score
+        clusters[player2] += score
+        pair = tuple(sorted((player1, player2)))
+        pairs.setdefault(pair, np.zeros(design.shape[1]))
+        pairs[pair] += score
+    meat = sum((vector[:, None] @ vector[None, :] for vector in clusters.values()), np.zeros((design.shape[1], design.shape[1])))
+    meat -= sum((vector[:, None] @ vector[None, :] for vector in pairs.values()), np.zeros((design.shape[1], design.shape[1])))
+    bread = design.T @ ((probabilities * (1.0 - probabilities))[:, None] * design)
+    bread_inverse = np.linalg.pinv(bread)
+    covariance = bread_inverse @ meat @ bread_inverse
+    cluster_count = len(clusters)
+    correction = (cluster_count / (cluster_count - 1)) * ((len(observations) - 1) / (len(observations) - design.shape[1]))
+    clustered = np.sqrt(np.maximum(np.diag(covariance) * correction, 0.0))
+    return np.maximum(clustered, model_standard_errors)
+
+
 def fit_card_model(observations: Sequence[PlayerObservation], cards: Sequence[str]) -> FittedCardModel:
     decks = sorted({deck for row in observations for deck in (row.deck, row.opponent)})
     cards = list(cards)
@@ -210,12 +242,16 @@ def fit_card_model(observations: Sequence[PlayerObservation], cards: Sequence[st
     if float(np.max(np.abs(estimator.coef_))) > BDIF_CARD_MAX_ABS_LOGIT:
         raise CardModelNotIdentifiable("card model indicates separated outcomes")
     standard_errors_array = _logistic_standard_errors(estimator, design)
+    standard_error_kind = "model-based"
+    if all(row.players is not None for row in observations):
+        standard_errors_array = _player_clustered_standard_errors(estimator, observations, design, standard_errors_array)
+        standard_error_kind = "player-clustered"
     standard_errors = {card: float(standard_errors_array[len(decks) - 1 + index]) for index, card in enumerate(cards)}
     match_counts: dict[tuple[str, str], int] = {}
     for row in observations:
         pair = tuple(sorted((row.deck, row.opponent)))
         match_counts[pair] = match_counts.get(pair, 0) + 1
-    return FittedCardModel(decks, cards, estimator, inclusion, standard_errors, match_counts, decks[-1])
+    return FittedCardModel(decks, cards, estimator, inclusion, standard_errors, match_counts, decks[-1], standard_error_kind)
 
 
 def model_artifact(model: FittedCardModel) -> dict[str, Any]:

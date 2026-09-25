@@ -1,18 +1,32 @@
 import sqlite3
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from src.bdif import service
 from src.bdif.settings import BdifSettings
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerObservation, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, recommend_best60, select_model_cards, select_panel_decks, validate_recommendation
+from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerObservation, _logistic_standard_errors, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, recommend_best60, select_model_cards, select_panel_decks, validate_recommendation
 from src.api.models import PredictionRequest
 from src.ingestion.store import LimitlessStore, _decklist_card_names
 from src.ingestion.aggregate import build_artifact
 from src.ingestion.mapping import coverage_report, extract_recorded_deck_ids, load_archetype_map, resolve_archetype
 from src.core.scraper import normalize_archetype
 SYNTHETIC_DECK_MAPPING = {"a": "a", "alakazam": "Alakazam", "b": "b", "crustle": "Crustle"}
+
+
+def _tech_observations(repeats, with_players):
+    observations = []
+    for index in range(240):
+        has_tech = index % 2 == 0
+        a_cards = frozenset({"Core", "Tech"} if has_tech else {"Core"})
+        b_cards = frozenset({"Core"})
+        result = int(index % 10 < (8 if has_tech else 2))
+        result = 1 - result if index % 11 == 0 else result
+        players = (f"p{index}", f"q{index}") if with_players else None
+        observations.extend([PlayerObservation("a", "b", a_cards, b_cards, result, players)] * repeats)
+    return observations
 
 
 
@@ -99,7 +113,7 @@ def test_backfill_keeps_catalogue_name_for_id_outside_static_map_and_observes_it
         names = dict(connection.execute("SELECT player_id, deck_name FROM standings"))
     assert names == {"p1": "Outside Baltimore", "p2": "Crustle", "p3": None}
     assert store.player_observations() == [
-        PlayerObservation("Outside Baltimore", "Crustle", frozenset({"A"}), frozenset({"B"}), 1),
+        PlayerObservation("Outside Baltimore", "Crustle", frozenset({"A"}), frozenset({"B"}), 1, ("p1", "p2")),
     ]
 
 
@@ -121,7 +135,7 @@ def test_player_observations_include_each_players_card_presence_and_skip_invalid
     ])
 
     assert store.player_observations() == [
-        PlayerObservation("a", "b", frozenset({"A", "Shared"}), frozenset({"B"}), 0),
+        PlayerObservation("a", "b", frozenset({"A", "Shared"}), frozenset({"B"}), 0, ("p1", "p2")),
     ]
 
 
@@ -656,3 +670,52 @@ def test_card_model_artifact_counts_matches_in_both_orientations():
     assert artifact["win_rate_matrix"]["a"]["b"]["match_count"] == 60
     assert artifact["win_rate_matrix"]["b"]["a"]["match_count"] == 60
     assert only_reverse["win_rate_matrix"]["a"]["b"]["match_count"] == 60
+
+
+@pytest.mark.unit
+def test_card_model_without_player_ids_keeps_model_based_standard_errors():
+    observations = _tech_observations(1, False)
+    model = fit_card_model(observations, ["Tech"])
+    expected = _logistic_standard_errors(model.estimator, np.asarray([
+        [float(row.deck == "a") - float(row.opponent == "a"), float("Tech" in row.deck_cards) - float("Tech" in row.opponent_cards)]
+        for row in observations
+    ]))
+    assert model.standard_error_kind == "model-based"
+    assert model.standard_errors["Tech"] == pytest.approx(expected[1])
+
+
+@pytest.mark.unit
+def test_repeated_matches_between_the_same_players_do_not_shrink_clustered_errors():
+    single = fit_card_model(_tech_observations(1, True), ["Tech"])
+    repeated = fit_card_model(_tech_observations(4, True), ["Tech"])
+    independent = fit_card_model(_tech_observations(4, False), ["Tech"])
+    assert repeated.standard_errors["Tech"] == pytest.approx(single.standard_errors["Tech"], rel=0.1)
+    assert independent.standard_errors["Tech"] < single.standard_errors["Tech"] * 0.6
+
+
+@pytest.mark.unit
+def test_clustered_errors_never_fall_below_model_based_errors():
+    observations = _tech_observations(1, True)
+    observations = [PlayerObservation(row.deck, row.opponent, row.deck_cards, row.opponent_cards, int(index % 4 in (0, 1)), ("p", "q")) for index, row in enumerate(observations)]
+    model = fit_card_model(observations, ["Tech"])
+    design = np.asarray([
+        [float(row.deck == "a") - float(row.opponent == "a"), float("Tech" in row.deck_cards) - float("Tech" in row.opponent_cards)]
+        for row in observations
+    ])
+    model_errors = _logistic_standard_errors(model.estimator, design)
+    assert model.standard_errors["Tech"] == pytest.approx(model_errors[1])
+    assert model.standard_errors["Tech"] > 0
+
+
+@pytest.mark.unit
+def test_player_observations_carry_both_player_ids(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
+    store.upsert_standings("event", [
+        {"player": "p1", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "A"}]}},
+        {"player": "p2", "deck": {"id": "b"}, "decklist": {"pokemon": [{"name": "B"}]}},
+    ])
+    store.upsert_pairings("event", [
+        {"round": 1, "player1": "p1", "player2": "p2", "winner": "p1"},
+        {"round": 2, "player1": "p2", "player2": "p1", "winner": "p1"},
+    ])
+    assert [((row.players), row.result) for row in store.player_observations()] == [(("p1", "p2"), 1), (("p2", "p1"), 0)]
