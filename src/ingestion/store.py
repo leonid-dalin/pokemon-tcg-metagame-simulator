@@ -8,7 +8,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any, Iterable
 
-from src.core.scraper import normalize_archetype
+from src.ingestion.mapping import resolve_archetype
 from src.ingestion.model import ACE_SPEC_CARDS, PlayerObservation, _card_limit
 
 SCHEMA = """
@@ -73,21 +73,9 @@ class LimitlessStore:
     def _resolve_deck_name(self, deck_id: str | None, display_name: str | None = None) -> str | None:
         if not deck_id or deck_id == "other":
             return None
-        candidates = [display_name, deck_id]
-        normalised = {normalize_archetype(name): name for name in self.canonical_names}
-        for candidate in candidates:
-            if not candidate:
-                continue
-            candidate_text = str(candidate).replace("-", " ")
-            normalised_candidate = normalize_archetype(candidate_text)
-            variants = [normalised_candidate]
-            variants.append(re.sub(r"\b([a-z]+)s(?=\s)", r"\1", normalised_candidate))
-            for variant in variants:
-                tokens = variant.split()
-                for end in range(len(tokens), 0, -1):
-                    match = normalised.get(" ".join(tokens[:end]))
-                    if match:
-                        return match
+        explicit = resolve_archetype(str(deck_id))
+        if explicit is not None:
+            return explicit
         if "-" not in deck_id and " " not in deck_id:
             return display_name or deck_id
         return None

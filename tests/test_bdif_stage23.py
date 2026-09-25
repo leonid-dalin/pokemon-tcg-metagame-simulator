@@ -1,4 +1,5 @@
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -7,7 +8,28 @@ from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerO
 from src.api.models import PredictionRequest
 from src.ingestion.store import LimitlessStore, _decklist_card_names
 from src.ingestion.aggregate import build_artifact
+from src.ingestion.mapping import coverage_report, extract_recorded_deck_ids, resolve_archetype
 from src.core.scraper import normalize_archetype
+
+
+@pytest.mark.unit
+def test_recorded_limitless_deck_ids_have_explicit_mapping_coverage():
+    fixture = next(Path("data").glob("Decks_*.htm"))
+    observed = extract_recorded_deck_ids(fixture)
+    report = coverage_report(observed)
+
+    assert len(observed) == 59
+    assert report.unmapped == ["farigiraf-milotic", "ogerpon-box", "other"]
+    assert report.mapped == sorted(observed - set(report.unmapped))
+    assert resolve_archetype("crustle-dri") == "Crustle"
+
+
+@pytest.mark.unit
+def test_unknown_limitless_deck_ids_are_reported_as_unmapped():
+    report = coverage_report({"crustle-dri", "unknown-deck"})
+
+    assert report.mapped == ["crustle-dri"]
+    assert report.unmapped == ["unknown-deck"]
 
 
 @pytest.mark.unit
