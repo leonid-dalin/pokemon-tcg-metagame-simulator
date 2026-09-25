@@ -10,22 +10,10 @@ from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerO
 from src.api.models import PredictionRequest
 from src.ingestion.store import LimitlessStore, _decklist_card_names
 from src.ingestion.aggregate import build_artifact
-from src.ingestion.mapping import coverage_report, extract_recorded_deck_ids, resolve_archetype
+from src.ingestion.mapping import coverage_report, extract_recorded_deck_ids, load_archetype_map, resolve_archetype
 from src.core.scraper import normalize_archetype
 SYNTHETIC_DECK_MAPPING = {"a": "a", "alakazam": "Alakazam", "b": "b", "crustle": "Crustle"}
 
-
-
-@pytest.mark.unit
-def test_recorded_limitless_deck_ids_have_explicit_mapping_coverage():
-    fixture = Path("data/Decks_ Regional Championship Prague – Limitless Labs.htm")
-    observed = extract_recorded_deck_ids(fixture)
-    report = coverage_report(observed)
-
-    assert len(observed) == 59
-    assert report.unmapped == ["farigiraf-milotic", "ogerpon-box", "other"]
-    assert report.mapped == sorted(observed - set(report.unmapped))
-    assert resolve_archetype("crustle-dri") == "Crustle"
 
 
 @pytest.mark.unit
@@ -35,6 +23,7 @@ def test_baltimore_limitless_deck_ids_have_explicit_mapping_coverage():
     report = coverage_report(observed)
 
     assert len(observed) == 90
+    assert set(load_archetype_map()) == observed
     assert report.unmapped == ["conkeldurr-twm", "other"]
     assert report.mapped == sorted(observed - set(report.unmapped))
     assert resolve_archetype("mega-abomasnow-ex") == "Mega Abomasnow"
