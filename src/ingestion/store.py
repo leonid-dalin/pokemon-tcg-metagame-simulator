@@ -175,8 +175,6 @@ class LimitlessStore:
             return None
         if str(deck_id) in self.deck_mapping:
             return resolve_archetype(str(deck_id), self.deck_mapping)
-        if str(deck_id) in self.canonical_names:
-            return str(deck_id)
         return deck_name if deck_name and deck_name.strip() else None
 
     def upsert_pairings(self, tournament_id: str, rows: Iterable[dict[str, Any]]) -> None:
