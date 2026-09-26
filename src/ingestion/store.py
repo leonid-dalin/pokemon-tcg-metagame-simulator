@@ -247,7 +247,7 @@ class LimitlessStore:
             else:
                 continue
             observations.append(PlayerObservation(
-                str(deck), str(opponent), deck_cards, opponent_cards, result,
+                str(deck), str(opponent), deck_cards, opponent_cards, result, (str(player1), str(player2)),
             ))
         return observations
 
