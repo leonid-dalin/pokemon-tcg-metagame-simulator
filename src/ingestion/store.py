@@ -83,12 +83,13 @@ class LimitlessStore:
     def connect(self):
         return sqlite3.connect(self.path)
 
-    def _decklists(self, archetype: str):
+    def _decklists(self, archetype: str, event_id: str | None = None):
         self.prepare_for_read()
         with closing(self.connect()) as conn:
+            event_filter = " AND tournament_id=?" if event_id is not None else ""
             rows = conn.execute(
-                "SELECT decklist_json FROM standings WHERE deck_name=? AND decklist_json IS NOT NULL",
-                (archetype,),
+                "SELECT decklist_json FROM standings WHERE deck_name=? AND decklist_json IS NOT NULL" + event_filter,
+                (archetype,) if event_id is None else (archetype, event_id),
             )
             for (raw,) in rows:
                 if raw and raw != "null":
@@ -201,9 +202,36 @@ class LimitlessStore:
         with self.connect() as conn:
             yield from conn.execute(query)
 
-    def card_inclusion(self, archetype: str) -> dict[str, float]:
+    def aggregate_rows(self):
+        self.prepare_for_read()
+        query = """
+        SELECT p.tournament_id, p.round, s1.deck_name, s2.deck_name,
+               p.winner, p.player1, p.player2,
+               s1.dropped_round, s2.dropped_round
+        FROM pairings p
+        LEFT JOIN standings s1
+          ON s1.tournament_id=p.tournament_id AND s1.player_id=p.player1
+        LEFT JOIN standings s2
+          ON s2.tournament_id=p.tournament_id AND s2.player_id=p.player2
+        ORDER BY p.tournament_id, p.phase, p.round, p.player1, p.player2
+        """
+        with self.connect() as conn:
+            for row in conn.execute(query):
+                yield {
+                    "event_id": row[0],
+                    "round": row[1],
+                    "deck1": row[2],
+                    "deck2": row[3],
+                    "winner": row[4],
+                    "player1": row[5],
+                    "player2": row[6],
+                    "drop1": row[7],
+                    "drop2": row[8],
+                }
+
+    def card_inclusion(self, archetype: str, event_id: str | None = None) -> dict[str, float]:
         counts: dict[str, int] = {}
-        rows = list(self._decklists(archetype))
+        rows = list(self._decklists(archetype, event_id))
         for cards in rows:
             names = {card["name"] for group in (cards or {}).values() if isinstance(group, list) for card in group if isinstance(card, dict) and "name" in card}
             for name in names:
