@@ -7,7 +7,7 @@ import pytest
 from src.bdif import service
 from src.bdif.settings import BdifSettings
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerObservation, _logistic_standard_errors, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, recommend_best60, select_model_cards, select_panel_decks, validate_recommendation
+from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerObservation, _card_design, _logistic_standard_errors, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, recommend_best60, select_model_cards, select_panel_decks, validate_recommendation
 from src.api.models import PredictionRequest
 from src.ingestion.store import LimitlessStore, _decklist_card_names
 from src.ingestion.aggregate import build_artifact
@@ -21,9 +21,8 @@ def _tech_observations(repeats, with_players):
     for index in range(240):
         has_tech = index % 2 == 0
         a_cards = frozenset({"Core", "Tech"} if has_tech else {"Core"})
-        b_cards = frozenset({"Core"})
-        result = int(index % 10 < (8 if has_tech else 2))
-        result = 1 - result if index % 11 == 0 else result
+        b_cards = frozenset({"Core", "Tech"} if index % 3 == 0 else {"Core"})
+        result = int(index % 10 < (7 if has_tech else 4))
         players = (f"p{index}", f"q{index}") if with_players else None
         observations.extend([PlayerObservation("a", "b", a_cards, b_cards, result, players)] * repeats)
     return observations
@@ -676,10 +675,7 @@ def test_card_model_artifact_counts_matches_in_both_orientations():
 def test_card_model_without_player_ids_keeps_model_based_standard_errors():
     observations = _tech_observations(1, False)
     model = fit_card_model(observations, ["Tech"])
-    expected = _logistic_standard_errors(model.estimator, np.asarray([
-        [float(row.deck == "a") - float(row.opponent == "a"), float("Tech" in row.deck_cards) - float("Tech" in row.opponent_cards)]
-        for row in observations
-    ]))
+    expected = _logistic_standard_errors(model.estimator, _card_design(observations, model.decks, model.cards))
     assert model.standard_error_kind == "model-based"
     assert model.standard_errors["Tech"] == pytest.approx(expected[1])
 
@@ -688,23 +684,27 @@ def test_card_model_without_player_ids_keeps_model_based_standard_errors():
 def test_repeated_matches_between_the_same_players_do_not_shrink_clustered_errors():
     single = fit_card_model(_tech_observations(1, True), ["Tech"])
     repeated = fit_card_model(_tech_observations(4, True), ["Tech"])
-    independent = fit_card_model(_tech_observations(4, False), ["Tech"])
+    naive_repeated = fit_card_model(_tech_observations(4, False), ["Tech"])
+    assert repeated.standard_error_kind == "player-clustered"
     assert repeated.standard_errors["Tech"] == pytest.approx(single.standard_errors["Tech"], rel=0.1)
-    assert independent.standard_errors["Tech"] < single.standard_errors["Tech"] * 0.6
+    assert naive_repeated.standard_errors["Tech"] == pytest.approx(single.standard_errors["Tech"] / 2, rel=0.1)
 
 
 @pytest.mark.unit
 def test_clustered_errors_never_fall_below_model_based_errors():
-    observations = _tech_observations(1, True)
-    observations = [PlayerObservation(row.deck, row.opponent, row.deck_cards, row.opponent_cards, int(index % 4 in (0, 1)), ("p", "q")) for index, row in enumerate(observations)]
+    observations = []
+    for index in range(120):
+        a_cards = frozenset({"Core", "Tech"} if index % 2 == 0 else {"Core"})
+        b_cards = frozenset({"Core", "Tech"} if index % 3 == 0 else {"Core"})
+        observations.extend([
+            PlayerObservation("a", "b", a_cards, b_cards, 1, (f"p{index}", f"x{index}")),
+            PlayerObservation("a", "b", a_cards, b_cards, 0, (f"p{index}", f"y{index}")),
+        ])
     model = fit_card_model(observations, ["Tech"])
-    design = np.asarray([
-        [float(row.deck == "a") - float(row.opponent == "a"), float("Tech" in row.deck_cards) - float("Tech" in row.opponent_cards)]
-        for row in observations
-    ])
-    model_errors = _logistic_standard_errors(model.estimator, design)
-    assert model.standard_errors["Tech"] == pytest.approx(model_errors[1])
-    assert model.standard_errors["Tech"] > 0
+    model_errors = _logistic_standard_errors(model.estimator, _card_design(observations, model.decks, model.cards))
+    assert model.standard_error_kind == "player-clustered"
+    assert model.standard_errors["Tech"] >= model_errors[1]
+    assert model_errors[1] > 0.1
 
 
 @pytest.mark.unit
