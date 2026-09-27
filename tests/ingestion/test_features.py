@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from src.ingestion.features import inclusion_rates
 from src.ingestion.store import LimitlessStore
 
@@ -98,3 +100,57 @@ def test_inclusion_rates_excludes_standings_without_decklists(tmp_path):
     )
 
     assert inclusion_rates(store, "Test Archetype", window_days=7) == {"Misty Energy": 1.0}
+
+
+@pytest.mark.unit
+def test_inclusion_rates_excludes_ace_spec_violations_and_logs_event(tmp_path, monkeypatch):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    date = datetime.now(timezone.utc).isoformat()
+    events = []
+
+    class Logger:
+        def warning(self, event, **kwargs):
+            events.append((event, kwargs))
+
+    monkeypatch.setattr("src.ingestion.features.logger", Logger())
+    _add_event(
+        store,
+        "event",
+        date,
+        [
+            _standing("duplicate", [{"name": "Prime Catcher", "count": 2}]),
+            _standing("multiple", [
+                {"name": "Prime Catcher", "count": 1},
+                {"name": "Master Ball", "count": 1},
+            ]),
+            _standing("valid", [{"name": "Prime Catcher", "count": 1}]),
+        ],
+    )
+
+    assert inclusion_rates(store, "Test Archetype", window_days=7) == {"Prime Catcher": 1.0}
+    events.clear()
+    assert inclusion_rates(store, "Test Archetype") == {"Prime Catcher": 1.0}
+    assert [event for event, _ in events] == [
+        "ingest_ace_spec_violation",
+        "ingest_ace_spec_violation",
+    ]
+
+
+@pytest.mark.unit
+def test_inclusion_rates_treats_valid_ace_spec_as_binary_presence(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db")
+    date = datetime.now(timezone.utc).isoformat()
+    _add_event(
+        store,
+        "event",
+        date,
+        [
+            _standing("one", [{"name": "Prime Catcher", "count": 1}]),
+            _standing("none", [{"name": "Basic Energy", "count": 8}]),
+        ],
+    )
+
+    assert inclusion_rates(store, "Test Archetype", window_days=7) == {
+        "Basic Energy": 0.5,
+        "Prime Catcher": 0.5,
+    }
