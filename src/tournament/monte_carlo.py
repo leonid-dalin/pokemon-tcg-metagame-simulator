@@ -157,6 +157,18 @@ def build_matchup_panel(
     return {"rows": rows, "unmatched": unmatched, "opponents": top_decks}
 
 
+def batch_ratio_standard_error(numerators: np.ndarray, denominators: np.ndarray) -> float:
+    numerators = np.asarray(numerators, dtype=float)
+    denominators = np.asarray(denominators, dtype=float)
+    batches = len(numerators)
+    total = float(denominators.sum())
+    if batches < 2 or total <= 0:
+        return float("nan")
+    ratio = float(numerators.sum()) / total
+    residuals = numerators - ratio * denominators
+    return float(np.sqrt(batches / (batches - 1) * np.sum(residuals ** 2)) / total)
+
+
 def posterior_field_metrics(
         deck_names: List[str],
         meta_vector: np.ndarray,
@@ -296,6 +308,7 @@ def run_monte_carlo_analytics(
     total_champ = np.zeros(n_decks, dtype=int)
 
     draw_metrics = []
+    draw_counts = []
     for current_chunk, draw_index in draw_specs:
         working_matrix = matrix_sampler(draw_index)
         if match_format == "BO3":
@@ -330,6 +343,12 @@ def run_monte_carlo_analytics(
         total_day2 += np.array(res_day2, dtype=int)
         total_topcut += np.array(res_top, dtype=int)
         total_champ += np.array(res_champ, dtype=int)
+        draw_counts.append((
+            np.array(res_init, dtype=float),
+            np.array(res_day2, dtype=float),
+            np.array(res_top, dtype=float),
+            np.array(res_champ, dtype=float),
+        ))
 
         # Fire progress state back to Huey
         with np.errstate(divide="ignore", invalid="ignore"):
@@ -365,9 +384,22 @@ def run_monte_carlo_analytics(
                 "day2_share": float(day2_share[i]),
                 "top_cut_share": float(topcut_share[i]),
             }
-            for metric in ("day2_conversion", "top_cut_conversion", "win_probability"):
-                value = results[deck][metric]
-                results[deck][f"{metric}_mc_se"] = float(np.sqrt(value * (1.0 - value) / entrants))
+            if use_posterior:
+                metric_counts = {
+                    "day2_conversion": (1, 0),
+                    "top_cut_conversion": (2, 0),
+                    "win_probability": (3, 0),
+                }
+                for metric, (numerator_index, denominator_index) in metric_counts.items():
+                    numerators = np.array([counts[numerator_index][i] for counts in draw_counts])
+                    denominators = np.array([counts[denominator_index][i] for counts in draw_counts])
+                    results[deck][f"{metric}_mc_se"] = batch_ratio_standard_error(
+                        numerators, denominators
+                    )
+            else:
+                for metric in ("day2_conversion", "top_cut_conversion", "win_probability"):
+                    value = results[deck][metric]
+                    results[deck][f"{metric}_mc_se"] = float(np.sqrt(value * (1.0 - value) / entrants))
 
     draw_array = {key: np.array([draw[key] for draw in draw_metrics]) for key in ("day2_share", "top_cut_share", "win_probability")}
     if not use_posterior:

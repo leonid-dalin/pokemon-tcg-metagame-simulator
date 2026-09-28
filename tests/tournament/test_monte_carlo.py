@@ -69,6 +69,48 @@ TWO_DECK_DETAILS = {
     ("b", "a"): {"win_rate": 0.4, "match_count": 2_000},
 }
 
+
+@pytest.mark.unit
+def test_batch_ratio_standard_error_matches_the_ratio_estimator_variance():
+    value = monte_carlo.batch_ratio_standard_error(np.array([1.0, 3.0]), np.array([10.0, 10.0]))
+    assert value == pytest.approx((2.0 * 2.0) ** 0.5 / 20.0)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("numerators", [np.array([2.0]), np.array([])])
+def test_batch_ratio_standard_error_needs_two_batches(numerators):
+    denominators = np.ones_like(numerators) * 10.0
+    assert np.isnan(monte_carlo.batch_ratio_standard_error(numerators, denominators))
+
+
+@pytest.mark.unit
+def test_posterior_mode_standard_errors_come_from_draw_to_draw_spread(monkeypatch):
+    champions = itertools.cycle([[2, 18], [6, 14]])
+    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
+    monkeypatch.setattr(
+        monte_carlo.tcg_engine,
+        "run_parallel_monte_carlo",
+        lambda n, *args: ([100, 100], [50, 50], [10, 10], next(champions)),
+    )
+    result = monte_carlo.run_monte_carlo_analytics(
+        deck_names=["a", "b"],
+        win_matrix=np.array([[0.5, 0.6], [0.4, 0.5]]),
+        meta_distribution={"a": 0.5, "b": 0.5},
+        matchup_details=TWO_DECK_DETAILS,
+        d1_rounds=1,
+        cut_points=1,
+        d2_rounds=1,
+        top_cut=1,
+        iterations=1_000,
+    )
+    draws = result["posterior"]["draws"]
+    expected = monte_carlo.batch_ratio_standard_error(
+        np.array([2.0, 6.0] * (draws // 2)), np.full(draws, 100.0),
+    )
+    assert draws == 10
+    assert result["metrics"]["a"]["win_probability_mc_se"] == pytest.approx(expected)
+    assert result["metrics"]["a"]["win_probability_mc_se"] != pytest.approx((0.04 * 0.96 / 1_000) ** 0.5)
+
 EXPECTED_DRAWS_BY_TIER = {
     PrecisionTier.BULLET: 10,
     PrecisionTier.BLITZ: 100,
