@@ -13,6 +13,11 @@ from src.core.config import OUTPUT_DIR, RNG_SEED
 from src.core.logger import setup_structured_logging, logger
 from src.core.telemetry import setup_telemetry
 
+EVIDENCE_UNAVAILABLE = {
+    "ingest": {"disabled", "failed"},
+    "refit": {"missing", "insufficient observations", "not identifiable"},
+}
+
 
 def _meta_spec(value: str) -> dict[str, float]:
     result = {}
@@ -84,9 +89,7 @@ def main() -> int:
             )
             result = service.run_prediction(request, seed=args.seed, input_path=input_path)
         print(json.dumps(result, sort_keys=True, default=lambda value: value.value if hasattr(value, "value") else str(value)))
-        if args.command == "report" and _evidence_unavailable(result):
-            return 3
-        return 0
+        return _exit_code(args.command, result)
     except SystemExit:
         raise
     except Exception as exc:
@@ -96,28 +99,17 @@ def main() -> int:
         return 1
 
 
-def _evidence_unavailable(result: Any) -> bool:
+def _exit_code(command: str, result: Any) -> int:
     if not isinstance(result, dict):
-        return False
-    mc_results = result.get("mc_results")
-    if not isinstance(mc_results, dict):
-        return False
-    if mc_results.get("insufficient_data"):
-        return True
-    for addon_group in ("best60_recommendations", "h1_report"):
-        addon = mc_results.get(addon_group)
-        if not isinstance(addon, dict):
-            continue
-        if addon.get("status") in {"failed", "unavailable", "insufficient_data"}:
-            return True
-        if any(
-            isinstance(value, dict) and value.get("status") in {"failed", "unavailable", "insufficient_data"}
-            for value in addon.values()
-        ):
-            return True
-    posterior = mc_results.get("posterior")
-    interval_status = posterior.get("interval_status") if isinstance(posterior, dict) else None
-    return isinstance(interval_status, str) and interval_status.lower() in {"failed", "unavailable", "insufficient_data"}
+        return 0
+    if command == "report":
+        mc_results = result.get("mc_results")
+        if not isinstance(mc_results, dict):
+            return 0
+        ranked_metrics = mc_results.get("ranked_metrics")
+        return 3 if not isinstance(ranked_metrics, dict) or not ranked_metrics else 0
+    statuses = EVIDENCE_UNAVAILABLE.get(command, set())
+    return 3 if result.get("status") in statuses else 0
 
 
 if __name__ == "__main__":

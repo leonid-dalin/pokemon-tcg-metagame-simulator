@@ -26,7 +26,7 @@ def _run(monkeypatch, capsys, argv, module):
 @pytest.mark.unit
 @pytest.mark.parametrize(("command", "method", "result"), [
     ("status", "bdif_status", {"status": "missing"}),
-    ("ingest", "run_ingestion", {"status": "disabled"}),
+    ("ingest", "run_ingestion", {"status": "complete"}),
     ("refit", "refit_card_model", {"status": "complete"}),
 ])
 def test_module_commands_write_json_only_to_stdout(monkeypatch, capsys, command, method, result):
@@ -162,6 +162,46 @@ def test_healthy_report_with_empty_insufficient_data_exits_zero(monkeypatch, tmp
     code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source)], module)
     assert code == 0
     assert json.loads(captured.out)["mc_results"]["insufficient_data"] == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("command", "status", "expected"), [
+    ("ingest", "disabled", 3),
+    ("ingest", "failed", 3),
+    ("refit", "missing", 3),
+    ("refit", "insufficient observations", 3),
+    ("refit", "not identifiable", 3),
+    ("refit", "complete", 0),
+    ("status", "missing", 0),
+    ("refit", None, 0),
+])
+def test_evidence_statuses_select_command_exit_code(monkeypatch, capsys, command, status, expected):
+    method = {"status": "bdif_status", "ingest": "run_ingestion", "refit": "refit_card_model"}[command]
+    result = {} if status is None else {"status": status}
+    code, captured = _run(monkeypatch, capsys, [command], SimpleNamespace(**{method: lambda: result}))
+    assert code == expected
+    assert json.loads(captured.out) == result
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("result", "expected"), [
+    ({"mc_results": {"ranked_metrics": {"A": {}}, "insufficient_data": ["B"]}}, 0),
+    ({"mc_results": {"ranked_metrics": {"A": {}}, "best60_recommendations": {"status": "failed"}}}, 0),
+    ({"mc_results": {"ranked_metrics": {"A": {}}, "posterior": {"interval_status": "failed"}}}, 0),
+    ({"mc_results": {"ranked_metrics": {}}}, 3),
+    ({"mc_results": {}}, 3),
+    ({"mc_results": {"ranked_metrics": None}}, 3),
+    (None, 0),
+    ([], 0),
+])
+def test_report_exit_code_requires_ranked_metrics(monkeypatch, tmp_path, capsys, result, expected):
+    source = tmp_path / "matrix.json"
+    source.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
+    module = SimpleNamespace(simulation_input_path=lambda: str(source), run_prediction=lambda request, **kwargs: result)
+    code, captured = _run(monkeypatch, capsys, ["report"], module)
+    assert code == expected
+    assert json.loads(captured.out) == result
 
 
 @pytest.mark.unit
