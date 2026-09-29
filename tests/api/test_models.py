@@ -2,6 +2,8 @@ import pytest
 from pydantic import ValidationError
 
 from src.api.models import PredictionRequest, RangeSpec
+from src.core.config import INPUT_DATA, MIN_GAMES
+from src.core.data import load_matchup_data
 
 
 def _request_payload(**overrides):
@@ -38,12 +40,18 @@ def test_prediction_request_rejects_job_id_longer_than_sixty_four_characters():
 
 
 @pytest.mark.unit
-def test_prediction_request_rejects_matrix_with_more_than_sixty_four_decks():
-    deck_names = [f"deck-{index}" for index in range(65)]
-    matchup_matrix = [
-        [0.5 if row == column else 0.0 for column in range(65)]
-        for row in range(65)
-    ]
+def test_shipped_input_is_accepted_by_prediction_request():
+    names, matrix, _ = load_matchup_data(INPUT_DATA, MIN_GAMES)
+
+    request = PredictionRequest(deck_names=names, matchup_matrix=matrix.tolist())
+
+    assert len(request.deck_names) == len(names) > 64
+
+
+@pytest.mark.unit
+def test_prediction_request_rejects_more_than_256_decks():
+    deck_names = [f"deck-{index}" for index in range(257)]
+    matchup_matrix = [[0.5] * 257 for _ in range(257)]
 
     with pytest.raises(ValidationError):
         PredictionRequest(deck_names=deck_names, matchup_matrix=matchup_matrix)

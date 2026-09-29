@@ -82,6 +82,28 @@ def load_matchup_data(
                     match_count = max(0, match_count)
                     matchup_details[(a, b)] = {"win_rate": wr, "match_count": match_count}
 
+            asymmetric_pairs = []
+            for index, a in enumerate(archetypes):
+                for b in archetypes[index + 1:]:
+                    forward = matchup_details[(a, b)]
+                    reverse = matchup_details[(b, a)]
+                    if abs(forward["win_rate"] + reverse["win_rate"] - 1.0) > 1e-9:
+                        total_matches = forward["match_count"] + reverse["match_count"]
+                        pooled_rate = (
+                            forward["win_rate"] * forward["match_count"]
+                            + (1.0 - reverse["win_rate"]) * reverse["match_count"]
+                        ) / total_matches if total_matches else 0.5
+                        pooled_count = total_matches // 2
+                        forward.update(win_rate=pooled_rate, match_count=pooled_count)
+                        reverse.update(win_rate=1.0 - pooled_rate, match_count=pooled_count)
+                        asymmetric_pairs.append((a, b))
+            if asymmetric_pairs:
+                logger.warning(
+                    "asymmetric_matchups_pooled",
+                    affected_pairs=asymmetric_pairs[:10],
+                    total_pairs=len(asymmetric_pairs),
+                )
+
             # Compute total matches per deck
             deck_total_matches = defaultdict(int)
             for (d1, d2), rec in matchup_details.items():
@@ -114,15 +136,6 @@ def load_matchup_data(
                 raise ValueError("Diagonal of win matrix must be exactly 0.5.")
             if not np.all((win_matrix >= 0.0) & (win_matrix <= 1.0)):
                 raise ValueError("Win rates must be between 0.0 and 1.0.")
-
-            asymmetry = np.abs(win_matrix + win_matrix.T - 1.0)
-            max_asymmetry = float(np.max(asymmetry))
-            if max_asymmetry >= 0.2 - 1e-5:
-                logger.warning(
-                    "high_asymmetry_detected",
-                    max_asymmetry=max_asymmetry,
-                    detail="This is normal for real-world data."
-                )
 
         logger.info("win_matrix_built", size=n, detail="Diagonal enforced to 0.5.")
         return reliable_decks, win_matrix, matchup_details

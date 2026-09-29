@@ -94,6 +94,43 @@ def test_malformed_matchup_json_returns_empty_result_and_logs_failure(tmp_path, 
 
 
 @pytest.mark.unit
+def test_asymmetric_matchups_are_pooled_into_a_zero_sum_matrix(tmp_path, monkeypatch):
+    logger = _CapturingLogger()
+    monkeypatch.setattr(data_module, "logger", logger)
+    path = tmp_path / "matchups.json"
+    path.write_text(
+        '{"archetypes": ["a", "b", "c"], "win_rate_matrix": {'
+        '"a": {"a": {"win_rate": 0.5, "match_count": 200}, '
+        '"b": {"win_rate": 0.8, "match_count": 100}, '
+        '"c": {"win_rate": 0.6, "match_count": 200}}, '
+        '"b": {"a": {"win_rate": 0.4, "match_count": 300}, '
+        '"b": {"win_rate": 0.5, "match_count": 200}, '
+        '"c": {"win_rate": 0.5, "match_count": 200}}, '
+        '"c": {"a": {"win_rate": 0.4, "match_count": 200}, '
+        '"b": {"win_rate": 0.5, "match_count": 200}, '
+        '"c": {"win_rate": 0.5, "match_count": 200}}}}',
+        encoding="utf-8",
+    )
+
+    names, matrix, details = load_matchup_data(str(path), min_matches_required=1)
+
+    assert names == ["a", "b", "c"]
+    assert matrix[0, 1] == pytest.approx(0.65)
+    assert matrix[1, 0] == pytest.approx(0.35)
+    assert details[("a", "b")]["win_rate"] == pytest.approx(0.65)
+    assert details[("b", "a")]["win_rate"] == pytest.approx(0.35)
+    assert details[("a", "b")]["match_count"] == 200
+    assert details[("b", "a")]["match_count"] == 200
+    assert details[("a", "c")] == {"win_rate": 0.6, "match_count": 200}
+    assert np.allclose(matrix + matrix.T, 1.0)
+    pooled_event, pooled = next(
+        item for item in logger.events if item[0] == "asymmetric_matchups_pooled"
+    )
+    assert pooled_event == "asymmetric_matchups_pooled"
+    assert pooled["affected_pairs"] == [("a", "b")]
+
+
+@pytest.mark.unit
 def test_identical_rows_collapse_to_a_single_reported_cluster():
     names = ["a", "b", "c", "d"]
     win_matrix = np.tile(np.array([0.5, 0.5, 0.5, 0.5], dtype=float), (4, 1))

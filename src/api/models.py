@@ -21,6 +21,7 @@ TIER_MAPPING = {
 }
 
 GLOBAL_TIE_RATE: float = 0.15
+MAX_REQUEST_DECKS = 256
 
 
 class ExactSpec(BaseModel):
@@ -67,11 +68,13 @@ class PredictionRequest(BaseModel):
     job_id: str = Field(default="unknown", max_length=64)
 
     # 2. Required Core Data
-    deck_names: List[str] = Field(..., min_length=2, description="List of active archetypes in the simulation.")
+    deck_names: List[str] = Field(
+        ..., min_length=2, max_length=MAX_REQUEST_DECKS, description="List of active archetypes in the simulation."
+    )
     matchup_matrix: List[List[float]] = Field(
         ...,
         min_length=2,
-        max_length=64,
+        max_length=MAX_REQUEST_DECKS,
         description="2D matrix of win rates corresponding to deck_names.",
     )
 
