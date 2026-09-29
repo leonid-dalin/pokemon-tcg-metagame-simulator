@@ -117,6 +117,8 @@ def test_asymmetric_matchups_are_pooled_into_a_zero_sum_matrix(tmp_path, monkeyp
     assert names == ["a", "b", "c"]
     assert matrix[0, 1] == pytest.approx(0.65)
     assert matrix[1, 0] == pytest.approx(0.35)
+    assert details[("a", "b")]["win_rate"] == pytest.approx(0.65)
+    assert details[("b", "a")]["win_rate"] == pytest.approx(0.35)
     assert details[("a", "b")]["match_count"] == 200
     assert details[("b", "a")]["match_count"] == 200
     assert details[("a", "c")] == {"win_rate": 0.6, "match_count": 200}

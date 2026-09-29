@@ -87,7 +87,7 @@ def load_matchup_data(
                 for b in archetypes[index + 1:]:
                     forward = matchup_details[(a, b)]
                     reverse = matchup_details[(b, a)]
-                    if not np.isclose(forward["win_rate"] + reverse["win_rate"], 1.0):
+                    if abs(forward["win_rate"] + reverse["win_rate"] - 1.0) > 1e-9:
                         total_matches = forward["match_count"] + reverse["match_count"]
                         pooled_rate = (
                             forward["win_rate"] * forward["match_count"]
@@ -136,9 +136,6 @@ def load_matchup_data(
                 raise ValueError("Diagonal of win matrix must be exactly 0.5.")
             if not np.all((win_matrix >= 0.0) & (win_matrix <= 1.0)):
                 raise ValueError("Win rates must be between 0.0 and 1.0.")
-
-            asymmetry = np.abs(win_matrix + win_matrix.T - 1.0)
-            max_asymmetry = float(np.max(asymmetry))
 
         logger.info("win_matrix_built", size=n, detail="Diagonal enforced to 0.5.")
         return reliable_decks, win_matrix, matchup_details
