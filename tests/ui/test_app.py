@@ -117,7 +117,8 @@ def test_bdif_tabs_render_status_evidence_and_provenance():
         render_bdif_tabs({
             "matchup_panel": {"rows": {}, "unmatched": [], "opponents": []},
             "best60_recommendations": {
-                "A": {"cards": [], "status": "missing observed skeleton", "no_signal": [], "card_evidence": {}}
+                "A": {"cards": [], "status": "missing observed skeleton", "ace_spec_choice": "Prime Catcher", "no_signal": [], "card_evidence": {}},
+                "B": {"cards": [], "status": "complete", "ace_spec_choice": None, "no_signal": [], "card_evidence": {}},
             },
             "h1_report": {},
             "field_posterior": {
@@ -144,3 +145,5 @@ def test_bdif_tabs_render_status_evidence_and_provenance():
         "Provenance",
     ]
     assert any("missing observed skeleton" in warning.value for warning in at.warning)
+    assert any("ACE SPEC choice: Prime Catcher" in caption.value for caption in at.caption)
+    assert any("ACE SPEC choice: No ACE SPEC selected" in caption.value for caption in at.caption)

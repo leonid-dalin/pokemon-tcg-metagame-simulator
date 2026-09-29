@@ -64,6 +64,7 @@ def test_best60_view_surfaces_status_evidence_and_no_signal_cards():
     view = bdif_view.best60_view({
         "cards": [],
         "status": "missing observed skeleton",
+        "ace_spec_choice": "Prime Catcher",
         "total_copies": 0,
         "no_signal": [{"card": "Weak"}],
         "card_evidence": {
@@ -80,6 +81,7 @@ def test_best60_view_surfaces_status_evidence_and_no_signal_cards():
     })
 
     assert view["status"] == "missing observed skeleton"
+    assert view["ace_spec_choice"] == "Prime Catcher"
     assert view["no_signal"] == ["Weak"]
     assert view["evidence"][0]["Verdict"] == "no signal"
     assert view["evidence"][0]["95% low"] == -1.0
