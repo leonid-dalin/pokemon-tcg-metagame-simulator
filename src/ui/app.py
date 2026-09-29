@@ -281,6 +281,7 @@ def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
             view = bdif_view.best60_view(recommendation)
             st.markdown(f"#### {archetype}")
             st.caption("Observational associations, not causal effects.")
+            st.caption(f"ACE SPEC choice: {view['ace_spec_choice'] or 'No ACE SPEC selected'}")
             if view["status"] != "complete":
                 st.warning(f"{archetype}: {view['status']}")
             if view["cards"]:
