@@ -84,6 +84,10 @@ tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_c
 tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_code[refit-not identifiable-3]
 tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_code[status-missing-0]
 tests/bdif/test_bdif_module_cli.py::test_healthy_report_with_empty_insufficient_data_exits_zero
+tests/bdif/test_bdif_module_cli.py::test_ingest_limit_outside_one_to_one_thousand_is_a_usage_error[0]
+tests/bdif/test_bdif_module_cli.py::test_ingest_limit_outside_one_to_one_thousand_is_a_usage_error[1001]
+tests/bdif/test_bdif_module_cli.py::test_ingest_limit_outside_one_to_one_thousand_is_a_usage_error[ten]
+tests/bdif/test_bdif_module_cli.py::test_ingest_passes_the_limit_to_the_service
 tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv0]
 tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv1]
 tests/bdif/test_bdif_module_cli.py::test_invalid_report_arguments_exit_two[argv2]
@@ -115,7 +119,12 @@ tests/bdif/test_bdif_service.py::test_addons_prepare_supplied_store_before_readi
 tests/bdif/test_bdif_service.py::test_addons_report_non_identifiable_for_each_deck
 tests/bdif/test_bdif_service.py::test_addons_skip_store_when_feature_disabled
 tests/bdif/test_bdif_service.py::test_bdif_status_reads_legacy_store_without_writing
+tests/bdif/test_bdif_service.py::test_ingestion_limit_overrides_the_configured_backfill[5-5]
+tests/bdif/test_bdif_service.py::test_ingestion_limit_overrides_the_configured_backfill[None-10]
 tests/bdif/test_bdif_service.py::test_ingestion_paginates_and_skips_stored_events
+tests/bdif/test_bdif_service.py::test_ingestion_status_accounts_for_failed_events[events0-bad0-complete]
+tests/bdif/test_bdif_service.py::test_ingestion_status_accounts_for_failed_events[events1-bad1-partial]
+tests/bdif/test_bdif_service.py::test_ingestion_status_accounts_for_failed_events[events2-bad2-failed]
 tests/bdif/test_bdif_service.py::test_panel_deck_resolution_drops_ambiguous_and_missing_ids
 tests/bdif/test_bdif_service.py::test_panel_deck_resolution_strips_unique_suffixes_and_preserves_compounds
 tests/bdif/test_bdif_service.py::test_panel_decks_for_report_passes_configured_maximum

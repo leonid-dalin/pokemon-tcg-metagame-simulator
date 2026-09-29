@@ -37,12 +37,24 @@ def _meta_spec(value: str) -> dict[str, float]:
     return result
 
 
+def _ingest_limit(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("--limit must be an integer") from exc
+    if not 1 <= parsed <= 1000:
+        raise argparse.ArgumentTypeError("--limit must be between 1 and 1000")
+    return parsed
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="BDIF data and report commands")
     parser.add_argument("-l", "--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR"), default="INFO")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name, help_text in (("status", "Show local BDIF data status"), ("ingest", "Ingest bounded BDIF data"), ("refit", "Refit the local card model")):
-        commands.add_parser(name, help=help_text)
+    commands.add_parser("status", help="Show local BDIF data status")
+    ingest = commands.add_parser("ingest", help="Ingest bounded BDIF data")
+    ingest.add_argument("--limit", type=_ingest_limit, default=None, help="Tournaments to fetch, 1 to 1000")
+    commands.add_parser("refit", help="Refit the local card model")
     report = commands.add_parser("report", help="Generate a tournament report")
     report.add_argument("-i", "--input", default=None)
     report.add_argument("-o", "--output", default=OUTPUT_DIR)
@@ -69,7 +81,7 @@ def main() -> int:
         if args.command == "status":
             result = service.bdif_status()
         elif args.command == "ingest":
-            result = service.run_ingestion()
+            result = service.run_ingestion(limit=args.limit)
         elif args.command == "refit":
             result = service.refit_card_model()
         else:

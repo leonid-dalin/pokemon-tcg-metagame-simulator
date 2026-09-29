@@ -134,7 +134,7 @@ def refit_card_model(settings: BdifSettings | None = None) -> dict:
     return {"status": "complete", "path": settings.model_input_path}
 
 
-def run_ingestion(settings: BdifSettings | None = None) -> dict:
+def run_ingestion(settings: BdifSettings | None = None, limit: int | None = None) -> dict:
     settings = settings or BdifSettings.from_environment()
     if not settings.ingestion_enabled:
         return {"status": "disabled"}
@@ -148,7 +148,7 @@ def run_ingestion(settings: BdifSettings | None = None) -> dict:
     store.ensure_schema()
     names = {str(row.get("identifier") or row.get("id")): str(row["name"]) for row in client.game_decks() if row.get("name") and (row.get("identifier") or row.get("id"))}
     store.backfill_deck_names(names)
-    events = list(client.iter_tournaments(game="PTCG", format="STANDARD", limit=settings.backfill_limit))
+    events = list(client.iter_tournaments(game="PTCG", format="STANDARD", limit=limit if limit is not None else settings.backfill_limit))
     existing_ids = store.existing_tournament_ids()
     failed = []
     skipped_events = 0
@@ -182,7 +182,13 @@ def run_ingestion(settings: BdifSettings | None = None) -> dict:
         else:
             write_json_atomic(model_artifact(fitted), settings.model_input_path)
             status = "complete"
-    return {"status": "complete", "events": len(events), "skipped_events": skipped_events, "failed_events": failed, "unmapped_deck_ids": unmapped_deck_ids, "path": artifact_path, "model_status": status}
+    if events and len(failed) == len(events):
+        outcome = "failed"
+    elif failed:
+        outcome = "partial"
+    else:
+        outcome = "complete"
+    return {"status": outcome, "events": len(events), "skipped_events": skipped_events, "failed_events": failed, "unmapped_deck_ids": unmapped_deck_ids, "path": artifact_path, "model_status": status}
 
 
 def bdif_status(settings: BdifSettings | None = None) -> dict:
