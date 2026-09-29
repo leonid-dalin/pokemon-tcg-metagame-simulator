@@ -31,7 +31,7 @@ def _run(monkeypatch, capsys, argv, module):
 ])
 def test_module_commands_write_json_only_to_stdout(monkeypatch, capsys, command, method, result):
     calls = []
-    module = SimpleNamespace(**{method: lambda: calls.append(method) or result})
+    module = SimpleNamespace(**{method: lambda **kwargs: calls.append(method) or result})
     code, captured = _run(monkeypatch, capsys, [command], module)
     assert code == 0
     assert calls == [method]
@@ -48,9 +48,9 @@ def test_module_commands_write_json_only_to_stdout(monkeypatch, capsys, command,
 def test_module_commands_use_current_service_module(monkeypatch, capsys, command, method):
     import src.bdif as package
 
-    stale = SimpleNamespace(**{method: lambda: pytest.fail("stale service module used")})
+    stale = SimpleNamespace(**{method: lambda **kwargs: pytest.fail("stale service module used")})
     current_calls = []
-    current = SimpleNamespace(**{method: lambda: current_calls.append(method) or {"status": "current"}})
+    current = SimpleNamespace(**{method: lambda **kwargs: current_calls.append(method) or {"status": "current"}})
     monkeypatch.setattr(package, "service", stale, raising=False)
     monkeypatch.setitem(sys.modules, "src.bdif.service", current)
 
@@ -178,7 +178,7 @@ def test_healthy_report_with_empty_insufficient_data_exits_zero(monkeypatch, tmp
 def test_evidence_statuses_select_command_exit_code(monkeypatch, capsys, command, status, expected):
     method = {"status": "bdif_status", "ingest": "run_ingestion", "refit": "refit_card_model"}[command]
     result = {} if status is None else {"status": status}
-    code, captured = _run(monkeypatch, capsys, [command], SimpleNamespace(**{method: lambda: result}))
+    code, captured = _run(monkeypatch, capsys, [command], SimpleNamespace(**{method: lambda **kwargs: result}))
     assert code == expected
     assert json.loads(captured.out) == result
 
@@ -216,6 +216,24 @@ def test_invalid_report_arguments_exit_two(monkeypatch, capsys, argv):
     with pytest.raises(SystemExit) as error:
         _run(monkeypatch, capsys, argv, SimpleNamespace())
     assert error.value.code == 2
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("value", ["0", "1001", "ten"])
+def test_ingest_limit_outside_one_to_one_thousand_is_a_usage_error(monkeypatch, capsys, value):
+    with pytest.raises(SystemExit) as error:
+        _run(monkeypatch, capsys, ["ingest", "--limit", value], SimpleNamespace())
+    assert error.value.code == 2
+
+
+@pytest.mark.unit
+def test_ingest_passes_the_limit_to_the_service(monkeypatch, capsys):
+    calls = []
+    module = SimpleNamespace(run_ingestion=lambda **kwargs: calls.append(kwargs) or {"status": "complete"})
+
+    _run(monkeypatch, capsys, ["ingest", "--limit", "20"], module)
+
+    assert calls == [{"limit": 20}]
 
 
 @pytest.mark.unit

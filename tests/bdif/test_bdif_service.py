@@ -317,3 +317,85 @@ def test_ingestion_paginates_and_skips_stored_events(monkeypatch, tmp_path):
     assert pairings == [{"player1": "p1", "player2": "p2"}]
     assert first["skipped_events"] == 1
     assert second["skipped_events"] == 2
+
+
+def _ingestion_fakes(monkeypatch, tmp_path, events, bad):
+    requested = []
+
+    class Client:
+        @classmethod
+        def from_environment(cls):
+            return cls()
+
+        def iter_tournaments(self, **params):
+            requested.append(params["limit"])
+            return iter([{"id": event} for event in events])
+
+        def game_decks(self):
+            return []
+
+        def fetch_event_bundle(self, event_id):
+            if event_id in bad:
+                raise RuntimeError("event unavailable")
+            return ({}, [], [])
+
+    class Store:
+        def __init__(self, path):
+            pass
+
+        def ensure_schema(self):
+            pass
+
+        def backfill_deck_names(self, deck_names):
+            pass
+
+        def existing_tournament_ids(self):
+            return set()
+
+        def upsert_tournament(self, event, details):
+            pass
+
+        def upsert_standings(self, event_id, standings):
+            pass
+
+        def upsert_pairings(self, event_id, pairings):
+            pass
+
+        def unmapped_deck_ids(self):
+            return []
+
+        def player_observations(self):
+            return []
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("src.ingestion.client.LimitlessClient", Client)
+    monkeypatch.setattr("src.ingestion.store.LimitlessStore", Store)
+    monkeypatch.setattr("src.ingestion.aggregate.build_artifact", lambda store: {"archetypes": []})
+    return requested
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("events", "bad", "status"), [
+    (["one", "two"], set(), "complete"),
+    (["one", "two"], {"two"}, "partial"),
+    (["one", "two"], {"one", "two"}, "failed"),
+])
+def test_ingestion_status_accounts_for_failed_events(monkeypatch, tmp_path, events, bad, status):
+    _ingestion_fakes(monkeypatch, tmp_path, events, bad)
+
+    result = service.run_ingestion(settings(ingestion_enabled=True), limit=5)
+
+    assert result["status"] == status
+    assert [row["id"] for row in result["failed_events"]] == [event for event in events if event in bad]
+    assert "path" in result
+    assert "model_status" in result
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("limit", "expected"), [(5, 5), (None, 10)])
+def test_ingestion_limit_overrides_the_configured_backfill(monkeypatch, tmp_path, limit, expected):
+    requested = _ingestion_fakes(monkeypatch, tmp_path, ["one"], set())
+
+    service.run_ingestion(settings(ingestion_enabled=True), limit=limit)
+
+    assert requested == [expected]
