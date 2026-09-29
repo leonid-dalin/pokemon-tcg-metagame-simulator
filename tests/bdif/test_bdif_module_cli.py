@@ -1,6 +1,8 @@
 import json
 import logging
+import os
 import sys
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -71,7 +73,7 @@ def test_report_uses_local_input_and_bounded_request(monkeypatch, tmp_path, caps
             self.__dict__.update(kwargs)
     monkeypatch.setattr(cli, "PredictionRequest", Request)
     monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
-    module = SimpleNamespace(run_prediction=lambda req, **kwargs: {"report": req.total_players})
+    module = SimpleNamespace(simulation_input_path=lambda: str(source), run_prediction=lambda req, **kwargs: {"report": req.total_players})
     code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source), "--output", str(output), "-P", "64", "--seed", "8", "--meta", "Pikachu:0.2"], module)
     assert code == 0
     assert output.is_dir()
@@ -87,7 +89,7 @@ def test_report_passes_seed_to_service(monkeypatch, tmp_path, capsys):
     source.write_text("{}", encoding="utf-8")
     seeds = []
     monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
-    module = SimpleNamespace(run_prediction=lambda request, **kwargs: seeds.append(kwargs["seed"]) or {"report": request.total_players})
+    module = SimpleNamespace(simulation_input_path=lambda: str(source), run_prediction=lambda request, **kwargs: seeds.append(kwargs["seed"]) or {"report": request.total_players})
 
     code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source), "--seed", "9876"], module)
 
@@ -97,11 +99,57 @@ def test_report_passes_seed_to_service(monkeypatch, tmp_path, capsys):
 
 
 @pytest.mark.unit
+def test_report_without_input_uses_service_default_for_loading_and_prediction(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "configured.json"
+    source.write_text("{}", encoding="utf-8")
+    loaded, calls = [], []
+    monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: loaded.append(path) or (["A", "B"], __import__("numpy").array([[.5, .6], [.4, .5]]), {}))
+    module = SimpleNamespace(
+        simulation_input_path=lambda: str(source),
+        run_prediction=lambda request, **kwargs: calls.append(kwargs) or {"report": request.total_players},
+    )
+
+    code, captured = _run(monkeypatch, capsys, ["report"], module)
+
+    assert code == 0
+    assert loaded == [str(source)]
+    assert calls == [{"seed": cli.RNG_SEED, "input_path": str(source)}]
+    assert json.loads(captured.out) == {"report": 256}
+
+
+@pytest.mark.integration
+def test_report_subprocess_uses_explicit_four_deck_input(tmp_path, monkeypatch):
+    source = tmp_path / "four-decks.json"
+    output = tmp_path / "out"
+    decks = ["a", "b", "c", "d"]
+    matrix = {left: {right: {"win_rate": (0.5 if left == right else (0.6 if decks.index(left) < decks.index(right) else 0.4)), "match_count": 1000} for right in decks} for left in decks}
+    source.write_text(json.dumps({"archetypes": decks, "win_rate_matrix": matrix}), encoding="utf-8")
+    default_input = tmp_path / "default.json"
+    default_input.write_text("{}", encoding="utf-8")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = "."
+    env["OTEL_SDK_DISABLED"] = "true"
+    env["OTEL_EXPORTER_OTLP_ENDPOINT"] = ""
+    completed = subprocess.run(
+        ["C:/Users/DALIN/dev/pokemon-tcg-metagame-simulator/.venv-qa/Scripts/python.exe", "-m", "src.bdif", "report", "--input", str(source), "--output", str(output), "-P", "16", "--meta", "a:0.4,b:0.3"],
+        cwd="C:/Users/DALIN/dev/pokemon-tcg-metagame-simulator-task12", env=env,
+        capture_output=True, text=True, timeout=120,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    report = json.loads(completed.stdout)
+    assert sorted(report["mc_results"]["metrics"]) == decks
+    assert completed.stdout.count("\n") == 1
+    assert '"event":' not in completed.stdout
+    assert completed.stderr.count('"event":') >= 1
+
+
+@pytest.mark.unit
 def test_healthy_report_with_empty_insufficient_data_exits_zero(monkeypatch, tmp_path, capsys):
     source = tmp_path / "matrix.json"
     source.write_text("{}", encoding="utf-8")
     monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
-    module = SimpleNamespace(run_prediction=lambda req, **kwargs: {
+    module = SimpleNamespace(simulation_input_path=lambda: str(source), run_prediction=lambda req, **kwargs: {
         "solver_results": {"full_meta": {"A": 0.5, "B": 0.5}},
         "mc_results": {
             "metrics": {"A": {"win_rate": 0.5}},
@@ -143,7 +191,7 @@ def test_unavailable_evidence_exits_three(monkeypatch, capsys, tmp_path):
     source = tmp_path / "matrix.json"
     source.write_text("{}", encoding="utf-8")
     monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
-    module = SimpleNamespace(run_prediction=lambda req, **kwargs: {
+    module = SimpleNamespace(simulation_input_path=lambda: str(source), run_prediction=lambda req, **kwargs: {
         "solver_results": {},
         "mc_results": {
             "metrics": {},
@@ -175,7 +223,7 @@ def test_report_panel_argument_sets_requested_decks(monkeypatch, tmp_path, capsy
 
     monkeypatch.setattr(cli, "PredictionRequest", Request)
     monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
-    module = SimpleNamespace(run_prediction=lambda req, **kwargs: {"report": req.bdif_panel_decks})
+    module = SimpleNamespace(simulation_input_path=lambda: str(source), run_prediction=lambda req, **kwargs: {"report": req.bdif_panel_decks})
 
     code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source), "--panel", "A,B"], module)
 

@@ -194,10 +194,10 @@ def bdif_status(settings: BdifSettings | None = None) -> dict:
     return {"status": "available", "db_path": settings.db_path, "decks": len(store.deck_weights()), "observations": len(store.player_observations())}
 
 
-def run_prediction(request: PredictionRequest, progress_callback=None, settings: BdifSettings | None = None, logger=None, seed: int | None = None) -> dict:
+def run_prediction(request: PredictionRequest, progress_callback=None, settings: BdifSettings | None = None, logger=None, seed: int | None = None, input_path: str | None = None) -> dict:
     settings = settings or BdifSettings.from_environment()
     logger = logger or __import__("structlog").get_logger()
-    deck_names, matrix, details = load_matchup_data(simulation_input_path(settings), config.MIN_GAMES)
+    deck_names, matrix, details = load_matchup_data(input_path or simulation_input_path(settings), config.MIN_GAMES)
     solver = predict_best_decks(request)
     players = request.total_players
     if request.tournament_style == "championship_series":

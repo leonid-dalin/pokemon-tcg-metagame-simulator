@@ -157,6 +157,28 @@ def test_prediction_uses_explicit_seed(monkeypatch):
 
 
 @pytest.mark.unit
+def test_prediction_uses_input_path_or_configured_default(monkeypatch):
+    loaded = []
+    monkeypatch.setattr(service, "load_matchup_data", lambda path, *args: loaded.append(path) or (["a", "b"], np.array([[.5, .6], [.4, .5]]), {}))
+    monkeypatch.setattr(service, "predict_best_decks", lambda request: {"full_meta": {"a": .5, "b": .5}})
+    monkeypatch.setattr(service, "swiss_rounds_from_players", lambda players: 1)
+    monkeypatch.setattr(service, "open_store", lambda cfg: None)
+    monkeypatch.setattr(service, "panel_decks_for_report", lambda *args: [])
+    monkeypatch.setattr(service, "build_report_addons", lambda *args: ({}, {}))
+    monkeypatch.setattr(service, "run_monte_carlo_analytics", lambda **kwargs: {
+        "metrics": {}, "ranked_metrics": {}, "insufficient_data": [],
+        "posterior": {}, "field_posterior": {}, "matchup_panel": {},
+    })
+    monkeypatch.setattr(service, "build_bdif_report", lambda result, *args: result)
+    request = PredictionRequest(job_id="job", deck_names=["a", "b"], matchup_matrix=[[.5, .6], [.4, .5]], total_players=4)
+
+    service.run_prediction(request, settings=settings(), input_path="custom.json")
+    service.run_prediction(request, settings=settings())
+
+    assert loaded == ["custom.json", "input.json"]
+
+
+@pytest.mark.unit
 def test_bdif_status_reads_legacy_store_without_writing(monkeypatch, tmp_path):
     db = tmp_path / "legacy.db"
     db.touch()

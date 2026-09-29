@@ -9,7 +9,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from src.api.models import PredictionRequest
-from src.core.config import INPUT_DATA, OUTPUT_DIR, RNG_SEED
+from src.core.config import OUTPUT_DIR, RNG_SEED
 from src.core.logger import setup_structured_logging, logger
 from src.core.telemetry import setup_telemetry
 
@@ -39,7 +39,7 @@ def _parser() -> argparse.ArgumentParser:
     for name, help_text in (("status", "Show local BDIF data status"), ("ingest", "Ingest bounded BDIF data"), ("refit", "Refit the local card model")):
         commands.add_parser(name, help=help_text)
     report = commands.add_parser("report", help="Generate a tournament report")
-    report.add_argument("-i", "--input", default=INPUT_DATA)
+    report.add_argument("-i", "--input", default=None)
     report.add_argument("-o", "--output", default=OUTPUT_DIR)
     report.add_argument("--seed", type=int, default=RNG_SEED)
     report.add_argument("-P", "--players", type=int, default=256)
@@ -68,20 +68,21 @@ def main() -> int:
         elif args.command == "refit":
             result = service.refit_card_model()
         else:
-            if not os.path.isfile(args.input):
-                _parser().error(f"input file not found: {args.input}")
             if not 4 <= args.players <= 8192:
                 _parser().error("--players must be between 4 and 8192")
+            input_path = args.input or service.simulation_input_path()
+            if not os.path.isfile(input_path):
+                _parser().error(f"input file not found: {input_path}")
             os.makedirs(args.output, exist_ok=True)
             from src.core.data import load_matchup_data
-            deck_names, matrix, _ = load_matchup_data(args.input)
+            deck_names, matrix, _ = load_matchup_data(input_path)
             request = PredictionRequest(
                 job_id="bdif_cli_report", total_players=args.players,
                 user_meta_spec=args.meta, tournament_style=args.tournament_style,
                 deck_names=deck_names, matchup_matrix=matrix.tolist(),
                 bdif_panel_decks=args.panel,
             )
-            result = service.run_prediction(request, seed=args.seed)
+            result = service.run_prediction(request, seed=args.seed, input_path=input_path)
         print(json.dumps(result, sort_keys=True, default=lambda value: value.value if hasattr(value, "value") else str(value)))
         if args.command == "report" and _evidence_unavailable(result):
             return 3
