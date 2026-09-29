@@ -160,6 +160,9 @@ def build_matchup_panel(
 def batch_ratio_standard_error(numerators: np.ndarray, denominators: np.ndarray) -> float:
     numerators = np.asarray(numerators, dtype=float)
     denominators = np.asarray(denominators, dtype=float)
+    informative = denominators > 0
+    numerators = numerators[informative]
+    denominators = denominators[informative]
     batches = len(numerators)
     total = float(denominators.sum())
     if batches < 2 or total <= 0:

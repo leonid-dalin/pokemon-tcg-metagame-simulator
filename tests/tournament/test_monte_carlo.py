@@ -84,6 +84,22 @@ def test_batch_ratio_standard_error_needs_two_batches(numerators):
 
 
 @pytest.mark.unit
+def test_batch_ratio_standard_error_excludes_empty_batch():
+    value = monte_carlo.batch_ratio_standard_error(
+        np.array([0.0, 2.0]), np.array([0.0, 10.0])
+    )
+    assert np.isnan(value)
+
+
+@pytest.mark.unit
+def test_batch_ratio_standard_error_needs_two_informative_batches():
+    value = monte_carlo.batch_ratio_standard_error(
+        np.array([0.0, 0.0, 2.0]), np.array([0.0, 0.0, 10.0])
+    )
+    assert np.isnan(value)
+
+
+@pytest.mark.unit
 def test_posterior_mode_standard_errors_come_from_draw_to_draw_spread(monkeypatch):
     champions = itertools.cycle([[2, 18], [6, 14]])
     monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
