@@ -111,6 +111,7 @@ tests/bdif/test_bdif_settings.py::test_from_environment_rejects_invalid_boolean_
 tests/bdif/test_bdif_settings.py::test_from_environment_rejects_invalid_boolean_values[enabled]
 tests/bdif/test_bdif_settings.py::test_from_environment_rejects_invalid_boolean_values[truth]
 tests/bdif/test_bdif_settings.py::test_from_environment_uses_live_config_defaults
+tests/core/test_data.py::test_asymmetric_matchups_are_pooled_into_a_zero_sum_matrix
 tests/core/test_data.py::test_distinct_profiles_still_cluster
 tests/core/test_data.py::test_identical_rows_collapse_to_a_single_reported_cluster
 tests/core/test_data.py::test_malformed_matchup_json_returns_empty_result_and_logs_failure
