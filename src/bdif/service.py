@@ -97,7 +97,7 @@ def build_report_addons(store=None, settings: BdifSettings | None = None) -> tup
         deck: recommend_best60(Best60Request(
             archetype=deck, candidates=candidates, coefficients=coefficients,
             coefficient_intervals=intervals, inclusion=inclusion, meta_weights=weights,
-            playable_cards=store.observed_cards(deck), skeleton=store.observed_skeleton(deck),
+            playable_cards=store.observed_cards(deck), observed_pokemon_cards=store.observed_pokemon_cards(deck), card_rules=store.observed_card_rules(deck), skeleton=store.observed_skeleton(deck),
         )) for deck in top
     }
     rows = store.pairings_with_decklists("%alakazam%")

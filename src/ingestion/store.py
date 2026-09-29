@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from src.ingestion.mapping import load_archetype_map, resolve_archetype
-from src.ingestion.model import ACE_SPEC_CARDS, PlayerObservation, _card_limit
+from src.ingestion.model import ACE_SPEC_CARDS, BASIC_ENERGY_NAMES, PlayerObservation, _card_limit, validate_recommendation
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tournaments (id TEXT PRIMARY KEY, game TEXT, format TEXT, name TEXT, date TEXT, players INTEGER, details_json TEXT);
@@ -280,31 +280,50 @@ class LimitlessStore:
         return observations
 
     def observed_skeleton(self, archetype: str) -> list[dict[str, object]]:
-        counts: dict[str, int] = {}
-        rows = list(self._decklists(archetype))
-        for decklist in rows:
-            for group in decklist.values():
+        raw_rows = list(self._decklists(archetype))
+        if not raw_rows:
+            return []
+        legal_rows = []
+        for decklist in raw_rows:
+            cards = []
+            profile = []
+            for group_name, group in decklist.items():
                 if not isinstance(group, list):
                     continue
-                for card in group:
-                    if isinstance(card, dict) and card.get("name"):
-                        counts[str(card["name"])] = counts.get(str(card["name"]), 0) + int(card.get("count", 0))
-        decks = len(rows)
-        skeleton = []
-        ace_cards = []
-        for card, total in sorted(counts.items(), key=lambda item: item[1], reverse=True):
-            if total / decks < 0.75:
+                for item in group:
+                    if not isinstance(item, dict) or not item.get("name"):
+                        continue
+                    card = str(item["name"])
+                    copies = int(item.get("count", 0))
+                    cards.append({"card": card, "copies": copies})
+                    if group_name in {"pokemon", "energy"} and card not in ACE_SPEC_CARDS:
+                        profile.append((group_name, card, copies))
+            rules = {
+                row["card"]: {"ace_spec": True} if row["card"] in ACE_SPEC_CARDS else
+                {"basic_energy": True} if row["card"] in {"Grass Energy", "Fire Energy", "Water Energy", "Lightning Energy", "Psychic Energy", "Fighting Energy", "Darkness Energy", "Metal Energy"} else {}
+                for row in cards
+            }
+            if sum(row["copies"] for row in cards) != 60:
                 continue
-            limit = _card_limit(card, {})
-            copies = round(total / decks) if limit is None else min(limit, round(total / decks))
+            try:
+                validate_recommendation(cards, card_rules=rules)
+            except ValueError:
+                continue
+            legal_rows.append((tuple(sorted(profile)), cards))
+        if not legal_rows:
+            return []
+        profiles: dict[tuple[tuple[str, int], ...], int] = {}
+        for profile, _ in legal_rows:
+            profiles[profile] = profiles.get(profile, 0) + 1
+        modal_profile, support = max(profiles.items(), key=lambda item: (item[1], item[0]))
+        if support / len(legal_rows) < 0.75:
+            return []
+        result = []
+        for group_name, card, copies in sorted(modal_profile, key=lambda item: (0 if item[0] == "pokemon" else 1, item[1])):
             if card in ACE_SPEC_CARDS:
-                ace_cards.append({"card": card, "copies": min(copies, 1)})
                 continue
-            if copies:
-                skeleton.append({"card": card, "copies": copies})
-        if ace_cards:
-            skeleton.append(ace_cards[0])
-        return skeleton
+            result.append({"card": card, "copies": min(copies, _card_limit(card, {})) if _card_limit(card, {}) is not None else copies})
+        return result
 
     def deck_weights(self, archetypes: Iterable[str] | None = None) -> dict[str, float]:
         self.prepare_for_read()
@@ -319,7 +338,29 @@ class LimitlessStore:
         return {str(deck): count / total for deck, count in rows} if total else {}
 
     def observed_cards(self, archetype: str) -> set[str]:
-        return {row["card"] for row in self.observed_skeleton(archetype)}
+        cards = set()
+        for decklist in self._decklists(archetype):
+            for group in decklist.values():
+                if isinstance(group, list):
+                    cards.update(str(card["name"]) for card in group if isinstance(card, dict) and card.get("name"))
+        return cards
+
+    def observed_pokemon_cards(self, archetype: str) -> set[str]:
+        cards = set()
+        for decklist in self._decklists(archetype):
+            cards.update(str(card["name"]) for card in decklist.get("pokemon", []) if isinstance(card, dict) and card.get("name"))
+        return cards
+
+    def observed_card_rules(self, archetype: str) -> dict[str, dict[str, Any]]:
+        rules: dict[str, dict[str, Any]] = {}
+        for decklist in self._decklists(archetype):
+            for card in decklist.get("pokemon", []):
+                if isinstance(card, dict) and card.get("name"):
+                    rules[str(card["name"])] = {"type": "pokemon"}
+            for card in decklist.get("energy", []):
+                if isinstance(card, dict) and card.get("name"):
+                    rules.setdefault(str(card["name"]), {})["basic_energy"] = str(card["name"]) in BASIC_ENERGY_NAMES
+        return rules
 
     def pairings_with_decklists(self, archetype_pattern: str) -> list[tuple[Any, ...]]:
         self.prepare_for_read()

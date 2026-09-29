@@ -70,6 +70,7 @@ def best60_view(recommendation: Mapping[str, Any]) -> dict[str, Any]:
     evidence = recommendation.get("card_evidence", {})
     return {
         "status": recommendation.get("status", "complete"),
+        "ace_spec_choice": recommendation.get("ace_spec_choice"),
         "total_copies": int(recommendation.get("total_copies", sum(int(c["copies"]) for c in cards))),
         "cards": [{"Card": c["card"], "Copies": int(c["copies"])} for c in cards],
         "evidence": [

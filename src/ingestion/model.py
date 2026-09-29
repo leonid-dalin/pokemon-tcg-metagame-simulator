@@ -137,6 +137,7 @@ class Best60Request:
     banned_cards: set[str] | None = None
     card_rules: Mapping[str, Mapping[str, Any]] | None = None
     playable_cards: set[str] | None = None
+    observed_pokemon_cards: set[str] | None = None
     skeleton: Sequence[Mapping[str, Any]] | None = None
 
 
@@ -303,6 +304,10 @@ def recommend_best60(request: Best60Request) -> dict[str, Any]:
     banned_cards = banned_cards or set()
     card_rules = card_rules or {}
     playable_cards = set(playable_cards) if playable_cards is not None else set(candidates)
+    observed_pokemon_cards = request.observed_pokemon_cards
+    pokemon_cards = {card for card in set(candidates) | playable_cards if card_rules.get(card, {}).get("type") == "pokemon"}
+    playable_cards -= pokemon_cards - (observed_pokemon_cards or set())
+    candidates = [card for card in candidates if card not in pokemon_cards or card in (observed_pokemon_cards or set())]
     scored = []
     for card in candidates:
         if card in banned_cards or card not in playable_cards:
@@ -361,6 +366,7 @@ def recommend_best60(request: Best60Request) -> dict[str, Any]:
             "observational": True,
             "total_copies": 0,
             "status": "missing observed skeleton",
+            "ace_spec_choice": None,
         }
 
     selected: list[dict[str, Any]] = []
@@ -400,11 +406,15 @@ def recommend_best60(request: Best60Request) -> dict[str, Any]:
         return available
 
     for row in signal:
-        if _is_ace_spec(row["card"], card_rules):
+        if row["card"] in selected_by_card or _is_ace_spec(row["card"], card_rules):
             continue
         if sum(int(item["copies"]) for item in selected_by_card.values()) >= 60:
             break
         add_cards(row["card"], 60)
+
+    ace_candidates = [row for row in scored if _is_ace_spec(row["card"], card_rules)]
+    if not ace_selected and ace_candidates:
+        ace_selected = bool(add_cards(ace_candidates[0]["card"], 1))
 
     fallback_cards = sorted(
         (card for card in playable_cards if card not in banned_cards),
@@ -412,7 +422,7 @@ def recommend_best60(request: Best60Request) -> dict[str, Any]:
         reverse=True,
     )
     for card in fallback_cards:
-        if card in {row["card"] for row in signal} or _is_ace_spec(card, card_rules):
+        if card in selected_by_card or _is_ace_spec(card, card_rules):
             continue
         if sum(int(item["copies"]) for item in selected_by_card.values()) >= 60:
             break
@@ -438,9 +448,10 @@ def recommend_best60(request: Best60Request) -> dict[str, Any]:
             "observational": True,
             "total_copies": total_copies,
             "status": "insufficient legal observed cards to complete 60",
+            "ace_spec_choice": next((row["card"] for row in selected if _is_ace_spec(row["card"], card_rules)), None),
         }
     validate_recommendation(selected, banned_cards, card_rules)
-    return {"archetype": archetype, "cards": selected, "no_signal": no_signal, "card_evidence": card_evidence, "observational": True, "total_copies": total_copies}
+    return {"archetype": archetype, "cards": selected, "no_signal": no_signal, "card_evidence": card_evidence, "observational": True, "total_copies": total_copies, "ace_spec_choice": next((row["card"] for row in selected if _is_ace_spec(row["card"], card_rules)), None)}
 
 
 def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str, Any]:

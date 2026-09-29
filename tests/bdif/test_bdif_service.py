@@ -68,6 +68,39 @@ def test_panel_deck_resolution_drops_ambiguous_and_missing_ids(monkeypatch):
 
 
 @pytest.mark.unit
+def test_addons_enforce_observed_pokemon_playability_without_card_rules(monkeypatch, tmp_path):
+    class Fitted:
+        inclusion = {"a": {"Unobserved Pokemon": 1.0, "Observed Tech": 0.0, "Darkness Energy": 1.0}}
+
+        def coefficient_report(self):
+            cards = ["Unobserved Pokemon", "Observed Tech", "Darkness Energy"]
+            return ({card: 1.0 for card in cards}, {card: (1.0, 1.0) for card in cards})
+
+    class Store:
+        def prepare_for_read(self): pass
+        def deck_weights(self): return {"a": 1.0}
+        def player_observations(self):
+            return [PlayerObservation("a", "b", frozenset({"Observed Tech"}), frozenset(), 1)] * 2 + [PlayerObservation("a", "b", frozenset(), frozenset({"Observed Tech"}), 0)] * 2
+        def observed_cards(self, deck): return {"Unobserved Pokemon", "Observed Tech", "Darkness Energy"}
+        def observed_pokemon_cards(self, deck): return {"Observed Tech"}
+        def observed_card_rules(self, deck):
+            return {"Unobserved Pokemon": {"type": "pokemon"}, "Observed Tech": {"type": "pokemon"}, "Darkness Energy": {"basic_energy": True}}
+        def observed_skeleton(self, deck): return [{"card": "Darkness Energy", "copies": 60}]
+        def pairings_with_decklists(self, pattern): return []
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "limitless.db").touch()
+    monkeypatch.setattr("src.ingestion.model.fit_card_model", lambda *args: Fitted())
+    monkeypatch.setattr("src.ingestion.model.select_model_cards", lambda observations: ["Unobserved Pokemon", "Observed Tech", "Darkness Energy"])
+
+    recommendations, _ = service.build_report_addons(Store(), settings())
+
+    assert "Unobserved Pokemon" not in recommendations["a"]["card_evidence"]
+    assert "Observed Tech" in recommendations["a"]["card_evidence"]
+    assert "Darkness Energy" in recommendations["a"]["card_evidence"]
+
+
 def test_addons_report_non_identifiable_for_each_deck(monkeypatch, tmp_path):
     class Store:
         def prepare_for_read(self): pass

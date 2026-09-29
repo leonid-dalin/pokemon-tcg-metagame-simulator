@@ -16,6 +16,65 @@ from src.core.scraper import normalize_archetype
 SYNTHETIC_DECK_MAPPING = {"a": "a", "alakazam": "Alakazam", "b": "b", "crustle": "Crustle"}
 
 
+@pytest.mark.unit
+def test_best60_preserves_modal_core_and_selects_ace_spec_separately():
+    result = recommend_best60(Best60Request(
+        archetype="a",
+        candidates=["Core Pokemon", "Observed Tech", "Prime Catcher", "Grass Energy"],
+        coefficients={"Core Pokemon": -10.0, "Observed Tech": 2.0, "Prime Catcher": 3.0, "Grass Energy": 0.0},
+        coefficient_intervals={card: (value, value) for card, value in {
+            "Core Pokemon": -10.0, "Observed Tech": 2.0, "Prime Catcher": 3.0, "Grass Energy": 0.0,
+        }.items()},
+        inclusion={"a": {"Core Pokemon": 1.0, "Observed Tech": 0.0, "Prime Catcher": 1.0, "Grass Energy": 1.0}, "b": {}},
+        meta_weights={"b": 1.0},
+        playable_cards={"Core Pokemon", "Observed Tech", "Prime Catcher", "Grass Energy"},
+        observed_pokemon_cards={"Core Pokemon", "Observed Tech"},
+        skeleton=[{"card": "Core Pokemon", "copies": 2}, {"card": "Grass Energy", "copies": 20}],
+        card_rules={"Core Pokemon": {"type": "pokemon", "max_copies": 4}, "Observed Tech": {"type": "pokemon", "max_copies": 4}, "Grass Energy": {"basic_energy": True}, "Prime Catcher": {"ace_spec": True}},
+    ))
+    cards = {row["card"]: row["copies"] for row in result["cards"]}
+    assert result["total_copies"] == 60
+    assert cards["Core Pokemon"] == 2
+    assert cards["Prime Catcher"] == 1
+
+
+@pytest.mark.unit
+def test_best60_observed_pokemon_cards_are_a_distinct_request_pool():
+    request = Best60Request(
+        archetype="a", candidates=["Pokemon", "Trainer"], coefficients={}, coefficient_intervals={},
+        inclusion={}, meta_weights={}, observed_pokemon_cards={"Pokemon"}, playable_cards={"Pokemon", "Trainer"},
+        skeleton=[{"card": "Pokemon", "copies": 1}],
+    )
+    assert request.observed_pokemon_cards == {"Pokemon"}
+
+
+@pytest.mark.unit
+def test_best60_excludes_unobserved_pokemon_but_keeps_observed_tech_playable():
+    result = recommend_best60(Best60Request(
+        archetype="a", candidates=["Unobserved Pokemon", "Observed Tech", "Darkness Energy"],
+        coefficients={"Unobserved Pokemon": 100, "Observed Tech": 0, "Darkness Energy": 0},
+        coefficient_intervals={card: (0, 0) for card in ["Unobserved Pokemon", "Observed Tech", "Darkness Energy"]},
+        inclusion={}, meta_weights={}, playable_cards={"Unobserved Pokemon", "Observed Tech", "Darkness Energy"},
+        observed_pokemon_cards={"Observed Tech"},
+        card_rules={"Unobserved Pokemon": {"type": "pokemon"}, "Observed Tech": {"type": "pokemon"}, "Darkness Energy": {"basic_energy": True}},
+        skeleton=[{"card": "Darkness Energy", "copies": 59}],
+    ))
+    assert "Unobserved Pokemon" not in {row["card"] for row in result["cards"]}
+    assert "Observed Tech" in {row["card"] for row in result["cards"]}
+    assert "Unobserved Pokemon" not in result["card_evidence"]
+
+
+@pytest.mark.unit
+def test_best60_returns_selected_ace_spec_separately():
+    result = recommend_best60(Best60Request(
+        archetype="a", candidates=["Prime Catcher"], coefficients={"Prime Catcher": 2},
+        coefficient_intervals={"Prime Catcher": (1, 3)}, inclusion={}, meta_weights={},
+        playable_cards={"Prime Catcher", "Darkness Energy"},
+        skeleton=[{"card": "Darkness Energy", "copies": 59}],
+    ))
+    assert result["ace_spec_choice"] == "Prime Catcher"
+
+
 def _tech_observations(repeats, with_players):
     observations = []
     for index in range(240):
@@ -338,10 +397,45 @@ def test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag(tmp_path):
 def test_observed_skeleton_uses_high_frequency_cards(tmp_path):
     store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
     store.upsert_standings("event", [
-        {"player": "p1", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 2}]}},
-        {"player": "p2", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 2}]}},
+        {"player": "p1", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 2}], "energy": [{"name": "Darkness Energy", "count": 2}], "trainer": [{"name": f"Trainer {i}", "count": 4} for i in range(14)]}},
+        {"player": "p2", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 2}], "energy": [{"name": "Darkness Energy", "count": 2}], "trainer": [{"name": f"Trainer {i}", "count": 4} for i in range(14)]}},
     ])
-    assert store.observed_skeleton("a") == [{"card": "Crustle", "copies": 2}]
+    assert store.observed_skeleton("a") == [{"card": "Crustle", "copies": 2}, {"card": "Darkness Energy", "copies": 2}]
+
+
+@pytest.mark.unit
+def test_observed_skeleton_uses_modal_joint_core_from_legal_sixties(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
+    store.upsert_tournament({"id": "event", "game": "PTCG", "format": "STANDARD"}, {})
+    rows = []
+    for index in range(4):
+        rows.append({
+            "player": f"core-{index}", "deck": {"id": "a"},
+            "decklist": {
+                "pokemon": [{"name": "Crustle", "count": 4}, {"name": "Munkidori", "count": 2}],
+                "energy": [{"name": "Darkness Energy", "count": 8}],
+                "trainer": [{"name": f"Trainer {slot}", "count": 4} for slot in range(11)] + [{"name": "Trainer 11", "count": 2}],
+            },
+        })
+    rows.append({
+        "player": "variant", "deck": {"id": "a"},
+        "decklist": {
+            "pokemon": [{"name": "Crustle", "count": 4}, {"name": "Tech Pokemon", "count": 1}],
+            "energy": [{"name": "Psychic Energy", "count": 4}],
+            "trainer": [{"name": f"Variant Trainer {slot}", "count": 4} for slot in range(12)] + [{"name": "Variant Trainer 12", "count": 3}],
+        },
+    })
+    rows.append({
+        "player": "incomplete", "deck": {"id": "a"},
+        "decklist": {"pokemon": [{"name": "Noise Pokemon", "count": 4}]},
+    })
+    store.upsert_standings("event", rows)
+
+    assert store.observed_skeleton("a") == [
+        {"card": "Crustle", "copies": 4},
+        {"card": "Munkidori", "copies": 2},
+        {"card": "Darkness Energy", "copies": 8},
+    ]
 
 
 def test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec(tmp_path):
@@ -351,16 +445,17 @@ def test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec(tmp_path):
         standings.append({
             "player": f"p{index}",
             "deck": {"id": "a"},
-            "decklist": {"trainer": [
-                {"name": "Weird Card", "count": 9},
+            "decklist": {"pokemon": [{"name": "Weird Card", "count": 4}], "energy": [{"name": "Darkness Energy", "count": 49}], "trainer": [
                 {"name": "Prime Catcher", "count": 1},
-                {"name": "Master Ball", "count": 1},
+
+                {"name": "Trainer", "count": 4},
+                {"name": "Trainer 2", "count": 2},
             ]},
         })
     store.upsert_standings("event", standings)
     skeleton = store.observed_skeleton("a")
     assert {row["card"]: row["copies"] for row in skeleton}["Weird Card"] == 4
-    assert sum(row["card"] in {"Prime Catcher", "Master Ball"} for row in skeleton) == 1
+    assert not any(row["card"] in {"Prime Catcher", "Master Ball"} for row in skeleton)
 
 
 @pytest.mark.unit
