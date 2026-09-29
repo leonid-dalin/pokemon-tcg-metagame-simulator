@@ -1,8 +1,9 @@
 import json
 import logging
 import os
-import sys
 import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -118,21 +119,20 @@ def test_report_without_input_uses_service_default_for_loading_and_prediction(mo
 
 
 @pytest.mark.integration
-def test_report_subprocess_uses_explicit_four_deck_input(tmp_path, monkeypatch):
+def test_report_subprocess_uses_explicit_four_deck_input(tmp_path):
     source = tmp_path / "four-decks.json"
     output = tmp_path / "out"
     decks = ["a", "b", "c", "d"]
     matrix = {left: {right: {"win_rate": (0.5 if left == right else (0.6 if decks.index(left) < decks.index(right) else 0.4)), "match_count": 1000} for right in decks} for left in decks}
     source.write_text(json.dumps({"archetypes": decks, "win_rate_matrix": matrix}), encoding="utf-8")
-    default_input = tmp_path / "default.json"
-    default_input.write_text("{}", encoding="utf-8")
+    root = Path(__file__).resolve().parents[2]
     env = os.environ.copy()
-    env["PYTHONPATH"] = "."
+    env["PYTHONPATH"] = str(root)
     env["OTEL_SDK_DISABLED"] = "true"
     env["OTEL_EXPORTER_OTLP_ENDPOINT"] = ""
     completed = subprocess.run(
-        ["C:/Users/DALIN/dev/pokemon-tcg-metagame-simulator/.venv-qa/Scripts/python.exe", "-m", "src.bdif", "report", "--input", str(source), "--output", str(output), "-P", "16", "--meta", "a:0.4,b:0.3"],
-        cwd="C:/Users/DALIN/dev/pokemon-tcg-metagame-simulator-task12", env=env,
+        [sys.executable, "-m", "src.bdif", "report", "--input", str(source), "--output", str(output), "-P", "16", "--meta", "a:0.4,b:0.3"],
+        cwd=root, env=env,
         capture_output=True, text=True, timeout=120,
     )
 
