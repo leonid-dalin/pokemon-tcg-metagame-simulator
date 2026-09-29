@@ -71,6 +71,7 @@ The CLI writes timestamped directories under `output/` unless `--output` changes
 | Run the CLI | [CLI how-to](docs/how-to/run-cli.md) |
 | Run the Docker Compose stack | [Compose how-to](docs/how-to/run-compose.md) |
 | Enable Limitless and BDIF analytics | [BDIF how-to](docs/how-to/enable-bdif.md) |
+| Understand Limitless ingestion data and model rules | [Limitless ingestion reference](docs/limitless-ingestion.md) |
 | Set up local development | [Local development how-to](docs/how-to/local-development.md) |
 | Check CLI flags and defaults | [CLI reference](docs/reference/cli.md) |
 | Integrate with the API | [API reference](docs/reference/api.md) |
