@@ -77,6 +77,7 @@ tests/bdif/test_bdif_cli.py::test_bdif_mutating_commands_call_service_without_ne
 tests/bdif/test_bdif_cli.py::test_bdif_status_command_prints_service_result
 tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_code[ingest-disabled-3]
 tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_code[ingest-failed-3]
+tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_code[ingest-partial-3]
 tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_code[refit-None-0]
 tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_code[refit-complete-0]
 tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_code[refit-insufficient observations-3]

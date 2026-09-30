@@ -168,6 +168,7 @@ def test_healthy_report_with_empty_insufficient_data_exits_zero(monkeypatch, tmp
 @pytest.mark.parametrize(("command", "status", "expected"), [
     ("ingest", "disabled", 3),
     ("ingest", "failed", 3),
+    ("ingest", "partial", 3),
     ("refit", "missing", 3),
     ("refit", "insufficient observations", 3),
     ("refit", "not identifiable", 3),
