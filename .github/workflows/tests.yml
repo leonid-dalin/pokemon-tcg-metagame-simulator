@@ -44,3 +44,5 @@ jobs:
         run: PYTHONPATH=. python tools/qa-harness/cluster_se_check.py
       - name: Run BDIF statistics mutation sweep
         run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.bdif-statistics.json --pythonpath .
+      - name: Run delivered BDIF decisions mutation sweep
+        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.bdif-delivered.json --pythonpath .
