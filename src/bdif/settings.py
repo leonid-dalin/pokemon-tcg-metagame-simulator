@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import os
 
 from src.core import config
+from src.core.logger import logger
 
 
 def _environment_flag(name: str, default: bool) -> bool:
@@ -49,3 +50,12 @@ class BdifSettings:
             fallback_panel_decks=tuple(config.BDIF_PANEL_DECKS),
             backfill_limit=config.LIMITLESS_BACKFILL_TOURNAMENTS,
         )
+
+
+def simulation_input_path(settings: BdifSettings | None = None) -> str:
+    settings = settings or BdifSettings.from_environment()
+    if settings.use_card_model and os.path.exists(settings.model_input_path):
+        return settings.model_input_path
+    if settings.use_card_model:
+        logger.warning("card_model_artifact_missing", path=settings.model_input_path)
+    return settings.baseline_input_path

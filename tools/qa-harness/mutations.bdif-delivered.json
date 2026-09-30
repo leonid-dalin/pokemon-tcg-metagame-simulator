@@ -250,5 +250,17 @@
     "file": "src/ingestion/store.py",
     "find": "        self.path = str(path)\n        self.deck_mapping",
     "replace": "        self.path = str(path)\n        json.loads(Path(\"data/input/ea_input.json\").read_text(encoding=\"utf-8\"))\n        self.deck_mapping"
+  },
+  {
+    "name": "mismatched request matrix accepted",
+    "file": "src/bdif/service.py",
+    "find": "        raise ValueError(f\"request matrix does not match the simulation input {source}\")",
+    "replace": "        pass"
+  },
+  {
+    "name": "dashboard loads the engine to find its input",
+    "file": "src/ui/app.py",
+    "find": "from src.bdif.settings import simulation_input_path",
+    "replace": "from src.bdif.service import simulation_input_path"
   }
 ]

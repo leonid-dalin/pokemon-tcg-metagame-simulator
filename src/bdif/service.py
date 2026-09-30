@@ -4,8 +4,10 @@ import os
 from copy import deepcopy
 from typing import Sequence
 
+import numpy as np
+
 from src.api.models import PredictionRequest, TIER_MAPPING
-from src.bdif.settings import BdifSettings
+from src.bdif.settings import BdifSettings, simulation_input_path
 from src.core import config
 from src.core.logger import logger
 from src.core.data import load_matchup_data
@@ -118,15 +120,6 @@ def build_report_addons(store=None, settings: BdifSettings | None = None) -> tup
     return deepcopy(result[0]), deepcopy(result[1])
 
 
-def simulation_input_path(settings: BdifSettings | None = None) -> str:
-    settings = settings or BdifSettings.from_environment()
-    if settings.use_card_model and os.path.exists(settings.model_input_path):
-        return settings.model_input_path
-    if settings.use_card_model:
-        logger.warning("card_model_artifact_missing", path=settings.model_input_path)
-    return settings.baseline_input_path
-
-
 def refit_card_model(settings: BdifSettings | None = None) -> dict:
     settings = settings or BdifSettings.from_environment()
     if not os.path.exists(settings.db_path):
@@ -224,6 +217,9 @@ def run_prediction(request: PredictionRequest, progress_callback=None, settings:
     source = input_path or simulation_input_path(settings)
     input_sha256 = _file_sha256(source)
     deck_names, matrix, details = load_matchup_data(source, config.MIN_GAMES)
+    requested = np.asarray(request.matchup_matrix, dtype=float)
+    if list(request.deck_names) != list(deck_names) or requested.shape != matrix.shape or not np.allclose(requested, matrix):
+        raise ValueError(f"request matrix does not match the simulation input {source}")
     solver = predict_best_decks(request)
     players = request.total_players
     if request.tournament_style == "championship_series":
