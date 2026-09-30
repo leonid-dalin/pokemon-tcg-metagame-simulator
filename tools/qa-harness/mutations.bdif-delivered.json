@@ -220,5 +220,35 @@
     "file": "src/bdif/service.py",
     "find": "        if event_id in existing_ids:",
     "replace": "        if False:"
+  },
+  {
+    "name": "store connections left open",
+    "file": "src/ingestion/store.py",
+    "find": "        finally:\n            connection.close()",
+    "replace": "        finally:\n            pass"
+  },
+  {
+    "name": "refit creates a missing store",
+    "file": "src/bdif/service.py",
+    "find": "    if not os.path.exists(settings.db_path):\n        return {\"status\": \"missing\", \"db_path\": settings.db_path}\n    from src.ingestion.model",
+    "replace": "    from src.ingestion.model"
+  },
+  {
+    "name": "artefact directory ignored",
+    "file": "src/bdif/settings.py",
+    "find": "        artifact_dir = (os.environ.get(\"BDIF_ARTIFACT_DIR\") or \"data/input\").rstrip(\"/\\\\\")",
+    "replace": "        artifact_dir = \"data/input\""
+  },
+  {
+    "name": "report not written to the output directory",
+    "file": "src/bdif/cli.py",
+    "find": "            write_text_atomic(text, os.path.join(args.output, REPORT_FILENAME))",
+    "replace": "            pass"
+  },
+  {
+    "name": "store construction reads the simulation input",
+    "file": "src/ingestion/store.py",
+    "find": "        self.path = str(path)\n        self.deck_mapping",
+    "replace": "        self.path = str(path)\n        json.loads(Path(\"data/input/ea_input.json\").read_text(encoding=\"utf-8\"))\n        self.deck_mapping"
   }
 ]

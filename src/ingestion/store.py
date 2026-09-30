@@ -4,7 +4,7 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass
-from contextlib import closing
+from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -39,7 +39,6 @@ def _decklist_card_names(raw: str | None) -> frozenset[str]:
 class LimitlessStore:
     def __init__(self, path: str | Path, canonical_names: Iterable[str] | None = None, deck_mapping: Mapping[str, str | None] | None = None):
         self.path = str(path)
-        self.canonical_names = list(canonical_names) if canonical_names is not None else self._load_canonical_names()
         self.deck_mapping = dict(deck_mapping) if deck_mapping is not None else load_archetype_map()
         self._schema_ready = False
         self._read_ready = False
@@ -62,15 +61,6 @@ class LimitlessStore:
         self.backfill_deck_names()
         self._read_ready = True
 
-    @staticmethod
-    def _load_canonical_names() -> list[str]:
-        path = Path("data/input/ea_input.json")
-        if not path.exists():
-            return []
-        with path.open(encoding="utf-8") as handle:
-            payload = json.load(handle)
-        return [str(name) for name in payload.get("archetypes", [])]
-
     def _resolve_deck_name(self, deck_id: str | None, display_name: str | None = None) -> str | None:
         if not deck_id or deck_id == "other":
             return None
@@ -80,12 +70,34 @@ class LimitlessStore:
         return display_name if display_name and display_name.strip() else None
 
 
+    @contextmanager
     def connect(self):
-        return sqlite3.connect(self.path)
+        connection = sqlite3.connect(self.path)
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
+
+    def summary(self) -> dict[str, Any]:
+        uri = f"{Path(self.path).resolve().as_uri()}?mode=ro"
+        with closing(sqlite3.connect(uri, uri=True)) as conn:
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if not {"standings", "pairings"} <= tables:
+                return {"schema": "incomplete"}
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(standings)")}
+            if "deck_name" not in columns:
+                return {"schema": "legacy"}
+            decks = conn.execute("SELECT COUNT(DISTINCT deck_name) FROM standings WHERE deck_name IS NOT NULL").fetchone()[0]
+            pairings = conn.execute("SELECT COUNT(*) FROM pairings").fetchone()[0]
+            decklists = conn.execute(
+                "SELECT COUNT(*) FROM standings WHERE decklist_json IS NOT NULL AND decklist_json != 'null'"
+            ).fetchone()[0]
+        return {"schema": "current", "decks": decks, "pairings": pairings, "decklists": decklists}
 
     def _decklists(self, archetype: str, event_id: str | None = None):
         self.prepare_for_read()
-        with closing(self.connect()) as conn:
+        with self.connect() as conn:
             event_filter = " AND tournament_id=?" if event_id is not None else ""
             rows = conn.execute(
                 "SELECT decklist_json FROM standings WHERE deck_name=? AND decklist_json IS NOT NULL" + event_filter,
@@ -114,7 +126,7 @@ class LimitlessStore:
                 "SELECT DISTINCT deck_id FROM standings "
                 "WHERE deck_id IS NOT NULL AND deck_name IS NULL "
                 "ORDER BY deck_id"
-            )
+            ).fetchall()
         return [str(row[0]) for row in rows]
 
     def upsert_standings(

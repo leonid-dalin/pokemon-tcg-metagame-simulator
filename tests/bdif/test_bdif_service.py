@@ -1,6 +1,8 @@
 import ast
 import hashlib
 import os
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +13,11 @@ from src.bdif import service
 from src.bdif.settings import BdifSettings
 from src.core import config
 from src.ingestion.model import CardModelNotIdentifiable, PlayerObservation
+from src.ingestion.store import LimitlessStore
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def settings(**overrides):
@@ -262,18 +269,68 @@ def test_prediction_uses_input_path_or_configured_default(monkeypatch):
 
 
 @pytest.mark.unit
-def test_bdif_status_reads_legacy_store_without_writing(monkeypatch, tmp_path):
-    db = tmp_path / "legacy.db"
-    db.touch()
-    calls = []
-    class Store:
-        def __init__(self, path): calls.append("open")
-        def prepare_for_read(self): calls.append("prepare")
-        def deck_weights(self): calls.append("weights"); return {"a": 1}
-        def player_observations(self): calls.append("observations"); return []
-    monkeypatch.setattr("src.ingestion.store.LimitlessStore", Store)
-    assert service.bdif_status(settings(db_path=str(db))) == {"status": "available", "db_path": str(db), "decks": 1, "observations": 0}
-    assert calls == ["open", "prepare", "weights", "observations"]
+def test_refit_reports_a_missing_store_without_creating_it(tmp_path):
+    db = tmp_path / "absent.db"
+
+    assert service.refit_card_model(settings(db_path=str(db))) == {"status": "missing", "db_path": str(db)}
+    assert not db.exists()
+
+
+@pytest.mark.unit
+def test_bdif_status_reports_settings_when_the_store_is_missing(tmp_path):
+    db = tmp_path / "absent.db"
+
+    assert service.bdif_status(settings(db_path=str(db), model_input_path=str(tmp_path / "model.json"))) == {
+        "status": "missing", "db_path": str(db), "use_card_model": True, "ingestion_enabled": False, "model_artifact": False,
+    }
+    assert not db.exists()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("tables", "schema"), [
+    ([], "incomplete"),
+    ([
+        "CREATE TABLE standings (tournament_id TEXT, player_id TEXT, deck_id TEXT, decklist_json TEXT)",
+        "CREATE TABLE pairings (tournament_id TEXT, round INTEGER, phase INTEGER, player1 TEXT, player2 TEXT, winner TEXT)",
+        "INSERT INTO standings VALUES ('e', 'p1', 'alakazam-dudunsparce', NULL)",
+    ], "legacy"),
+])
+def test_bdif_status_reports_an_old_store_without_writing(tmp_path, tables, schema):
+    db = tmp_path / "old.db"
+    with closing(sqlite3.connect(db)) as connection, connection:
+        for statement in tables:
+            connection.execute(statement)
+    before = _sha256(db)
+
+    result = service.bdif_status(settings(db_path=str(db), model_input_path=str(tmp_path / "model.json")))
+
+    assert _sha256(db) == before
+    assert result == {
+        "status": "available", "db_path": str(db), "use_card_model": True, "ingestion_enabled": False,
+        "model_artifact": False, "schema": schema,
+    }
+
+
+@pytest.mark.unit
+def test_bdif_status_counts_a_current_store_without_writing(tmp_path):
+    db = tmp_path / "limitless.db"
+    store = LimitlessStore(db, deck_mapping={"a": "A", "b": "B"})
+    store.upsert_standings("e", [
+        {"player": "p1", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Mon", "count": 1}]}},
+        {"player": "p2", "deck": {"id": "b"}, "decklist": None},
+    ])
+    store.upsert_pairings("e", [{"round": 1, "player1": "p1", "player2": "p2", "winner": "p1"}])
+    model = tmp_path / "model.json"
+    model.write_text("{}", encoding="utf-8")
+    before = _sha256(db)
+
+    result = service.bdif_status(settings(db_path=str(db), model_input_path=str(model)))
+
+    assert _sha256(db) == before
+    assert result == {
+        "status": "available", "db_path": str(db), "use_card_model": True, "ingestion_enabled": False,
+        "model_artifact": True, "schema": "current", "decks": 2, "pairings": 1, "decklists": 1,
+    }
 
 
 @pytest.mark.unit

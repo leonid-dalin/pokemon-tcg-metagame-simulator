@@ -32,6 +32,7 @@ class BdifSettings:
 
     @classmethod
     def from_environment(cls) -> "BdifSettings":
+        artifact_dir = (os.environ.get("BDIF_ARTIFACT_DIR") or "data/input").rstrip("/\\")
         return cls(
             use_card_model=_environment_flag(
                 "BDIF_USE_CARD_MODEL", config.BDIF_USE_CARD_MODEL
@@ -41,8 +42,8 @@ class BdifSettings:
             ),
             db_path=os.environ.get("BDIF_DB_PATH") or "data/limitless.db",
             baseline_input_path=config.INPUT_DATA,
-            ingestion_input_path="data/input/limitless_input.json",
-            model_input_path="data/input/limitless_model_input.json",
+            ingestion_input_path=f"{artifact_dir}/limitless_input.json",
+            model_input_path=f"{artifact_dir}/limitless_model_input.json",
             panel_share_threshold=config.BDIF_PANEL_SHARE_THRESHOLD,
             panel_max_decks=config.BDIF_PANEL_MAX_DECKS,
             fallback_panel_decks=tuple(config.BDIF_PANEL_DECKS),

@@ -86,3 +86,6 @@ diagnose.py
 test_scraper.py
 data/extras
 data/limitless.db
+
+data/input/limitless_input.json
+data/input/limitless_model_input.json
