@@ -37,9 +37,8 @@ def _decklist_card_names(raw: str | None) -> frozenset[str]:
 
 
 class LimitlessStore:
-    def __init__(self, path: str | Path, canonical_names: Iterable[str] | None = None, deck_mapping: Mapping[str, str | None] | None = None):
+    def __init__(self, path: str | Path, deck_mapping: Mapping[str, str | None] | None = None):
         self.path = str(path)
-        self.canonical_names = list(canonical_names) if canonical_names is not None else self._load_canonical_names()
         self.deck_mapping = dict(deck_mapping) if deck_mapping is not None else load_archetype_map()
         self._schema_ready = False
         self._read_ready = False
@@ -61,15 +60,6 @@ class LimitlessStore:
         self.ensure_schema()
         self.backfill_deck_names()
         self._read_ready = True
-
-    @staticmethod
-    def _load_canonical_names() -> list[str]:
-        path = Path("data/input/ea_input.json")
-        if not path.exists():
-            return []
-        with path.open(encoding="utf-8") as handle:
-            payload = json.load(handle)
-        return [str(name) for name in payload.get("archetypes", [])]
 
     def _resolve_deck_name(self, deck_id: str | None, display_name: str | None = None) -> str | None:
         if not deck_id or deck_id == "other":

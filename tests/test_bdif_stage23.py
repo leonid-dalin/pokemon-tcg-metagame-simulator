@@ -140,7 +140,7 @@ def test_ingestion_reports_newly_observed_unmapped_deck_ids(monkeypatch, tmp_pat
 
 @pytest.mark.unit
 def test_unknown_limitless_ids_without_catalogue_names_stay_unmapped(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db", canonical_names=["Known"])
+    store = LimitlessStore(tmp_path / "limitless.db")
 
     assert store._resolve_deck_name("unknown") is None
 
@@ -260,11 +260,11 @@ def test_store_writes_missing_decklists_as_sql_null(tmp_path):
 @pytest.mark.unit
 def test_store_construction_does_not_modify_existing_database(tmp_path):
     path = tmp_path / "limitless.db"
-    store = LimitlessStore(path, canonical_names=["N's Zoroark"])
+    store = LimitlessStore(path)
     store.upsert_standings("event", [{"player": "p1", "deck": {"id": "n-zoroark"}}])
     before = path.read_bytes()
 
-    LimitlessStore(path, canonical_names=["N's Zoroark"])
+    LimitlessStore(path)
 
     assert path.read_bytes() == before
 
@@ -280,7 +280,7 @@ def test_readers_prepare_legacy_store_schema(tmp_path):
         conn.execute("INSERT INTO standings VALUES ('event', 'p1', 'a', '{\"pokemon\": []}')")
         conn.commit()
 
-    store = LimitlessStore(path, canonical_names=["a"], deck_mapping=SYNTHETIC_DECK_MAPPING)
+    store = LimitlessStore(path, deck_mapping=SYNTHETIC_DECK_MAPPING)
     assert list(store.matchup_rows()) == []
 
     with sqlite3.connect(path) as conn:
@@ -296,7 +296,7 @@ def test_h1_observations_treats_legacy_json_null_as_empty_deck():
 
 @pytest.mark.unit
 def test_store_persists_and_backfills_canonical_deck_names(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db", canonical_names=["N's Zoroark"])
+    store = LimitlessStore(tmp_path / "limitless.db")
     store.upsert_standings("event", [
         {"player": "p1", "deck": {"id": "n-zoroark", "name": "N's Zoroark"}},
         {"player": "p2", "deck": {"id": "other", "name": "Other"}},

@@ -244,5 +244,11 @@
     "file": "src/bdif/cli.py",
     "find": "            write_text_atomic(text, os.path.join(args.output, REPORT_FILENAME))",
     "replace": "            pass"
+  },
+  {
+    "name": "store construction reads the simulation input",
+    "file": "src/ingestion/store.py",
+    "find": "        self.path = str(path)\n        self.deck_mapping",
+    "replace": "        self.path = str(path)\n        json.loads(Path(\"data/input/ea_input.json\").read_text(encoding=\"utf-8\"))\n        self.deck_mapping"
   }
 ]
