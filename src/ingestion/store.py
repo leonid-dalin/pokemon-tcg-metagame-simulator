@@ -4,7 +4,7 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass
-from contextlib import closing
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -80,12 +80,18 @@ class LimitlessStore:
         return display_name if display_name and display_name.strip() else None
 
 
+    @contextmanager
     def connect(self):
-        return sqlite3.connect(self.path)
+        connection = sqlite3.connect(self.path)
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     def _decklists(self, archetype: str, event_id: str | None = None):
         self.prepare_for_read()
-        with closing(self.connect()) as conn:
+        with self.connect() as conn:
             event_filter = " AND tournament_id=?" if event_id is not None else ""
             rows = conn.execute(
                 "SELECT decklist_json FROM standings WHERE deck_name=? AND decklist_json IS NOT NULL" + event_filter,
@@ -114,7 +120,7 @@ class LimitlessStore:
                 "SELECT DISTINCT deck_id FROM standings "
                 "WHERE deck_id IS NOT NULL AND deck_name IS NULL "
                 "ORDER BY deck_id"
-            )
+            ).fetchall()
         return [str(row[0]) for row in rows]
 
     def upsert_standings(

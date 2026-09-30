@@ -220,5 +220,11 @@
     "file": "src/bdif/service.py",
     "find": "        if event_id in existing_ids:",
     "replace": "        if False:"
+  },
+  {
+    "name": "store connections left open",
+    "file": "src/ingestion/store.py",
+    "find": "        finally:\n            connection.close()",
+    "replace": "        finally:\n            pass"
   }
 ]
