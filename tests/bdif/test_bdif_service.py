@@ -247,6 +247,21 @@ def test_prediction_uses_explicit_seed(monkeypatch):
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(("deck_names", "matrix"), [
+    (["a", "c"], [[.5, .6], [.4, .5]]),
+    (["a", "b"], [[.5, .7], [.3, .5]]),
+    (["b", "a"], [[.5, .4], [.6, .5]]),
+])
+def test_prediction_rejects_a_request_matrix_that_differs_from_the_simulation_input(monkeypatch, deck_names, matrix):
+    monkeypatch.setattr(service, "load_matchup_data", lambda path, *args: (["a", "b"], np.array([[.5, .6], [.4, .5]]), {}))
+    monkeypatch.setattr(service, "predict_best_decks", lambda request: pytest.fail("solver ran on a mismatched request"))
+    request = PredictionRequest(job_id="job", deck_names=deck_names, matchup_matrix=matrix, total_players=4)
+
+    with pytest.raises(ValueError, match="does not match the simulation input custom.json"):
+        service.run_prediction(request, settings=settings(), input_path="custom.json")
+
+
+@pytest.mark.unit
 def test_prediction_uses_input_path_or_configured_default(monkeypatch):
     loaded = []
     monkeypatch.setattr(service, "load_matchup_data", lambda path, *args: loaded.append(path) or (["a", "b"], np.array([[.5, .6], [.4, .5]]), {}))

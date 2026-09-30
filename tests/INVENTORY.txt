@@ -131,6 +131,9 @@ tests/bdif/test_bdif_service.py::test_panel_deck_resolution_strips_unique_suffix
 tests/bdif/test_bdif_service.py::test_panel_decks_for_report_passes_configured_maximum
 tests/bdif/test_bdif_service.py::test_panel_decks_map_limitless_ids_to_simulation_names
 tests/bdif/test_bdif_service.py::test_prediction_passes_matchup_details_and_report_addons
+tests/bdif/test_bdif_service.py::test_prediction_rejects_a_request_matrix_that_differs_from_the_simulation_input[deck_names0-matrix0]
+tests/bdif/test_bdif_service.py::test_prediction_rejects_a_request_matrix_that_differs_from_the_simulation_input[deck_names1-matrix1]
+tests/bdif/test_bdif_service.py::test_prediction_rejects_a_request_matrix_that_differs_from_the_simulation_input[deck_names2-matrix2]
 tests/bdif/test_bdif_service.py::test_prediction_reports_its_provenance[None]
 tests/bdif/test_bdif_service.py::test_prediction_reports_its_provenance[matrix bytes]
 tests/bdif/test_bdif_service.py::test_prediction_reuses_one_store_and_isolates_addon_failure
@@ -374,6 +377,7 @@ tests/ui/test_app.py::test_api_headers_reflects_optional_api_token[-expected1]
 tests/ui/test_app.py::test_api_headers_reflects_optional_api_token[None-expected0]
 tests/ui/test_app.py::test_api_headers_reflects_optional_api_token[secret-expected2]
 tests/ui/test_app.py::test_bdif_tabs_render_status_evidence_and_provenance
+tests/ui/test_app.py::test_dashboard_import_does_not_load_the_simulation_engine
 tests/ui/test_app.py::test_fetch_bdif_status_degrades_on_request_failures[ConnectionError]
 tests/ui/test_app.py::test_fetch_bdif_status_degrades_on_request_failures[HTTPError]
 tests/ui/test_app.py::test_fetch_bdif_status_degrades_on_request_failures[JSONDecodeError]
@@ -381,6 +385,7 @@ tests/ui/test_app.py::test_fetch_bdif_status_returns_json
 tests/ui/test_app.py::test_resolve_auto_fill_reports_infeasible_constraints
 tests/ui/test_app.py::test_submit_prediction_passes_a_timeout
 tests/ui/test_app.py::test_submit_prediction_passes_api_headers
+tests/ui/test_app.py::test_ui_loads_the_matrix_the_service_simulates
 tests/ui/test_bdif_view.py::test_best60_view_surfaces_status_evidence_and_no_signal_cards
 tests/ui/test_bdif_view.py::test_field_posterior_rows_rank_by_best_pick_and_label_thin_decks
 tests/ui/test_bdif_view.py::test_h1_rows_unpack_intervals_from_tuples_or_json_lists

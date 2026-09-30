@@ -27,8 +27,9 @@ if project_root not in sys.path:
 
 from src.api.models import PrecisionTier, RangeSpec, ExactSpec, PredictionRequest
 from src.core.data import load_matchup_data
-from src.core.config import NASH_EQUILIBRIUM, INPUT_DATA, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, \
+from src.core.config import NASH_EQUILIBRIUM, MIN_GAMES, WIN_THRESHOLD, aggressive_colorscale, TIER_THRESHOLDS, \
     TIER_2_THRESHOLD
+from src.bdif.settings import simulation_input_path
 from src.ui.meta_rows import locked_exact_spec, locked_share, minimum_share
 from src.ui import bdif_view
 from src.tournament.solver import swiss_rounds_from_players, get_variant_5_structure, \
@@ -63,15 +64,13 @@ TTL_TIMER = 600
 
 @st.cache_data(show_spinner=False, ttl=TTL_TIMER)
 def get_valid_deck_names() -> List[str]:
-    input_path = os.path.join(str(INPUT_DATA))
-    deck_names, _, _ = load_matchup_data(input_path, MIN_GAMES)
+    deck_names, _, _ = load_matchup_data(simulation_input_path(), MIN_GAMES)
     return sorted(deck_names)
 
 
 @st.cache_data(show_spinner=False, ttl=TTL_TIMER)
 def load_full_win_matrix():
-    input_path = os.path.join(str(INPUT_DATA))
-    deck_names, win_matrix, matchup_details = load_matchup_data(input_path, MIN_GAMES)
+    deck_names, win_matrix, matchup_details = load_matchup_data(simulation_input_path(), MIN_GAMES)
     return deck_names, win_matrix, matchup_details
 
 
@@ -704,11 +703,11 @@ def main():
                 st_progress_bar = st.progress(0, text="Booting Data Solver...")
                 start_time = time.time()
                 try:
-                    _, win_matrix, _ = load_full_win_matrix()
+                    matrix_deck_names, win_matrix, _ = load_full_win_matrix()
                     # 1. Prepare the payload
                     payload = {
                         "job_id": job_id,
-                        "deck_names": deck_names,
+                        "deck_names": matrix_deck_names,
                         "matchup_matrix": win_matrix.tolist() if hasattr(win_matrix, "tolist") else win_matrix,
                         "tournament_style": str(tourney_structure).lower().replace(" ", "_"),
                         "match_format": match_format,

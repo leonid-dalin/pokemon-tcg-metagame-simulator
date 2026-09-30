@@ -1,4 +1,8 @@
 import json
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -81,6 +85,38 @@ def test_fetch_bdif_status_degrades_on_request_failures(monkeypatch, failure):
     monkeypatch.setattr(app.requests, "get", get)
 
     assert app.fetch_bdif_status("http://api.test") is None
+
+
+def test_ui_loads_the_matrix_the_service_simulates(monkeypatch, tmp_path):
+    source = tmp_path / "simulated.json"
+    decks = ["x", "y"]
+    matrix = {a: {b: {"win_rate": 0.5 if a == b else (0.6 if a < b else 0.4), "match_count": 500} for b in decks} for a in decks}
+    source.write_text(json.dumps({"archetypes": decks, "win_rate_matrix": matrix}), encoding="utf-8")
+    monkeypatch.setattr(app, "simulation_input_path", lambda: str(source))
+    app.get_valid_deck_names.clear()
+    app.load_full_win_matrix.clear()
+
+    try:
+        assert app.get_valid_deck_names() == ["x", "y"]
+        assert app.load_full_win_matrix()[0] == ["x", "y"]
+    finally:
+        app.get_valid_deck_names.clear()
+        app.load_full_win_matrix.clear()
+
+
+@pytest.mark.integration
+def test_dashboard_import_does_not_load_the_simulation_engine(tmp_path):
+    root = Path(__file__).resolve().parents[2]
+    probe = tmp_path / "import_dashboard"
+    probe.write_text("import sys\nimport src.ui.app\nprint('tcg_engine' in sys.modules)\n", encoding="utf-8")
+    completed = subprocess.run(
+        [sys.executable, str(probe)],
+        cwd=root, env={**os.environ, "PYTHONPATH": str(root), "OTEL_SDK_DISABLED": "true"},
+        capture_output=True, text=True, timeout=120,
+    )
+
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    assert completed.stdout.strip().splitlines()[-1] == "False"
 
 
 def test_fetch_bdif_status_returns_json(monkeypatch):
