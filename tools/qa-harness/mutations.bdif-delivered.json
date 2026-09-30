@@ -1,0 +1,224 @@
+[
+  {
+    "name": "match counts keyed by ordered pair",
+    "file": "src/ingestion/model.py",
+    "find": "        pair = tuple(sorted((row.deck, row.opponent)))\n",
+    "replace": "        pair = (row.deck, row.opponent)\n"
+  },
+  {
+    "name": "overlapping engine seeds",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "        base_seed = (seed + int(draw_starts[draw_index])) % (1 << 32)\n",
+    "replace": "        base_seed = (seed + draw_index) % (1 << 32)\n"
+  },
+  {
+    "name": "no small-sample factor",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "np.sqrt(batches / (batches - 1) * np.sum(residuals ** 2))",
+    "replace": "np.sqrt(np.sum(residuals ** 2))"
+  },
+  {
+    "name": "field lower quantile 5%",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "\"expected_win_rate_lower\": float(np.quantile(expected[:, i], 0.025)),",
+    "replace": "\"expected_win_rate_lower\": float(np.quantile(expected[:, i], 0.05)),"
+  },
+  {
+    "name": "Z_95 set to one SE",
+    "file": "src/ingestion/model.py",
+    "find": "Z_95 = float(norm.ppf(0.975))",
+    "replace": "Z_95 = float(norm.ppf(0.8413))"
+  },
+  {
+    "name": "card selection ignores min players",
+    "file": "src/ingestion/model.py",
+    "find": "count >= min_players and low <=",
+    "replace": "count >= 0 and low <="
+  },
+  {
+    "name": "request cap back to 64",
+    "file": "src/api/models.py",
+    "find": "MAX_REQUEST_DECKS = 256\n",
+    "replace": "MAX_REQUEST_DECKS = 64\n"
+  },
+  {
+    "name": "service ignores input_path",
+    "file": "src/bdif/service.py",
+    "find": "    source = input_path or simulation_input_path(settings)\n",
+    "replace": "    source = simulation_input_path(settings)\n"
+  },
+  {
+    "name": "CLI does not pass input_path",
+    "file": "src/bdif/cli.py",
+    "find": "            result = service.run_prediction(request, seed=args.seed, input_path=input_path)\n",
+    "replace": "            result = service.run_prediction(request, seed=args.seed)\n"
+  },
+  {
+    "name": "CLI ignores the configured simulation input",
+    "file": "src/bdif/cli.py",
+    "find": "            input_path = args.input or service.simulation_input_path()\n",
+    "replace": "            input_path = args.input or \"data/input/ea_input.json\"\n"
+  },
+  {
+    "name": "refit failures exit 0",
+    "file": "src/bdif/cli.py",
+    "find": "    \"refit\": {\"missing\", \"insufficient observations\", \"not identifiable\"},\n",
+    "replace": "    \"refit\": {\"missing\"},\n"
+  },
+  {
+    "name": "limit upper bound removed",
+    "file": "src/bdif/cli.py",
+    "find": "    if not 1 <= parsed <= 1000:\n",
+    "replace": "    if not 1 <= parsed:\n"
+  },
+  {
+    "name": "partial failure reported complete",
+    "file": "src/bdif/service.py",
+    "find": "    elif failed:\n        outcome = \"partial\"\n",
+    "replace": "    elif failed:\n        outcome = \"complete\"\n"
+  },
+  {
+    "name": "report drops provenance",
+    "file": "src/tournament/reporting.py",
+    "find": "        \"provenance\": provenance or {},\n",
+    "replace": "        \"provenance\": {},\n"
+  },
+  {
+    "name": "pair cluster not subtracted",
+    "file": "src/ingestion/model.py",
+    "find": "    meat -= sum((vector[:, None] @ vector[None, :] for vector in pairs.values()), np.zeros((design.shape[1], design.shape[1])))",
+    "replace": "    pass"
+  },
+  {
+    "name": "clustered SE not floored at model-based",
+    "file": "src/ingestion/model.py",
+    "find": "    return np.maximum(clustered, model_standard_errors)",
+    "replace": "    return clustered"
+  },
+  {
+    "name": "clustering replaced by model-based SE",
+    "file": "src/ingestion/model.py",
+    "find": "        standard_errors_array = _player_clustered_standard_errors(estimator, observations, design, standard_errors_array)",
+    "replace": "        standard_errors_array = standard_errors_array"
+  },
+  {
+    "name": "store drops player ids",
+    "file": "src/ingestion/store.py",
+    "find": "                str(deck), str(opponent), deck_cards, opponent_cards, result, (str(player1), str(player2)),",
+    "replace": "                str(deck), str(opponent), deck_cards, opponent_cards, result, None,"
+  },
+  {
+    "name": "binomial SE in posterior mode",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "            if use_posterior:\n                metric_counts = {",
+    "replace": "            if False:\n                metric_counts = {"
+  },
+  {
+    "name": "unweighted pooling",
+    "file": "src/core/data.py",
+    "find": "                        pooled_rate = (\n                            forward[\"win_rate\"] * forward[\"match_count\"]\n                            + (1.0 - reverse[\"win_rate\"]) * reverse[\"match_count\"]\n                        ) / total_matches if total_matches else 0.5",
+    "replace": "                        pooled_rate = (forward[\"win_rate\"] + 1.0 - reverse[\"win_rate\"]) / 2.0"
+  },
+  {
+    "name": "pooled count doubles evidence",
+    "file": "src/core/data.py",
+    "find": "                        pooled_count = total_matches // 2",
+    "replace": "                        pooled_count = total_matches"
+  },
+  {
+    "name": "asymmetric pairs left alone",
+    "file": "src/core/data.py",
+    "find": "                    if abs(forward[\"win_rate\"] + reverse[\"win_rate\"] - 1.0) > 1e-9:",
+    "replace": "                    if False:"
+  },
+  {
+    "name": "backfill overwrites stored provider names",
+    "file": "src/ingestion/store.py",
+    "find": "                    \"UPDATE standings SET deck_name=? WHERE deck_id=? AND (deck_name IS NULL OR deck_name=deck_id)\",",
+    "replace": "                    \"UPDATE standings SET deck_name=? WHERE deck_id=?\","
+  },
+  {
+    "name": "backfill writes unresolved names",
+    "file": "src/ingestion/store.py",
+    "find": "                if deck_name is None:\n                    continue\n                cursor",
+    "replace": "                cursor"
+  },
+  {
+    "name": "report exits 3 whenever any deck is thin",
+    "file": "src/bdif/cli.py",
+    "find": "        return 3 if not isinstance(ranked_metrics, dict) or not ranked_metrics else 0",
+    "replace": "        return 3 if not isinstance(ranked_metrics, dict) or not ranked_metrics or mc_results.get(\"insufficient_data\") else 0"
+  },
+  {
+    "name": "service ignores limit",
+    "file": "src/bdif/service.py",
+    "find": "limit=limit if limit is not None else settings.backfill_limit",
+    "replace": "limit=settings.backfill_limit"
+  },
+  {
+    "name": "all-failed run reported partial",
+    "file": "src/bdif/service.py",
+    "find": "    if events and len(failed) == len(events):\n        outcome = \"failed\"",
+    "replace": "    if False:\n        outcome = \"failed\""
+  },
+  {
+    "name": "provenance hash dropped",
+    "file": "src/bdif/service.py",
+    "find": "        \"input_sha256\": input_sha256,",
+    "replace": "        \"input_sha256\": None,"
+  },
+  {
+    "name": "provenance seed ignores override",
+    "file": "src/bdif/service.py",
+    "find": "    run_seed = config.RNG_SEED if seed is None else seed",
+    "replace": "    run_seed = config.RNG_SEED"
+  },
+  {
+    "name": "explicit unmapped id falls back to provider name",
+    "file": "src/ingestion/store.py",
+    "find": "        if str(deck_id) in self.deck_mapping:\n            return explicit",
+    "replace": "        if explicit is not None:\n            return explicit"
+  },
+  {
+    "name": "ties counted as wins for the first deck",
+    "file": "src/ingestion/aggregate.py",
+    "find": "    elif winner is None:\n        wins[key] += 0.5",
+    "replace": "    elif winner is None:\n        wins[key] += 1.0"
+  },
+  {
+    "name": "post-drop rounds kept",
+    "file": "src/ingestion/aggregate.py",
+    "find": "        return \"after_drop\"",
+    "replace": "        return None"
+  },
+  {
+    "name": "ACE SPEC violations kept",
+    "file": "src/ingestion/features.py",
+    "find": "        if _ace_spec_violation(decklist):",
+    "replace": "        if False:"
+  },
+  {
+    "name": "unobserved Pokemon admitted",
+    "file": "src/ingestion/model.py",
+    "find": "    playable_cards -= pokemon_cards - (observed_pokemon_cards or set())",
+    "replace": "    pass"
+  },
+  {
+    "name": "skeleton accepts minority profile",
+    "file": "src/ingestion/store.py",
+    "find": "    if support / len(legal_rows) < 0.75:",
+    "replace": "    if support / len(legal_rows) < 0.0:"
+  },
+  {
+    "name": "pagination stops after the first page",
+    "file": "src/ingestion/client.py",
+    "find": "            page += 1",
+    "replace": "            break"
+  },
+  {
+    "name": "stored events fetched again",
+    "file": "src/bdif/service.py",
+    "find": "        if event_id in existing_ids:",
+    "replace": "        if False:"
+  }
+]

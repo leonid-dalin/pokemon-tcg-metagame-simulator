@@ -44,3 +44,9 @@ jobs:
         run: PYTHONPATH=. python tools/qa-harness/cluster_se_check.py
       - name: Run BDIF statistics mutation sweep
         run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.bdif-statistics.json --pythonpath .
+      - name: Run delivered BDIF decisions mutation sweep
+        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.bdif-delivered.json --pythonpath .
+      - name: Check BDIF flag combinations
+        run: PYTHONPATH=. python tools/qa-harness/flag_matrix.py --spec tools/qa-harness/flag_spec_bdif.py
+      - name: Check BDIF data handoffs
+        run: PYTHONPATH=. python tools/qa-harness/contract_probe.py --spec tools/qa-harness/contract_spec_bdif.py

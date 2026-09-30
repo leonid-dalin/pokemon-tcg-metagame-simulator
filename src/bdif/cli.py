@@ -14,7 +14,7 @@ from src.core.logger import setup_structured_logging, logger
 from src.core.telemetry import setup_telemetry
 
 EVIDENCE_UNAVAILABLE = {
-    "ingest": {"disabled", "failed"},
+    "ingest": {"disabled", "failed", "partial"},
     "refit": {"missing", "insufficient observations", "not identifiable"},
 }
 
