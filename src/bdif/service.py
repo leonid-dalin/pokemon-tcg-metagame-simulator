@@ -204,11 +204,16 @@ def run_ingestion(settings: BdifSettings | None = None, limit: int | None = None
 
 def bdif_status(settings: BdifSettings | None = None) -> dict:
     settings = settings or BdifSettings.from_environment()
+    base = {
+        "db_path": settings.db_path,
+        "use_card_model": settings.use_card_model,
+        "ingestion_enabled": settings.ingestion_enabled,
+        "model_artifact": os.path.exists(settings.model_input_path),
+    }
     if not os.path.exists(settings.db_path):
-        return {"status": "missing", "db_path": settings.db_path}
-    store = open_store(settings)
-    store.prepare_for_read()
-    return {"status": "available", "db_path": settings.db_path, "decks": len(store.deck_weights()), "observations": len(store.player_observations())}
+        return {"status": "missing", **base}
+    from src.ingestion.store import LimitlessStore
+    return {"status": "available", **base, **LimitlessStore(settings.db_path).summary()}
 
 
 def run_prediction(request: PredictionRequest, progress_callback=None, settings: BdifSettings | None = None, logger=None, seed: int | None = None, input_path: str | None = None) -> dict:

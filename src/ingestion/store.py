@@ -4,7 +4,7 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -88,6 +88,22 @@ class LimitlessStore:
                 yield connection
         finally:
             connection.close()
+
+    def summary(self) -> dict[str, Any]:
+        uri = f"{Path(self.path).resolve().as_uri()}?mode=ro"
+        with closing(sqlite3.connect(uri, uri=True)) as conn:
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if not {"standings", "pairings"} <= tables:
+                return {"schema": "incomplete"}
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(standings)")}
+            if "deck_name" not in columns:
+                return {"schema": "legacy"}
+            decks = conn.execute("SELECT COUNT(DISTINCT deck_name) FROM standings WHERE deck_name IS NOT NULL").fetchone()[0]
+            pairings = conn.execute("SELECT COUNT(*) FROM pairings").fetchone()[0]
+            decklists = conn.execute(
+                "SELECT COUNT(*) FROM standings WHERE decklist_json IS NOT NULL AND decklist_json != 'null'"
+            ).fetchone()[0]
+        return {"schema": "current", "decks": decks, "pairings": pairings, "decklists": decklists}
 
     def _decklists(self, archetype: str, event_id: str | None = None):
         self.prepare_for_read()

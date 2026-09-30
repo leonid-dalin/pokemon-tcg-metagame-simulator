@@ -226,5 +226,11 @@
     "file": "src/ingestion/store.py",
     "find": "        finally:\n            connection.close()",
     "replace": "        finally:\n            pass"
+  },
+  {
+    "name": "status migrates the store before summarising",
+    "file": "src/bdif/service.py",
+    "find": "    return {\"status\": \"available\", **base, **LimitlessStore(settings.db_path).summary()}",
+    "replace": "    return {\"status\": \"available\", **base, **(lambda store: (store.prepare_for_read(), store.summary())[1])(LimitlessStore(settings.db_path))}"
   }
 ]
