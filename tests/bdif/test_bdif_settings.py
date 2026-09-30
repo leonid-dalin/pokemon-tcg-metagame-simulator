@@ -44,6 +44,16 @@ def test_from_environment_overrides_database_path(monkeypatch):
     assert BdifSettings.from_environment().db_path == "custom/store.db"
 
 
+@pytest.mark.parametrize("directory", ["scratch/bdif", "scratch/bdif/"])
+def test_from_environment_moves_both_artefacts_with_the_artifact_directory(monkeypatch, directory):
+    monkeypatch.setenv("BDIF_ARTIFACT_DIR", directory)
+
+    settings = BdifSettings.from_environment()
+
+    assert settings.ingestion_input_path == "scratch/bdif/limitless_input.json"
+    assert settings.model_input_path == "scratch/bdif/limitless_model_input.json"
+
+
 @pytest.mark.parametrize("value", ["enabled", "2", "truth"])
 def test_from_environment_rejects_invalid_boolean_values(monkeypatch, value):
     monkeypatch.setenv("BDIF_USE_CARD_MODEL", value)

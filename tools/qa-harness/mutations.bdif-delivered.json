@@ -232,5 +232,11 @@
     "file": "src/bdif/service.py",
     "find": "    if not os.path.exists(settings.db_path):\n        return {\"status\": \"missing\", \"db_path\": settings.db_path}\n    from src.ingestion.model",
     "replace": "    from src.ingestion.model"
+  },
+  {
+    "name": "artefact directory ignored",
+    "file": "src/bdif/settings.py",
+    "find": "        artifact_dir = (os.environ.get(\"BDIF_ARTIFACT_DIR\") or \"data/input\").rstrip(\"/\\\\\")",
+    "replace": "        artifact_dir = \"data/input\""
   }
 ]
