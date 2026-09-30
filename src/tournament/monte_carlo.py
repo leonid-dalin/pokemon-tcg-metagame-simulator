@@ -172,6 +172,28 @@ def batch_ratio_standard_error(numerators: np.ndarray, denominators: np.ndarray)
     return float(np.sqrt(batches / (batches - 1) * np.sum(residuals ** 2)) / total)
 
 
+def _draw_metrics(initial: np.ndarray, day2: np.ndarray, top: np.ndarray, champ: np.ndarray) -> Dict[str, np.ndarray]:
+    n_decks = len(initial)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return {
+            "day2_share": np.divide(day2, day2.sum(), out=np.zeros(n_decks), where=day2.sum() > 0),
+            "top_cut_share": np.divide(top, top.sum(), out=np.zeros(n_decks), where=top.sum() > 0),
+            "win_probability": np.divide(champ, initial, out=np.zeros(n_decks), where=initial > 0),
+        }
+
+
+def denoised_interval(values: np.ndarray, first_halves: np.ndarray, second_halves: np.ndarray) -> Tuple[float, float, float]:
+    values = np.asarray(values, dtype=float)
+    centre = float(values.mean())
+    total = float(values.var(ddof=1))
+    noise = float(np.mean((np.asarray(first_halves, dtype=float) - np.asarray(second_halves, dtype=float)) ** 2) / 4.0)
+    share = min(1.0, noise / total) if total > 0 else 0.0
+    if 1.0 - share < 2.0 * np.sqrt(2.0 / (len(values) - 1)):
+        return float(np.quantile(values, 0.025)), float(np.quantile(values, 0.975)), share
+    shrunk = centre + (values - centre) * np.sqrt(1.0 - share)
+    return float(np.quantile(shrunk, 0.025)), float(np.quantile(shrunk, 0.975)), share
+
+
 def posterior_field_metrics(
         deck_names: List[str],
         meta_vector: np.ndarray,
@@ -311,6 +333,7 @@ def run_monte_carlo_analytics(
     total_champ = np.zeros(n_decks, dtype=int)
 
     draw_metrics = []
+    half_metrics = []
     draw_counts = []
     for current_chunk, draw_index in draw_specs:
         working_matrix = matrix_sampler(draw_index)
@@ -327,43 +350,35 @@ def run_monte_carlo_analytics(
             rust_span.set_attribute("chunk.size", current_chunk)
             rust_span.set_attribute("chunk.index", draw_index)
 
-            res_init, res_day2, res_top, res_champ = tcg_engine.run_parallel_monte_carlo(
-                current_chunk,
-                players,
-                meta_vec.tolist(),
-                working_matrix.tolist(),
-                d1_rounds,
-                cut_points,
-                d2_rounds,
-                top_cut,
-                base_seed,
-                use_tie_convergence,
-                global_tie_rate,
-                use_drop_feature
-            )
+            halves = [current_chunk // 2, current_chunk - current_chunk // 2] if use_posterior and current_chunk >= 2 else [current_chunk]
+            parts = []
+            offset = 0
+            for size in halves:
+                parts.append(tuple(np.array(values, dtype=float) for values in tcg_engine.run_parallel_monte_carlo(
+                    size,
+                    players,
+                    meta_vec.tolist(),
+                    working_matrix.tolist(),
+                    d1_rounds,
+                    cut_points,
+                    d2_rounds,
+                    top_cut,
+                    (base_seed + offset) % (1 << 32),
+                    use_tie_convergence,
+                    global_tie_rate,
+                    use_drop_feature,
+                )))
+                offset += size
         logger.debug("chunk_processed", chunk_index=draw_index, size=current_chunk)
-        total_initial += np.array(res_init, dtype=int)
-        total_day2 += np.array(res_day2, dtype=int)
-        total_topcut += np.array(res_top, dtype=int)
-        total_champ += np.array(res_champ, dtype=int)
-        draw_counts.append((
-            np.array(res_init, dtype=float),
-            np.array(res_day2, dtype=float),
-            np.array(res_top, dtype=float),
-            np.array(res_champ, dtype=float),
-        ))
-
-        # Fire progress state back to Huey
-        with np.errstate(divide="ignore", invalid="ignore"):
-            draw_initial = np.array(res_init, dtype=float)
-            draw_day2 = np.array(res_day2, dtype=float)
-            draw_top = np.array(res_top, dtype=float)
-            draw_champ = np.array(res_champ, dtype=float)
-            draw_metrics.append({
-                "day2_share": np.divide(draw_day2, draw_day2.sum(), out=np.zeros(n_decks), where=draw_day2.sum() > 0),
-                "top_cut_share": np.divide(draw_top, draw_top.sum(), out=np.zeros(n_decks), where=draw_top.sum() > 0),
-                "win_probability": np.divide(draw_champ, draw_initial, out=np.zeros(n_decks), where=draw_initial > 0),
-            })
+        res_init, res_day2, res_top, res_champ = (sum(values) for values in zip(*parts))
+        total_initial += np.asarray(res_init, dtype=int)
+        total_day2 += np.asarray(res_day2, dtype=int)
+        total_topcut += np.asarray(res_top, dtype=int)
+        total_champ += np.asarray(res_champ, dtype=int)
+        draw_counts.append((res_init, res_day2, res_top, res_champ))
+        draw_metrics.append(_draw_metrics(res_init, res_day2, res_top, res_champ))
+        if len(parts) == 2:
+            half_metrics.append((_draw_metrics(*parts[0]), _draw_metrics(*parts[1])))
 
         if progress_callback:
             progress_callback(draw_index + 1, draw_count)
@@ -411,13 +426,23 @@ def run_monte_carlo_analytics(
         interval_status = "ok"
     else:
         interval_status = "too few posterior draws"
+    split_draws = len(half_metrics) == len(draw_metrics)
     if interval_status == "ok":
         for i, deck in enumerate(deck_names):
             if deck not in results:
                 continue
             for metric, values in draw_array.items():
-                results[deck][f"{metric}_lower"] = float(np.quantile(values[:, i], 0.025))
-                results[deck][f"{metric}_upper"] = float(np.quantile(values[:, i], 0.975))
+                if split_draws:
+                    lower, upper, share = denoised_interval(
+                        values[:, i],
+                        np.array([first[metric][i] for first, _ in half_metrics]),
+                        np.array([second[metric][i] for _, second in half_metrics]),
+                    )
+                    results[deck][f"{metric}_mc_share"] = share
+                else:
+                    lower, upper = float(np.quantile(values[:, i], 0.025)), float(np.quantile(values[:, i], 0.975))
+                results[deck][f"{metric}_lower"] = lower
+                results[deck][f"{metric}_upper"] = upper
     ranked_metrics = {
         deck: metrics for deck, metrics in results.items()
         if deck not in insufficient_data
