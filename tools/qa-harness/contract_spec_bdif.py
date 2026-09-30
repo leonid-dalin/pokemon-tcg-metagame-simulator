@@ -54,19 +54,19 @@ def _produce_legacy_store():
             "CREATE TABLE standings (tournament_id TEXT, player_id TEXT, deck_id TEXT, decklist_json TEXT);"
             "CREATE TABLE pairings (tournament_id TEXT, player1 TEXT, player2 TEXT, winner TEXT);"
         )
-        conn.execute("INSERT INTO standings VALUES ('event', 'p1', 'a', '{\"pokemon\": []}')")
+        conn.execute("INSERT INTO standings VALUES ('event', 'p1', 'alakazam-dudunsparce', '{\"pokemon\": []}')")
         conn.commit()
     return path
 
 
 def _consume_legacy_store(path):
     from src.ingestion.store import LimitlessStore
-    store = LimitlessStore(path, canonical_names=["a"])
+    store = LimitlessStore(path)
     list(store.matchup_rows())
     with sqlite3.connect(path) as conn:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(standings)")}
         deck_name = conn.execute("SELECT deck_name FROM standings").fetchone()[0]
-    return {"has_deck_name": "deck_name" in columns, "backfilled": deck_name == "a"}
+    return {"has_deck_name": "deck_name" in columns, "backfilled": deck_name == "Alakazam Dudunsparce"}
 
 
 def _legacy_store_degenerate(loaded):
