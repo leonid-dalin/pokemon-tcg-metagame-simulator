@@ -71,10 +71,6 @@ tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_empty_by
 tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_empty_string
 tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_missing_value
 tests/api/test_stream_helpers.py::test_resolve_job_id_uses_fallback_for_undecodable_bytes
-tests/bdif/test_bdif_cli.py::test_bdif_commands_reject_multiple_operations
-tests/bdif/test_bdif_cli.py::test_bdif_mutating_commands_call_service_without_network[--bdif-ingest-run_ingestion-result0]
-tests/bdif/test_bdif_cli.py::test_bdif_mutating_commands_call_service_without_network[--bdif-refit-refit_card_model-result1]
-tests/bdif/test_bdif_cli.py::test_bdif_status_command_prints_service_result
 tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_code[ingest-disabled-3]
 tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_code[ingest-failed-3]
 tests/bdif/test_bdif_module_cli.py::test_evidence_statuses_select_command_exit_code[ingest-partial-3]
@@ -393,6 +389,9 @@ tests/ui/test_bdif_view.py::test_interval_columns_follow_the_view[Player (Micro)
 tests/ui/test_bdif_view.py::test_panel_rows_preserve_the_eight_report_columns
 tests/ui/test_bdif_view.py::test_split_by_evidence_keeps_order_and_labels_thin_decks
 tests/ui/test_bdif_view.py::test_tier_help_text_is_generated_from_the_thresholds
+tests/ui/test_cli_bdif_flags.py::test_legacy_cli_rejects_bdif_commands[--bdif-ingest]
+tests/ui/test_cli_bdif_flags.py::test_legacy_cli_rejects_bdif_commands[--bdif-refit]
+tests/ui/test_cli_bdif_flags.py::test_legacy_cli_rejects_bdif_commands[--bdif-status]
 tests/ui/test_meta_rows.py::test_a_tuple_value_on_an_exact_row_uses_its_first_element
 tests/ui/test_meta_rows.py::test_minimum_share_detects_overallocated_exact_rows
 tests/ui/test_meta_rows.py::test_minimum_share_includes_range_minimums
