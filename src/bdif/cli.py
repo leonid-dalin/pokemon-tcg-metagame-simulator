@@ -10,9 +10,11 @@ from pydantic import ValidationError
 
 from src.api.models import PredictionRequest
 from src.core.config import OUTPUT_DIR, RNG_SEED
+from src.core.files import write_text_atomic
 from src.core.logger import setup_structured_logging, logger
 from src.core.telemetry import setup_telemetry
 
+REPORT_FILENAME = "bdif_report.json"
 EVIDENCE_UNAVAILABLE = {
     "ingest": {"disabled", "failed", "partial"},
     "refit": {"missing", "insufficient observations", "not identifiable"},
@@ -100,7 +102,10 @@ def main() -> int:
                 bdif_panel_decks=args.panel,
             )
             result = service.run_prediction(request, seed=args.seed, input_path=input_path)
-        print(json.dumps(result, sort_keys=True, default=lambda value: value.value if hasattr(value, "value") else str(value)))
+        text = json.dumps(result, sort_keys=True, default=lambda value: value.value if hasattr(value, "value") else str(value))
+        print(text)
+        if args.command == "report":
+            write_text_atomic(text, os.path.join(args.output, REPORT_FILENAME))
         return _exit_code(args.command, result)
     except SystemExit:
         raise

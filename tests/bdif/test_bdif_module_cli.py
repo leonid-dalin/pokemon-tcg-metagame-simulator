@@ -8,7 +8,13 @@ from types import SimpleNamespace
 
 import pytest
 
+from src.api.models import PrecisionTier
 from src.bdif import cli
+
+
+@pytest.fixture(autouse=True)
+def _work_in_tmp(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
 
 
 def _run(monkeypatch, capsys, argv, module):
@@ -85,6 +91,22 @@ def test_report_uses_local_input_and_bounded_request(monkeypatch, tmp_path, caps
 
 
 @pytest.mark.unit
+def test_report_writes_the_printed_report_into_the_output_directory(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "matrix.json"
+    source.write_text("{}", encoding="utf-8")
+    output = tmp_path / "reports"
+    monkeypatch.setattr("src.core.data.load_matchup_data", lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}))
+    result = {"mc_results": {"ranked_metrics": {"A": {"win_probability": 0.5}}}, "tier": PrecisionTier.BULLET}
+    module = SimpleNamespace(simulation_input_path=lambda: str(source), run_prediction=lambda req, **kwargs: result)
+
+    code, captured = _run(monkeypatch, capsys, ["report", "--input", str(source), "--output", str(output)], module)
+
+    assert code == 0
+    assert (output / "bdif_report.json").read_text(encoding="utf-8") == captured.out.strip()
+    assert json.loads(captured.out)["tier"] == PrecisionTier.BULLET.value
+
+
+@pytest.mark.unit
 def test_report_passes_seed_to_service(monkeypatch, tmp_path, capsys):
     source = tmp_path / "matrix.json"
     source.write_text("{}", encoding="utf-8")
@@ -140,6 +162,7 @@ def test_report_subprocess_uses_explicit_four_deck_input(tmp_path):
     report = json.loads(completed.stdout)
     assert sorted(report["mc_results"]["metrics"]) == decks
     assert completed.stdout.count("\n") == 1
+    assert (output / "bdif_report.json").read_text(encoding="utf-8") == completed.stdout.strip()
     assert '"event":' not in completed.stdout
     assert completed.stderr.count('"event":') >= 1
 

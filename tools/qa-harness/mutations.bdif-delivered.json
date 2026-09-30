@@ -238,5 +238,11 @@
     "file": "src/bdif/settings.py",
     "find": "        artifact_dir = (os.environ.get(\"BDIF_ARTIFACT_DIR\") or \"data/input\").rstrip(\"/\\\\\")",
     "replace": "        artifact_dir = \"data/input\""
+  },
+  {
+    "name": "report not written to the output directory",
+    "file": "src/bdif/cli.py",
+    "find": "            write_text_atomic(text, os.path.join(args.output, REPORT_FILENAME))",
+    "replace": "            pass"
   }
 ]
