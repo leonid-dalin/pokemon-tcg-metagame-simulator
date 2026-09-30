@@ -129,6 +129,8 @@ def simulation_input_path(settings: BdifSettings | None = None) -> str:
 
 def refit_card_model(settings: BdifSettings | None = None) -> dict:
     settings = settings or BdifSettings.from_environment()
+    if not os.path.exists(settings.db_path):
+        return {"status": "missing", "db_path": settings.db_path}
     from src.ingestion.model import CardModelNotIdentifiable, fit_card_model, model_artifact, select_model_cards
     from src.ingestion.store import LimitlessStore
     store = LimitlessStore(settings.db_path)

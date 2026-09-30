@@ -269,6 +269,14 @@ def test_prediction_uses_input_path_or_configured_default(monkeypatch):
 
 
 @pytest.mark.unit
+def test_refit_reports_a_missing_store_without_creating_it(tmp_path):
+    db = tmp_path / "absent.db"
+
+    assert service.refit_card_model(settings(db_path=str(db))) == {"status": "missing", "db_path": str(db)}
+    assert not db.exists()
+
+
+@pytest.mark.unit
 def test_bdif_status_reports_settings_when_the_store_is_missing(tmp_path):
     db = tmp_path / "absent.db"
 

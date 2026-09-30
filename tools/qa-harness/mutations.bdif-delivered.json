@@ -228,9 +228,9 @@
     "replace": "        finally:\n            pass"
   },
   {
-    "name": "status migrates the store before summarising",
+    "name": "refit creates a missing store",
     "file": "src/bdif/service.py",
-    "find": "    return {\"status\": \"available\", **base, **LimitlessStore(settings.db_path).summary()}",
-    "replace": "    return {\"status\": \"available\", **base, **(lambda store: (store.prepare_for_read(), store.summary())[1])(LimitlessStore(settings.db_path))}"
+    "find": "    if not os.path.exists(settings.db_path):\n        return {\"status\": \"missing\", \"db_path\": settings.db_path}\n    from src.ingestion.model",
+    "replace": "    from src.ingestion.model"
   }
 ]
