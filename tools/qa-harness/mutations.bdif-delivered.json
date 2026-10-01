@@ -280,5 +280,17 @@
     "file": "src/core/scraper.py",
     "find": "            won_and_played[1] += m[\"total_matches\"]",
     "replace": "            won_and_played[:] = [m[\"win_rate\"] * m[\"total_matches\"], m[\"total_matches\"]]"
+  },
+  {
+    "name": "status migrates the store before summarising",
+    "file": "src/bdif/service.py",
+    "find": "    return {\"status\": \"available\", **base, **LimitlessStore(settings.db_path).summary()}",
+    "replace": "    return {\"status\": \"available\", **base, **(lambda store: (store.prepare_for_read(), store.summary())[1])(LimitlessStore(settings.db_path))}"
+  },
+  {
+    "name": "dashboard loads the engine to find its input",
+    "file": "src/ui/app.py",
+    "find": "from src.bdif.settings import simulation_input_path",
+    "replace": "from src.bdif.service import simulation_input_path"
   }
 ]

@@ -1,0 +1,68 @@
+mutations.bdif-delivered.json::ACE SPEC violations kept
+mutations.bdif-delivered.json::CLI does not pass input_path
+mutations.bdif-delivered.json::CLI ignores the configured simulation input
+mutations.bdif-delivered.json::Z_95 set to one SE
+mutations.bdif-delivered.json::all-failed run reported partial
+mutations.bdif-delivered.json::artefact directory ignored
+mutations.bdif-delivered.json::asymmetric pairs left alone
+mutations.bdif-delivered.json::backfill overwrites stored provider names
+mutations.bdif-delivered.json::backfill writes unresolved names
+mutations.bdif-delivered.json::binomial SE in posterior mode
+mutations.bdif-delivered.json::card selection ignores min players
+mutations.bdif-delivered.json::clustered SE not floored at model-based
+mutations.bdif-delivered.json::clustering replaced by model-based SE
+mutations.bdif-delivered.json::dashboard loads the engine to find its input
+mutations.bdif-delivered.json::duplicate canonical rows overwrite each other
+mutations.bdif-delivered.json::explicit unmapped id falls back to provider name
+mutations.bdif-delivered.json::field lower quantile 5%
+mutations.bdif-delivered.json::limit upper bound removed
+mutations.bdif-delivered.json::match counts keyed by ordered pair
+mutations.bdif-delivered.json::mismatched request matrix accepted
+mutations.bdif-delivered.json::no small-sample factor
+mutations.bdif-delivered.json::noise-dominated intervals collapse
+mutations.bdif-delivered.json::overlapping engine seeds
+mutations.bdif-delivered.json::pagination stops after the first page
+mutations.bdif-delivered.json::pair cluster not subtracted
+mutations.bdif-delivered.json::partial failure reported complete
+mutations.bdif-delivered.json::pooled count doubles evidence
+mutations.bdif-delivered.json::post-drop rounds kept
+mutations.bdif-delivered.json::posterior draws run as one engine call
+mutations.bdif-delivered.json::posterior intervals keep simulation noise
+mutations.bdif-delivered.json::provenance hash dropped
+mutations.bdif-delivered.json::provenance seed ignores override
+mutations.bdif-delivered.json::refit creates a missing store
+mutations.bdif-delivered.json::refit failures exit 0
+mutations.bdif-delivered.json::report drops provenance
+mutations.bdif-delivered.json::report exits 3 whenever any deck is thin
+mutations.bdif-delivered.json::report not written to the output directory
+mutations.bdif-delivered.json::request cap back to 64
+mutations.bdif-delivered.json::service ignores input_path
+mutations.bdif-delivered.json::service ignores limit
+mutations.bdif-delivered.json::skeleton accepts minority profile
+mutations.bdif-delivered.json::status migrates the store before summarising
+mutations.bdif-delivered.json::store connections left open
+mutations.bdif-delivered.json::store construction reads the simulation input
+mutations.bdif-delivered.json::store drops player ids
+mutations.bdif-delivered.json::stored events fetched again
+mutations.bdif-delivered.json::ties counted as wins for the first deck
+mutations.bdif-delivered.json::unobserved Pokemon admitted
+mutations.bdif-delivered.json::unweighted pooling
+mutations.bdif-statistics.json::task1: restore the order-dependent averaged prior
+mutations.bdif-statistics.json::task2: ignore the per-draw iteration floor
+mutations.bdif-statistics.json::task2: report intervals from any number of draws
+mutations.bdif-statistics.json::task4: drop rank guard
+mutations.bdif-statistics.json::task4: drop separation guard
+mutations.bdif-statistics.json::task4: put intercept back
+mutations.minmatches.json::original survivor 1: drop the BDIF_MIN_MATCHES half
+mutations.pr5-remediated.json::old survivor: delete the Benjamini-Hochberg gate
+mutations.pr5-remediated.json::old survivor: invert the ranking order
+mutations.pr5-remediated.json::task1: re-invert the variance
+mutations.pr5-remediated.json::task1: revert to the unweighted Gram matrix
+mutations.pr5-remediated.json::task2: misspell the H1 card constant
+mutations.pr5-remediated.json::task3: drop the skeleton ACE SPEC guard
+mutations.pr5-remediated.json::task3: let add_cards ignore the per-card limit
+mutations.pr5-remediated.json::task3: stop clamping skeleton copies to the limit
+mutations.pr5-remediated.json::task3: target 59 cards instead of 60
+mutations.pr5-remediated.json::task4: let addon failures kill the job again
+mutations.pr5-remediated.json::task4: remove the feature-flag gate
+mutations.pr5-remediated.json::task5: zero the carried match counts again
