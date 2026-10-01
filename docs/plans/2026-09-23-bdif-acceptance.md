@@ -47,12 +47,12 @@ Stop at the first HTTP 4xx other than 429 and do not retry it. Stop any command 
 
 ## Record
 
-The live command outputs remain outside the repository under `output/acceptance`
+The live command outputs remain outside the repository under `C:\\Users\\DALIN\\AppData\\Local\\Temp\\BDIF-0930\\t21-acceptance`
 
 - `ingest.json`: `status=complete`; `events=20`; `skipped_events=0`; failed-event count `0`; `unmapped_deck_ids=["other"]`; `model_status=not identifiable`; exit code `0`
 - `status.json`: `schema=current`; `decks=81`; `pairings=2230`; `decklists=970`; `db_path=output/acceptance/limitless.db`; exit code `0`
 - `refit.json`: `status=not identifiable`; exit code `3`
-- `bdif_report.json`: `mc_results.provenance.input_path=data/input/ea_input.json`; `input_sha256=2e6fcb89fc16beed547aca8d357f77292f638a56a212acb9ae7636174a3c7376`; `posterior.interval_status=ok`; highest `expected_win_rate` rows are `Ogerpon Meganium Arboliva=0.5785260556997609`, `Dragapult Dudunsparce=0.5714665866669941`, and `Sinistcha Ogerpon=0.5668147594928132`; no `*_mc_share` exceeded `0.8`; report exit code `0`
+- `bdif_report.json`: `mc_results.provenance.input_path=data/input/ea_input.json`; `input_sha256=2e6fcb89fc16beed547aca8d357f77292f638a56a212acb9ae7636174a3c7376`; `posterior.interval_status=ok`; highest `expected_win_rate` rows are `Ogerpon Meganium Arboliva=0.5785260556997609`, `Dragapult Dudunsparce=0.5714665866669941`, and `Sinistcha Ogerpon=0.5668147594928132`; the report contains 300 nested `*_mc_share` values, 110 above `0.8`, and a maximum of `1.0`; report exit code `0`
 - `report-stdout.json` matched the report file apart from the final newline
 
 The scratch directory contains the database, input artefact, report artefact and command outputs. The credential scan found no key value in any output. `data/limitless.db` was absent and no tracked or untracked file under `data/` changed
