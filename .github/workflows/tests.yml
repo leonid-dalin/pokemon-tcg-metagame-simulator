@@ -30,6 +30,8 @@ jobs:
         run: python -m pytest -q
       - name: Check test inventory
         run: python tools/qa-harness/test_inventory.py --check
+      - name: Check mutation row inventory
+        run: python tools/qa-harness/mutation_inventory.py --check
       - name: Audit test quality
         run: python tools/qa-harness/test_quality_audit.py --tests tests --package src
       - name: Check reported intervals

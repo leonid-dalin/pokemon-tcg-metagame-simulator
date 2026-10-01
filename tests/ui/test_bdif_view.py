@@ -18,8 +18,8 @@ def test_split_by_evidence_keeps_order_and_labels_thin_decks():
 
 @pytest.mark.unit
 @pytest.mark.parametrize(("odds_view", "expected_keys"), [
-    ("Player (Micro)", {"Win Event % low", "Win Event % high"}),
-    ("Archetype (Macro)", {"Share % (Day 2) low", "Share % (Day 2) high", "Share % (Top 8) low", "Share % (Top 8) high"}),
+    ("Player (Micro)", {"Win Event % low", "Win Event % high", "Interval note"}),
+    ("Archetype (Macro)", {"Share % (Day 2) low", "Share % (Day 2) high", "Share % (Top 8) low", "Share % (Top 8) high", "Interval note"}),
 ])
 def test_interval_columns_follow_the_view(odds_view, expected_keys):
     metrics = {
@@ -34,6 +34,26 @@ def test_interval_columns_follow_the_view(odds_view, expected_keys):
     columns = bdif_view.interval_columns(metrics, {"interval_status": "ok"}, odds_view, top_cut=8, d2_rounds=2)
 
     assert set(columns) == expected_keys
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("odds_view", "expected_note"), [
+    ("Player (Micro)", "Win Event %: includes simulation noise"),
+    ("Archetype (Macro)", "Share % (Top 8): includes simulation noise"),
+])
+def test_interval_columns_name_intervals_that_keep_simulation_noise(odds_view, expected_note):
+    metrics = {
+        "win_probability_lower": 0.01, "win_probability_upper": 0.03, "win_probability_interval": "raw",
+        "day2_share_lower": 0.1, "day2_share_upper": 0.2, "day2_share_interval": "denoised",
+        "top_cut_share_lower": 0.05, "top_cut_share_upper": 0.15, "top_cut_share_interval": "raw",
+    }
+    metrics_without_noise = {key: "denoised" if key.endswith("_interval") else value for key, value in metrics.items()}
+
+    noisy = bdif_view.interval_columns(metrics, {"interval_status": "ok"}, odds_view, top_cut=8, d2_rounds=2)
+    clean = bdif_view.interval_columns(metrics_without_noise, {"interval_status": "ok"}, odds_view, top_cut=8, d2_rounds=2)
+
+    assert noisy["Interval note"] == expected_note
+    assert clean["Interval note"] == ""
 
 
 @pytest.mark.unit

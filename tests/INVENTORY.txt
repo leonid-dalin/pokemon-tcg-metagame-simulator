@@ -197,6 +197,9 @@ tests/ingestion/test_features.py::test_inclusion_rates_returns_empty_for_empty_w
 tests/ingestion/test_features.py::test_inclusion_rates_treats_valid_ace_spec_as_binary_presence
 tests/ingestion/test_store_connections.py::test_store_operations_close_every_connection
 tests/ingestion/test_store_construction.py::test_store_construction_does_not_read_the_simulation_input
+tests/ingestion/test_store_construction.py::test_store_warning_is_visible_to_an_ordinary_python_caller
+tests/ingestion/test_store_construction.py::test_store_warns_that_canonical_names_is_ignored
+tests/ingestion/test_store_construction.py::test_store_without_canonical_names_does_not_warn
 tests/test_bdif_decision_pins.py::test_card_intervals_span_1_96_standard_errors
 tests/test_bdif_decision_pins.py::test_card_selection_needs_the_minimum_players_in_one_deck[49-selected0]
 tests/test_bdif_decision_pins.py::test_card_selection_needs_the_minimum_players_in_one_deck[50-selected1]
@@ -355,6 +358,8 @@ tests/tournament/test_monte_carlo.py::test_posterior_draw_budget_follows_the_pre
 tests/tournament/test_monte_carlo.py::test_posterior_draws_keep_matchup_matrix_complementary
 tests/tournament/test_monte_carlo.py::test_posterior_draws_preserve_requested_iterations
 tests/tournament/test_monte_carlo.py::test_posterior_draws_run_as_two_halves_on_consecutive_seeds
+tests/tournament/test_monte_carlo.py::test_posterior_intervals_say_when_simulation_noise_could_not_be_removed
+tests/tournament/test_monte_carlo.py::test_posterior_intervals_say_when_simulation_noise_was_removed
 tests/tournament/test_monte_carlo.py::test_posterior_is_invariant_to_deck_order[order0]
 tests/tournament/test_monte_carlo.py::test_posterior_is_invariant_to_deck_order[order1]
 tests/tournament/test_monte_carlo.py::test_posterior_is_invariant_to_deck_order[order2]
@@ -401,6 +406,8 @@ tests/ui/test_bdif_view.py::test_h1_rows_unpack_intervals_from_tuples_or_json_li
 tests/ui/test_bdif_view.py::test_interval_columns_fall_back_to_the_monte_carlo_error
 tests/ui/test_bdif_view.py::test_interval_columns_follow_the_view[Archetype (Macro)-expected_keys1]
 tests/ui/test_bdif_view.py::test_interval_columns_follow_the_view[Player (Micro)-expected_keys0]
+tests/ui/test_bdif_view.py::test_interval_columns_name_intervals_that_keep_simulation_noise[Archetype (Macro)-Share % (Top 8): includes simulation noise]
+tests/ui/test_bdif_view.py::test_interval_columns_name_intervals_that_keep_simulation_noise[Player (Micro)-Win Event %: includes simulation noise]
 tests/ui/test_bdif_view.py::test_panel_rows_preserve_the_eight_report_columns
 tests/ui/test_bdif_view.py::test_split_by_evidence_keeps_order_and_labels_thin_decks
 tests/ui/test_bdif_view.py::test_tier_help_text_is_generated_from_the_thresholds

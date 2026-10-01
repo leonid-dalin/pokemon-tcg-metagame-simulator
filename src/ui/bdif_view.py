@@ -41,10 +41,15 @@ def interval_columns(
             wanted.append(("Share % (Day 2)", "day2_share"))
         if top_cut > 0:
             wanted.append((f"Share % (Top {top_cut})", "top_cut_share"))
+    noisy = []
     for label, metric in wanted:
         if f"{metric}_lower" in mc_metrics:
             columns[f"{label} low"] = _percent(mc_metrics[f"{metric}_lower"])
             columns[f"{label} high"] = _percent(mc_metrics[f"{metric}_upper"])
+            if mc_metrics.get(f"{metric}_interval") == "raw":
+                noisy.append(f"{label}: includes simulation noise")
+    if columns:
+        columns["Interval note"] = "; ".join(noisy)
     return columns
 
 

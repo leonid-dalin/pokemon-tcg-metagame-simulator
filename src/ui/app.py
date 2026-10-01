@@ -145,6 +145,8 @@ def fetch_bdif_status(api_url: str) -> Dict[str, Any] | None:
         response = requests.get(f"{api_url}/bdif/status", headers=api_headers(), timeout=5)
         response.raise_for_status()
         return response.json()
+    # get and raise_for_status raise RequestException subclasses; json() raises a ValueError subclass.
+    # The sidebar owns this boundary: any of them means the status is unavailable, not a page error.
     except (requests.exceptions.RequestException, ValueError):
         return None
 

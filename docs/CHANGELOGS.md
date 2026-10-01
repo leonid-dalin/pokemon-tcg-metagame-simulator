@@ -11,6 +11,7 @@ The September release cycle added live matchup discovery, stronger request and m
 - `BDIF_ARTIFACT_DIR` selects both generated artefacts; the default paths in `data/input` are ignored by Git
 - The worker rejects a request whose matrix differs from the simulation input, and the dashboard builds its request from that input
 - Posterior tournament intervals remove simulation noise and report the removed share as `_mc_share`
+- Each posterior tournament interval reports `_interval` as `denoised` or `raw`, and the dashboard names raw intervals in an `Interval note` column
 - The scraper pools matchup rows that share a canonical pair instead of keeping the last row
 - Compose passes the same BDIF settings to the `api`, `worker`, and `ui` services
 - The legacy `--bdif-status`, `--bdif-ingest`, and `--bdif-refit` flags of `python -m src.ui.cli` were removed
