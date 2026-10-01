@@ -77,7 +77,15 @@ def test_submit_prediction_passes_api_headers(monkeypatch):
     assert seen["headers"] == {"X-API-Token": "secret"}
 
 
-@pytest.mark.parametrize("failure", [requests.exceptions.ConnectionError, requests.exceptions.HTTPError, json.JSONDecodeError])
+@pytest.mark.parametrize("failure", [
+    requests.exceptions.ConnectionError,
+    requests.exceptions.HTTPError,
+    requests.exceptions.ReadTimeout,
+    requests.exceptions.TooManyRedirects,
+    requests.exceptions.ChunkedEncodingError,
+    requests.exceptions.InvalidURL,
+    json.JSONDecodeError,
+])
 def test_fetch_bdif_status_degrades_on_request_failures(monkeypatch, failure):
     def get(*args, **kwargs):
         raise failure("status unavailable", "", 0)
@@ -85,6 +93,16 @@ def test_fetch_bdif_status_degrades_on_request_failures(monkeypatch, failure):
     monkeypatch.setattr(app.requests, "get", get)
 
     assert app.fetch_bdif_status("http://api.test") is None
+
+
+def test_fetch_bdif_status_does_not_hide_programming_errors(monkeypatch):
+    def get(*args, **kwargs):
+        raise TypeError("programming error")
+
+    monkeypatch.setattr(app.requests, "get", get)
+
+    with pytest.raises(TypeError, match="programming error"):
+        app.fetch_bdif_status("http://api.test")
 
 
 def test_ui_loads_the_matrix_the_service_simulates(monkeypatch, tmp_path):

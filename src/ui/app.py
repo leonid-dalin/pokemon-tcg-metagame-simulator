@@ -145,7 +145,7 @@ def fetch_bdif_status(api_url: str) -> Dict[str, Any] | None:
         response = requests.get(f"{api_url}/bdif/status", headers=api_headers(), timeout=5)
         response.raise_for_status()
         return response.json()
-    except (requests.exceptions.ConnectionError, requests.exceptions.HTTPError, json.JSONDecodeError):
+    except (requests.exceptions.RequestException, ValueError):
         return None
 
 
