@@ -304,5 +304,11 @@
     "file": "src/ui/bdif_view.py",
     "find": "                noisy.append(f\"{label}: includes simulation noise\")",
     "replace": "                pass"
+  },
+  {
+    "name": "ignored canonical_names passes silently",
+    "file": "src/ingestion/store.py",
+    "find": "        if canonical_names is not None:\n            warnings.warn(",
+    "replace": "        if False:\n            warnings.warn("
   }
 ]

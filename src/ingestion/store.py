@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import warnings
 from dataclasses import dataclass
 from contextlib import closing, contextmanager
 from pathlib import Path
@@ -38,6 +39,8 @@ def _decklist_card_names(raw: str | None) -> frozenset[str]:
 
 class LimitlessStore:
     def __init__(self, path: str | Path, canonical_names: Iterable[str] | None = None, deck_mapping: Mapping[str, str | None] | None = None):
+        if canonical_names is not None:
+            warnings.warn("canonical_names is ignored; archetypes come from deck_mapping", DeprecationWarning, stacklevel=2)
         self.path = str(path)
         self.deck_mapping = dict(deck_mapping) if deck_mapping is not None else load_archetype_map()
         self._schema_ready = False

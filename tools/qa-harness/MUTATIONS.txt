@@ -16,6 +16,7 @@ mutations.bdif-delivered.json::dashboard loads the engine to find its input
 mutations.bdif-delivered.json::duplicate canonical rows overwrite each other
 mutations.bdif-delivered.json::explicit unmapped id falls back to provider name
 mutations.bdif-delivered.json::field lower quantile 5%
+mutations.bdif-delivered.json::ignored canonical_names passes silently
 mutations.bdif-delivered.json::limit upper bound removed
 mutations.bdif-delivered.json::match counts keyed by ordered pair
 mutations.bdif-delivered.json::mismatched request matrix accepted
