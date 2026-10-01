@@ -274,5 +274,11 @@
     "file": "src/tournament/monte_carlo.py",
     "find": "if use_posterior and current_chunk >= 2 else [current_chunk]",
     "replace": "if False else [current_chunk]"
+  },
+  {
+    "name": "duplicate canonical rows overwrite each other",
+    "file": "src/core/scraper.py",
+    "find": "            won_and_played[1] += m[\"total_matches\"]",
+    "replace": "            won_and_played[:] = [m[\"win_rate\"] * m[\"total_matches\"], m[\"total_matches\"]]"
   }
 ]

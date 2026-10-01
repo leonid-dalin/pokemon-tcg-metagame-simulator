@@ -152,8 +152,19 @@ def test_an_observed_half_win_rate_is_not_replaced_by_a_mirrored_result():
             "total_matches": 10,
         },
     ])
-
     assert result["matchup_matrix"]["Mine"]["Other"] == {
         "win_rate": 0.5,
         "match_count": 4,
     }
+
+
+@pytest.mark.unit
+def test_rows_that_share_a_canonical_pair_are_pooled_by_match_count():
+    result = build_complete_matchup_matrix([
+        {"deck_archetype": "Mine", "opponent_archetype": "Other", "win_rate": 0.6, "total_matches": 10},
+        {"deck_archetype": "Mine", "opponent_archetype": "Other", "win_rate": 0.4, "total_matches": 30},
+        {"deck_archetype": "Other", "opponent_archetype": "Mine", "win_rate": 0.55, "total_matches": 40},
+    ])
+
+    assert result["matchup_matrix"]["Mine"]["Other"] == {"win_rate": pytest.approx(0.45), "match_count": 40}
+    assert result["matchup_matrix"]["Other"]["Mine"] == {"win_rate": 0.55, "match_count": 40}
