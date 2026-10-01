@@ -4,6 +4,17 @@
 
 The September release cycle added live matchup discovery, stronger request and matrix validation, Redis-backed SSE reliability, reproducible simulation seeds, the data-backed BDIF card model, posterior field analytics, the BDIF command line, and the dashboard views that expose those results
 
+### BDIF contract fixes
+
+- `python -m src.bdif status` and `GET /api/v1/bdif/status` read the database without migrating it and report switches, model artefact, and schema state
+- `refit` reports a missing database instead of creating one, and `report --output` writes `bdif_report.json`
+- `BDIF_ARTIFACT_DIR` selects both generated artefacts; the default paths in `data/input` are ignored by Git
+- The worker rejects a request whose matrix differs from the simulation input, and the dashboard builds its request from that input
+- Posterior tournament intervals remove simulation noise and report the removed share as `_mc_share`
+- The scraper pools matchup rows that share a canonical pair instead of keeping the last row
+- Compose passes the same BDIF settings to the `api`, `worker`, and `ui` services
+- The legacy `--bdif-status`, `--bdif-ingest`, and `--bdif-refit` flags of `python -m src.ui.cli` were removed
+
 ### BDIF statistics and CLI
 
 - Replaced the earlier aggregate card-analysis path with a per-player, reference-coded card model with no intercept, identifiability guards, and observational reporting

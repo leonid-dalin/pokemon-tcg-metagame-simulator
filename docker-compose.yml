@@ -27,6 +27,10 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/?db=0}
       - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - BDIF_USE_CARD_MODEL=${BDIF_USE_CARD_MODEL:-false}
+      - LIMITLESS_INGESTION_ENABLED=${LIMITLESS_INGESTION_ENABLED:-false}
+      - BDIF_DB_PATH=${BDIF_DB_PATH:-data/limitless.db}
+      - BDIF_ARTIFACT_DIR=${BDIF_ARTIFACT_DIR:-data/input}
     volumes:
       - shared_data:/app/data
     depends_on:
@@ -53,6 +57,10 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
       - PYTHONPATH=/app
+      - BDIF_USE_CARD_MODEL=${BDIF_USE_CARD_MODEL:-false}
+      - LIMITLESS_INGESTION_ENABLED=${LIMITLESS_INGESTION_ENABLED:-false}
+      - BDIF_DB_PATH=${BDIF_DB_PATH:-data/limitless.db}
+      - BDIF_ARTIFACT_DIR=${BDIF_ARTIFACT_DIR:-data/input}
     volumes:
       - shared_data:/app/data
     depends_on:
@@ -80,6 +88,10 @@ services:
       - API_URL=http://api:8000/api/v1
       - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - BDIF_USE_CARD_MODEL=${BDIF_USE_CARD_MODEL:-false}
+      - LIMITLESS_INGESTION_ENABLED=${LIMITLESS_INGESTION_ENABLED:-false}
+      - BDIF_DB_PATH=${BDIF_DB_PATH:-data/limitless.db}
+      - BDIF_ARTIFACT_DIR=${BDIF_ARTIFACT_DIR:-data/input}
     volumes:
       - shared_data:/app/data
     depends_on:

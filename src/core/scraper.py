@@ -329,12 +329,15 @@ def build_complete_matchup_matrix(all_matchup_data: List[Dict[str, Any]]) -> Dic
         # Initialise empty matrix
         matrix = {a: {b: {"win_rate": 0.5, "match_count": 0} for b in valid_archetypes} for a in valid_archetypes}
 
+        pooled: Dict[Tuple[str, str], List[float]] = {}
         for m in all_matchup_data:
-            da = m["deck_archetype"]
-            oa = m["opponent_archetype"]
+            won_and_played = pooled.setdefault((m["deck_archetype"], m["opponent_archetype"]), [0.0, 0])
+            won_and_played[0] += m["win_rate"] * m["total_matches"]
+            won_and_played[1] += m["total_matches"]
+        for (da, oa), (won, played) in pooled.items():
             matrix[da][oa] = {
-                "win_rate": m["win_rate"],
-                "match_count": m["total_matches"],
+                "win_rate": won / played if played else 0.5,
+                "match_count": played,
             }
 
         # Mirror missing matchups

@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from pathlib import Path
 
@@ -11,9 +12,13 @@ from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerO
 from src.api.models import PredictionRequest
 from src.ingestion.store import LimitlessStore, _decklist_card_names
 from src.ingestion.aggregate import build_artifact
-from src.ingestion.mapping import coverage_report, extract_recorded_deck_ids, load_archetype_map, resolve_archetype
-from src.core.scraper import normalize_archetype
+from src.ingestion.mapping import load_archetype_map, resolve_archetype
 SYNTHETIC_DECK_MAPPING = {"a": "a", "alakazam": "Alakazam", "b": "b", "crustle": "Crustle"}
+DECK_LINK = re.compile(r'<a href="/[^/]+/decks/([^"]+)">([^<]+)</a>')
+
+
+def _recorded_deck_ids(path: Path) -> set[str]:
+    return {match.group(1) for match in DECK_LINK.finditer(path.read_text(encoding="utf-8"))}
 
 
 @pytest.mark.unit
@@ -92,13 +97,12 @@ def _tech_observations(repeats, with_players):
 @pytest.mark.unit
 def test_baltimore_limitless_deck_ids_have_explicit_mapping_coverage():
     fixture = Path("data/input/limitless_baltimore_0072_decks.html")
-    observed = extract_recorded_deck_ids(fixture)
-    report = coverage_report(observed)
+    observed = _recorded_deck_ids(fixture)
+    mapping = load_archetype_map()
 
     assert len(observed) == 90
-    assert set(load_archetype_map()) == observed
-    assert report.unmapped == ["conkeldurr-twm", "other"]
-    assert report.mapped == sorted(observed - set(report.unmapped))
+    assert set(mapping) == observed
+    assert sorted(deck_id for deck_id in observed if mapping[deck_id] is None) == ["conkeldurr-twm", "other"]
     assert resolve_archetype("mega-abomasnow-ex") == "Mega Abomasnow"
 
 
@@ -143,14 +147,6 @@ def test_unknown_limitless_ids_without_catalogue_names_stay_unmapped(tmp_path):
     store = LimitlessStore(tmp_path / "limitless.db")
 
     assert store._resolve_deck_name("unknown") is None
-
-
-@pytest.mark.unit
-def test_unknown_limitless_deck_ids_are_reported_as_unmapped():
-    report = coverage_report({"crustle-dri", "unknown-deck"})
-
-    assert report.mapped == ["crustle-dri"]
-    assert report.unmapped == ["unknown-deck"]
 
 
 @pytest.mark.unit

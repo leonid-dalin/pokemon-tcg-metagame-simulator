@@ -258,9 +258,27 @@
     "replace": "        pass"
   },
   {
-    "name": "dashboard loads the engine to find its input",
-    "file": "src/ui/app.py",
-    "find": "from src.bdif.settings import simulation_input_path",
-    "replace": "from src.bdif.service import simulation_input_path"
+    "name": "posterior intervals keep simulation noise",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "    shrunk = centre + (values - centre) * np.sqrt(1.0 - share)",
+    "replace": "    shrunk = values"
+  },
+  {
+    "name": "noise-dominated intervals collapse",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "    if 1.0 - share < 2.0 * np.sqrt(2.0 / (len(values) - 1)):",
+    "replace": "    if False:"
+  },
+  {
+    "name": "posterior draws run as one engine call",
+    "file": "src/tournament/monte_carlo.py",
+    "find": "if use_posterior and current_chunk >= 2 else [current_chunk]",
+    "replace": "if False else [current_chunk]"
+  },
+  {
+    "name": "duplicate canonical rows overwrite each other",
+    "file": "src/core/scraper.py",
+    "find": "            won_and_played[1] += m[\"total_matches\"]",
+    "replace": "            won_and_played[:] = [m[\"win_rate\"] * m[\"total_matches\"], m[\"total_matches\"]]"
   }
 ]

@@ -101,12 +101,12 @@ def test_batch_ratio_standard_error_needs_two_informative_batches():
 
 @pytest.mark.unit
 def test_posterior_mode_standard_errors_come_from_draw_to_draw_spread(monkeypatch):
-    champions = itertools.cycle([[2, 18], [6, 14]])
+    champions = itertools.cycle([[1, 9], [1, 9], [3, 7], [3, 7]])
     monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
     monkeypatch.setattr(
         monte_carlo.tcg_engine,
         "run_parallel_monte_carlo",
-        lambda n, *args: ([100, 100], [50, 50], [10, 10], next(champions)),
+        lambda n, *args: ([50, 50], [25, 25], [5, 5], next(champions)),
     )
     result = monte_carlo.run_monte_carlo_analytics(
         deck_names=["a", "b"],
@@ -163,7 +163,7 @@ def test_posterior_draw_budget_follows_the_precision_tier(monkeypatch, tier):
         BDIF_POSTERIOR_DRAWS,
         max(1, TIER_MAPPING[tier] // BDIF_MIN_ITERATIONS_PER_DRAW),
     )
-    assert len(calls) == expected_draws
+    assert len(calls) == 2 * expected_draws
     assert sum(calls) == TIER_MAPPING[tier]
     assert result["posterior"]["draws"] == expected_draws
     assert result["posterior"]["interval_status"] == (
@@ -587,6 +587,66 @@ def test_field_posterior_is_reproducible_and_collapses_with_evidence():
     second = monte_carlo.posterior_field_metrics(["a", "b", "c"], meta, alpha, beta, seed=11)
     assert first == second
     assert all(m["expected_win_rate_upper"] - m["expected_win_rate_lower"] < 1e-3 for m in first.values())
+@pytest.mark.unit
+def test_denoised_interval_keeps_the_spread_when_halves_agree():
+    values = np.linspace(0.1, 0.3, 200)
+
+    lower, upper, share = monte_carlo.denoised_interval(values, values, values)
+
+    assert share == 0.0
+    assert (lower, upper) == pytest.approx((np.quantile(values, 0.025), np.quantile(values, 0.975)))
+
+
+@pytest.mark.unit
+def test_denoised_interval_removes_the_half_to_half_share_of_the_spread():
+    rng = np.random.default_rng(3)
+    posterior = rng.normal(0.2, 0.02, 2_000)
+    first, second = posterior + rng.normal(0.0, 0.02, 2_000), posterior + rng.normal(0.0, 0.02, 2_000)
+    values = (first + second) / 2
+    noise = np.mean((first - second) ** 2) / 4
+    share = noise / values.var(ddof=1)
+
+    lower, upper, reported_share = monte_carlo.denoised_interval(values, first, second)
+
+    assert reported_share == pytest.approx(share)
+    assert upper - lower == pytest.approx((np.quantile(values, 0.975) - np.quantile(values, 0.025)) * np.sqrt(1 - share))
+    assert upper - lower == pytest.approx(2 * 1.96 * 0.02, rel=0.1)
+
+
+@pytest.mark.unit
+def test_denoised_interval_keeps_raw_quantiles_when_noise_cannot_be_separated():
+    values = np.array([0.1, 0.3, 0.1, 0.3])
+    first, second = values - 0.5, values + 0.5
+
+    lower, upper, share = monte_carlo.denoised_interval(values, first, second)
+
+    assert share == 1.0
+    assert (lower, upper) == pytest.approx((np.quantile(values, 0.025), np.quantile(values, 0.975)))
+
+
+@pytest.mark.unit
+def test_posterior_draws_run_as_two_halves_on_consecutive_seeds(monkeypatch):
+    calls = []
+    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
+
+    def run_parallel(size, players, meta, matrix, d1, cut, d2, top, seed, *args):
+        calls.append((size, seed))
+        return [size, size], [1, 1], [1, 1], [1, 1]
+
+    monkeypatch.setattr(monte_carlo.tcg_engine, "run_parallel_monte_carlo", run_parallel)
+    result = monte_carlo.run_monte_carlo_analytics(
+        deck_names=["a", "b"], win_matrix=np.array([[0.5, 0.6], [0.4, 0.5]]),
+        meta_distribution={"a": 0.5, "b": 0.5}, matchup_details=TWO_DECK_DETAILS,
+        d1_rounds=1, cut_points=1, d2_rounds=1, top_cut=1, iterations=1_001, posterior_draws=5, seed=40,
+    )
+
+    assert calls == [
+        (100, 40), (101, 140), (100, 241), (100, 341), (100, 441),
+        (100, 541), (100, 641), (100, 741), (100, 841), (100, 941),
+    ]
+    assert result["metrics"]["a"]["win_probability"] == pytest.approx(10 / 1_001)
+
+
 @pytest.mark.integration
 def test_chunked_run_simulates_the_same_tournaments_as_one_engine_call():
     decks = ["a", "b", "c", "d"]

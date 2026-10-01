@@ -38,7 +38,7 @@ The card fit uses an exact zero-sum outcome construction. The A1 report is an ar
 
 ## Posterior intervals
 
-Posterior matchup draws use a maximum budget of `BDIF_POSTERIOR_DRAWS`, 200 matrices, and at least `BDIF_MIN_ITERATIONS_PER_DRAW`, 100 tournament iterations per draw. Intervals are reported only when at least `BDIF_MIN_INTERVAL_DRAWS`, 50 draws, are available. Otherwise the report records `interval_status` as `too few posterior draws`; the UI can show the Monte Carlo standard error as an approximation for the player view. Monte Carlo standard error is not a posterior interval
+Posterior matchup draws use a maximum budget of `BDIF_POSTERIOR_DRAWS`, 200 matrices, and at least `BDIF_MIN_ITERATIONS_PER_DRAW`, 100 tournament iterations per draw. Intervals are reported only when at least `BDIF_MIN_INTERVAL_DRAWS`, 50 draws, are available. Each draw runs as two half-size engine calls on consecutive seeds, which simulates the same tournaments as one call. The half-to-half spread estimates simulation noise for each draw. The interval removes that share of the spread so it describes matchup uncertainty. Each metric reports the removed share as `_mc_share`. When the noise is too large to separate within about half of the posterior variance, the report keeps raw draw quantiles; `_mc_share` near 1 marks those wider intervals. Otherwise, the report records `interval_status` as `too few posterior draws`. The UI can show Monte Carlo standard error as an approximation in the player view. Monte Carlo standard error is not a posterior interval
 
 ## Field posterior
 
@@ -46,7 +46,7 @@ The field posterior samples matchup probabilities and estimates each deck's expe
 
 ## Legacy Limitless stores
 
-`LimitlessStore` construction is read-only. Reader methods call a guarded preparation step that adds the `deck_name` column when an older database lacks it and backfills canonical names before querying
+`LimitlessStore` construction is read-only, and `status` reads through a read-only connection that never migrates. `ingest`, `refit`, and card-model reports call a guarded preparation step that adds the `deck_name` column when an older database lacks it and backfills canonical names before querying
 
 H1 observation parsing treats a legacy JSON `"null"` decklist as an empty dictionary. New missing decklists are stored as SQL `NULL`
 
