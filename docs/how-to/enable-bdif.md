@@ -48,13 +48,12 @@ The result reports the database path, both feature switches, and whether the mod
 
 Refit using observations already stored in the configured database
 
-Assumed: the successful refit path needs stored, identifiable observations and was not run without an approved Limitless snapshot
 
 ```bash
 python -m src.bdif refit
 ```
 
-When the observations are sufficient and identifiable, the command writes `limitless_model_input.json` to `BDIF_ARTIFACT_DIR`. A missing database returns status `missing` and is not created
+When the observations are sufficient, the command writes `limitless_model_input.json` to `BDIF_ARTIFACT_DIR` and lists `card_packages`, the cards fitted together, and `not_identified`, the cards that got no coefficient. A missing database returns status `missing` and is not created
 
 ## Generate a report
 

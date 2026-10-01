@@ -137,7 +137,12 @@ def refit_card_model(settings: BdifSettings | None = None) -> dict:
     os.makedirs(os.path.dirname(settings.model_input_path), exist_ok=True)
     from src.core.files import write_json_atomic
     write_json_atomic(model_artifact(fitted), settings.model_input_path)
-    return {"status": "complete", "path": settings.model_input_path}
+    return {
+        "status": "complete",
+        "path": settings.model_input_path,
+        "card_packages": sorted(fitted.packages),
+        "not_identified": fitted.not_identified,
+    }
 
 
 def run_ingestion(settings: BdifSettings | None = None, limit: int | None = None) -> dict:

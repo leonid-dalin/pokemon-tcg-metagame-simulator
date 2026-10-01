@@ -35,6 +35,7 @@ mutations.bdif-delivered.json::provenance seed ignores override
 mutations.bdif-delivered.json::raw intervals reported as denoised
 mutations.bdif-delivered.json::refit creates a missing store
 mutations.bdif-delivered.json::refit failures exit 0
+mutations.bdif-delivered.json::refit hides the card packages
 mutations.bdif-delivered.json::report drops provenance
 mutations.bdif-delivered.json::report exits 3 whenever any deck is thin
 mutations.bdif-delivered.json::report not written to the output directory
@@ -50,12 +51,17 @@ mutations.bdif-delivered.json::stored events fetched again
 mutations.bdif-delivered.json::ties counted as wins for the first deck
 mutations.bdif-delivered.json::unobserved Pokemon admitted
 mutations.bdif-delivered.json::unweighted pooling
+mutations.bdif-statistics.json::always-together cards fitted separately
+mutations.bdif-statistics.json::prior left out of clustered errors
+mutations.bdif-statistics.json::prior left out of model-based errors
+mutations.bdif-statistics.json::prior removed from the card fit
 mutations.bdif-statistics.json::task1: restore the order-dependent averaged prior
 mutations.bdif-statistics.json::task2: ignore the per-draw iteration floor
 mutations.bdif-statistics.json::task2: report intervals from any number of draws
 mutations.bdif-statistics.json::task4: drop rank guard
 mutations.bdif-statistics.json::task4: drop separation guard
 mutations.bdif-statistics.json::task4: put intercept back
+mutations.bdif-statistics.json::unidentified cards fitted anyway
 mutations.minmatches.json::original survivor 1: drop the BDIF_MIN_MATCHES half
 mutations.pr5-remediated.json::old survivor: delete the Benjamini-Hochberg gate
 mutations.pr5-remediated.json::old survivor: invert the ranking order

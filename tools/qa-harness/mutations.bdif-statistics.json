@@ -20,8 +20,8 @@
   {
     "name": "task4: drop rank guard",
     "file": "src/ingestion/model.py",
-    "find": "    if np.linalg.matrix_rank(design) < design.shape[1]:\n        raise CardModelNotIdentifiable(\"card design is rank deficient\")",
-    "replace": "    if False:\n        raise CardModelNotIdentifiable(\"card design is rank deficient\")"
+    "find": "    if np.linalg.matrix_rank(full_design[:, :deck_columns]) < deck_columns:\n        raise CardModelNotIdentifiable(\"deck design is rank deficient\")",
+    "replace": "    if False:\n        raise CardModelNotIdentifiable(\"deck design is rank deficient\")"
   },
   {
     "name": "task4: drop separation guard",
@@ -32,7 +32,37 @@
   {
     "name": "task4: put intercept back",
     "file": "src/ingestion/model.py",
-    "find": "LogisticRegression(penalty=None, fit_intercept=False, max_iter=1000, random_state=1312)",
-    "replace": "LogisticRegression(penalty=None, fit_intercept=True, max_iter=1000, random_state=1312)"
+    "find": "LogisticRegression(penalty=\"l2\", C=BDIF_CARD_PRIOR_SD ** 2, fit_intercept=False, tol=1e-8, max_iter=1000, random_state=1312)",
+    "replace": "LogisticRegression(penalty=\"l2\", C=BDIF_CARD_PRIOR_SD ** 2, fit_intercept=True, tol=1e-8, max_iter=1000, random_state=1312)"
+  },
+  {
+    "name": "always-together cards fitted separately",
+    "file": "src/ingestion/model.py",
+    "find": "        groups.setdefault(design[:, deck_columns + index].tobytes(), []).append(index)",
+    "replace": "        groups.setdefault(index, []).append(index)"
+  },
+  {
+    "name": "unidentified cards fitted anyway",
+    "file": "src/ingestion/model.py",
+    "find": "    kept = sorted(int(pivot) for pivot, size in zip(pivots, diagonal) if size > tolerance)",
+    "replace": "    kept = sorted(int(pivot) for pivot in pivots)"
+  },
+  {
+    "name": "prior removed from the card fit",
+    "file": "src/ingestion/model.py",
+    "find": "C=BDIF_CARD_PRIOR_SD ** 2, fit_intercept=False, tol=1e-8",
+    "replace": "C=1e6, fit_intercept=False, tol=1e-8"
+  },
+  {
+    "name": "prior left out of model-based errors",
+    "file": "src/ingestion/model.py",
+    "find": "    information = design.T @ (weights[:, None] * design) + penalty * np.eye(design.shape[1])",
+    "replace": "    information = design.T @ (weights[:, None] * design)"
+  },
+  {
+    "name": "prior left out of clustered errors",
+    "file": "src/ingestion/model.py",
+    "find": "    bread = design.T @ ((probabilities * (1.0 - probabilities))[:, None] * design) + penalty * np.eye(design.shape[1])",
+    "replace": "    bread = design.T @ ((probabilities * (1.0 - probabilities))[:, None] * design)"
   }
 ]

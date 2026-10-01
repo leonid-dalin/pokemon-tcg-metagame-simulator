@@ -98,7 +98,7 @@
   {
     "name": "clustering replaced by model-based SE",
     "file": "src/ingestion/model.py",
-    "find": "        standard_errors_array = _player_clustered_standard_errors(estimator, observations, design, standard_errors_array)",
+    "find": "        standard_errors_array = _player_clustered_standard_errors(estimator, observations, design, standard_errors_array, penalty)",
     "replace": "        standard_errors_array = standard_errors_array"
   },
   {
@@ -310,5 +310,11 @@
     "file": "src/ingestion/store.py",
     "find": "        if canonical_names is not None:\n            warnings.warn(",
     "replace": "        if False:\n            warnings.warn("
+  },
+  {
+    "name": "refit hides the card packages",
+    "file": "src/bdif/service.py",
+    "find": "        \"card_packages\": sorted(fitted.packages),",
+    "replace": "        \"card_packages\": [],"
   }
 ]

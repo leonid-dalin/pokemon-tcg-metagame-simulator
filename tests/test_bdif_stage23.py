@@ -3,9 +3,11 @@ import sqlite3
 from pathlib import Path
 
 import numpy as np
+from scipy.optimize import minimize
 import pytest
 
 from src.bdif import service
+from src.core.config import BDIF_CARD_PRIOR_SD
 from src.bdif.settings import BdifSettings
 from src.ingestion.client import LimitlessClient
 from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerObservation, _card_design, _logistic_standard_errors, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, recommend_best60, select_model_cards, select_panel_decks, validate_recommendation
@@ -534,8 +536,8 @@ def test_rank_deficient_card_raises_not_identifiable():
 @pytest.mark.unit
 def test_separated_card_outcomes_raise_not_identifiable():
     observations = []
-    for index in range(200):
-        result = int(index < 199)
+    for index in range(2000):
+        result = int(index < 1999)
         observations.append(PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), result))
         observations.append(PlayerObservation("b", "a", frozenset({"Tech"}), frozenset(), result))
         observations.append(PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 1 - result))
@@ -553,8 +555,16 @@ def test_card_model_fit_has_no_intercept():
         + [PlayerObservation("b", "a", frozenset(), frozenset({"Tech"}), 1)] * 15
     )
     model = fit_card_model(observations, ["Tech"])
+    design = _card_design(observations, model.decks, model.cards)
+    target = np.asarray([row.result for row in observations])
+
+    def penalised_loss(weights):
+        logits = design @ weights
+        return np.sum(np.logaddexp(0.0, logits) - target * logits) + 0.5 * np.sum(weights ** 2) / BDIF_CARD_PRIOR_SD ** 2
+
+    expected = minimize(penalised_loss, np.zeros(design.shape[1]), method="BFGS", options={"gtol": 1e-10}).x
     assert model.estimator.intercept_.tolist() == [0.0]
-    assert model.estimator.coef_[0, 1] == pytest.approx(0.6931471805599453, abs=1e-5)
+    assert model.estimator.coef_[0] == pytest.approx(expected, abs=1e-4)
 
 
 @pytest.mark.unit
@@ -767,7 +777,7 @@ def test_card_model_artifact_counts_matches_in_both_orientations():
 def test_card_model_without_player_ids_keeps_model_based_standard_errors():
     observations = _tech_observations(1, False)
     model = fit_card_model(observations, ["Tech"])
-    expected = _logistic_standard_errors(model.estimator, _card_design(observations, model.decks, model.cards))
+    expected = _logistic_standard_errors(model.estimator, _card_design(observations, model.decks, model.cards), model.penalty)
     assert model.standard_error_kind == "model-based"
     assert model.standard_errors["Tech"] == pytest.approx(expected[1])
 
@@ -793,10 +803,79 @@ def test_clustered_errors_never_fall_below_model_based_errors():
             PlayerObservation("a", "b", a_cards, b_cards, 0, (f"p{index}", f"y{index}")),
         ])
     model = fit_card_model(observations, ["Tech"])
-    model_errors = _logistic_standard_errors(model.estimator, _card_design(observations, model.decks, model.cards))
+    model_errors = _logistic_standard_errors(model.estimator, _card_design(observations, model.decks, model.cards), model.penalty)
     assert model.standard_error_kind == "player-clustered"
     assert model.standard_errors["Tech"] >= model_errors[1]
     assert model_errors[1] > 0.1
+
+
+def _engine_observations(engine_cards, other_cards=frozenset()):
+    observations = []
+    for index in range(120):
+        has_engine = index % 2 == 0
+        a_cards = frozenset({"Core"} | set(engine_cards) | set(other_cards)) if has_engine else frozenset({"Core"} | set(other_cards))
+        b_cards = frozenset({"Core"})
+        result = int(index % 10 < (8 if has_engine else 2))
+        result = 1 - result if index % 11 == 0 else result
+        observations.append(PlayerObservation("a", "b", a_cards, b_cards, result))
+        observations.append(PlayerObservation("b", "a", b_cards, a_cards, 1 - result))
+    return observations
+
+
+@pytest.mark.unit
+def test_cards_that_always_appear_together_are_scored_as_one_package():
+    model = fit_card_model(_engine_observations({"Dreepy", "Drakloak"}), ["Dreepy", "Drakloak"])
+
+    coefficients, intervals = model.coefficient_report()
+    assert model.packages == {"Dreepy + Drakloak": ("Dreepy", "Drakloak")}
+    assert coefficients["Dreepy"] == coefficients["Drakloak"] > 0
+    assert intervals["Dreepy"] == intervals["Drakloak"]
+
+
+@pytest.mark.unit
+def test_a_card_that_one_deck_plays_in_every_game_is_reported_as_not_identified():
+    model = fit_card_model(_engine_observations({"Tech"}, {"Signature"}), ["Signature", "Tech"])
+
+    coefficients, _ = model.coefficient_report()
+    assert model.not_identified == ["Signature"]
+    assert "Signature" not in coefficients
+    assert coefficients["Tech"] > 0
+
+
+@pytest.mark.unit
+def test_model_based_errors_include_the_prior():
+    observations = _tech_observations(1, False)
+    model = fit_card_model(observations, ["Tech"])
+    design = _card_design(observations, model.decks, model.cards)
+    probabilities = model.estimator.predict_proba(design)[:, 1]
+    curvature = design.T @ ((probabilities * (1.0 - probabilities))[:, None] * design) + np.eye(design.shape[1]) / BDIF_CARD_PRIOR_SD ** 2
+
+    assert model.standard_errors["Tech"] == pytest.approx(float(np.sqrt(np.linalg.inv(curvature)[1, 1])))
+
+
+@pytest.mark.unit
+def test_decks_that_never_meet_each_other_raise_not_identifiable():
+    observations = []
+    for index in range(40):
+        cards = frozenset({"Tech"} if index % 2 else set())
+        observations.append(PlayerObservation("a", "b", cards, frozenset(), index % 3 == 0))
+        observations.append(PlayerObservation("c", "d", cards, frozenset(), index % 4 == 0))
+
+    with pytest.raises(CardModelNotIdentifiable, match="deck design is rank deficient"):
+        fit_card_model(observations, ["Tech"])
+
+
+@pytest.mark.unit
+def test_a_rarely_played_card_is_no_more_uncertain_than_its_prior():
+    observations = [
+        PlayerObservation("a", "b", frozenset({"Tech"}) if index < 2 else frozenset(), frozenset(), index % 2, (f"p{index}", f"q{index}"))
+        for index in range(400)
+    ]
+
+    model = fit_card_model(observations, ["Tech"])
+
+    assert model.standard_error_kind == "player-clustered"
+    assert model.standard_errors["Tech"] < BDIF_CARD_PRIOR_SD
 
 
 @pytest.mark.unit
