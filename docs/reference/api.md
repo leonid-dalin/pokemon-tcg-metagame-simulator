@@ -4,9 +4,13 @@ The FastAPI application is defined in `src/api/main.py`. The base path is `/api/
 
 ## Authentication
 
-Set `API_TOKEN` in the API environment to protect prediction and task endpoints. Clients send the value in the `X-API-Token` header. When `API_TOKEN` is empty, the middleware allows these requests without a token
+Set `API_TOKEN` in the API environment to protect prediction, task, and BDIF status endpoints. Clients send the value in the `X-API-Token` header. When `API_TOKEN` is empty, the middleware allows these requests without a token
 
 ## Endpoints
+
+### `GET /api/v1/bdif/status`
+
+Returns the read-only BDIF status reported by `python -m src.bdif status`: `status`, `db_path`, `use_card_model`, `ingestion_enabled`, and `model_artifact`. For an existing database, it also reports `schema`, with deck, pairing, and decklist counts when the schema is current. The request does not change the database
 
 ### `POST /api/v1/predict`
 
@@ -18,12 +22,14 @@ Queues a simulation and returns HTTP `202`:
 
 The request body must contain at least two unique `deck_names` and a square, zero-sum `matchup_matrix`. Matrix diagonals must be exactly `0.5`
 
+The worker simulates the configured simulation input, so `deck_names` and `matchup_matrix` must match that input in the order returned by the loader. A request that differs fails with `request matrix does not match the simulation input`
+
 Important fields:
 
 | Field | Default | Constraints |
 | --- | --- | --- |
 | `job_id` | `unknown` | Maximum 64 characters |
-| `deck_names` | required | At least 2 names, maximum 64 matrix rows |
+| `deck_names` | required | At least 2 names, maximum 256 matrix rows |
 | `matchup_matrix` | required | Square, values from `0.0` to `1.0`, mirrored pairs sum to `1.0` |
 | `tournament_style` | `pure_swiss` | `pure_swiss` or `championship_series` |
 | `match_format` | `BO3` | `BO1` or `BO3` |
@@ -33,6 +39,7 @@ Important fields:
 | `min_sample_threshold` | `10` | From 1 to 100 |
 | `use_tie_convergence` | `true` | Boolean |
 | `use_drop_feature` | `false` | Boolean |
+| `bdif_panel_decks` | automatic | At most 10 deck names |
 
 `user_meta_spec` accepts numeric shares or `{ "exact": number }` and `{ "min": number, "max": number }` objects, with values from `0.0` to `1.0`
 

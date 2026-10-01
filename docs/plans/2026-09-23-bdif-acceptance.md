@@ -2,53 +2,68 @@
 
 ## Scope
 
-This record covers the documentation and acceptance work for the merged BDIF CLI, posterior analytics, card model, and Tasks 11-15 UI changes
+This record covers local documentation and offline acceptance of the BDIF CLI, posterior analytics, card model, and runtime contracts
 
 ## Live Limitless acceptance
 
 **Status: NOT RUN**
 
-The live acceptance run requires written approval from the repository owner, Leonid Dalin, in the PR thread and access to the owner's credentials. No written approval or credentials were provided for this task, so the live run was not started
+Live acceptance requires written approval from the repository owner, Leonid Dalin, in the PR thread. It also requires access to the operator-managed Limitless credential. No live request is authorised by this record
 
-The following commands were not run:
+The following exact invocations were not run because their default paths require written live-run approval. The offline probe ran the same commands against scratch paths
+
+Assumed: these listed invocations describe the approved live procedure; no live database, credential, or Limitless response was checked
 
 ```bash
-python -m src.bdif ingest --limit 20 --db output/acceptance/limitless.db --json > output/acceptance/ingest.json
-python -m src.bdif status --db output/acceptance/limitless.db --json > output/acceptance/status.json
-python -m src.bdif fit --db output/acceptance/limitless.db --json > output/acceptance/fit.json
-python -m src.bdif report --db output/acceptance/limitless.db --card-model --precision-tier 3 --output output/acceptance --json > output/acceptance/report.json
+python -m src.bdif ingest --limit 20
+python -m src.bdif status
+python -m src.bdif refit
+python -m src.bdif report --output output/acceptance
 ```
 
-The planned bootstrap gate was not run. No Limitless ingestion, third-party network call, Docker command, or command that could expose a credential was run
+No Limitless ingestion or third-party request was made. Do not use `data/limitless.db` for an acceptance run
 
-## Required record when approved
+## Procedure when approved
 
-After written approval, record the approver and date before starting. Use a scratch database, never `data/limitless.db`. Stop at the first HTTP 4xx other than 429 and do not retry. Stop any command that exceeds 15 minutes
+Record the approver and date before the first request. Use the project interpreter and scratch paths from the repository root
 
-Record the following verbatim from the approved run:
+Assumed: the live command sequence was not run. The offline probe used a temporary database and artefact directory
 
-- Event and failure counts
-- `model_status`
-- Selected-card count
-- Observation count
-- The report `provenance` block
-- `posterior.interval_status`
-- The top three `field_posterior` rows
-- The reason if `fit` exits 3
-- The bootstrap-gate output, including any ratio outside `[0.5, 2.0]`
+```bash
+mkdir -p output/acceptance
+export BDIF_DB_PATH=output/acceptance/limitless.db
+export BDIF_ARTIFACT_DIR=output/acceptance
+export LIMITLESS_INGESTION_ENABLED=true
+export BDIF_USE_CARD_MODEL=true
+python -m src.bdif ingest --limit 20 > output/acceptance/ingest.json
+python -m src.bdif status > output/acceptance/status.json
+python -m src.bdif refit > output/acceptance/refit.json
+python -m src.bdif report --output output/acceptance > output/acceptance/report-stdout.json
+```
+
+Stop at the first HTTP 4xx other than 429 and do not retry it. Stop any command that runs longer than 15 minutes. Never point `BDIF_DB_PATH` at `data/limitless.db`
+
+## Record
+
+Copy these values from the files produced by the approved run:
+
+- `ingest.json`: `status`, `events`, `skipped_events`, failed-event count, `unmapped_deck_ids`, and `model_status`
+- `status.json`: `schema`, `decks`, `pairings`, and `decklists`
+- `refit.json`: `status` and the exit code when it is 3
+- `bdif_report.json`: `mc_results.provenance`, `mc_results.posterior.interval_status`, the three highest `mc_results.field_posterior.expected_win_rate` rows, and every `_mc_share` above 0.8 in `mc_results.metrics`
+- Exit code for each command
 
 ## Local verification
 
-The local CLI and static verification results for this documentation task are recorded below
+The documentation command probe ran with a temporary database and artefact directory. It made no network requests
 
 | Check | Result |
 | --- | --- |
-| Branch guard | Passed: `feat/bdif-ui` |
-| Parent-change guard | Passed: Tasks 11-15 source and test changes were present before editing |
-| `python -m src.bdif --help` | Passed; command and subcommands are present |
-| `python -m src.bdif status` | Not run; live acceptance and database access were intentionally avoided |
-| Config constant probe | Passed; values were `200 100 50 2000 50 0.05 0.95 5.0` |
-| Forbidden config grep | Passed; no documentation instructs enabling ingestion through a source-code assignment |
-| Documentation scope | Passed; only the five named existing pages and this acceptance record were changed |
-
-No source files, tests, or commits were changed by this task
+| `python -m src.bdif status` without a database | Exit 0; status `missing`; database not created |
+| `python -m src.bdif refit` without a database | Exit 3; database not created |
+| `python -m src.bdif ingest` with ingestion disabled | Exit 3; status `disabled` |
+| `ingest --limit 0` and `ingest --limit 1001` | Both exit 2 |
+| `report --output` | Exit 0; writes `bdif_report.json` |
+| `report --panel` | Exit 0; both requested rows returned; unmatched list empty |
+| `python -m src.ui.cli --bdif-status` | Exit 2 |
+| Status help, report help, and UI CLI help | Exit 0 |

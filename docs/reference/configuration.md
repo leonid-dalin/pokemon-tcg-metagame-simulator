@@ -52,6 +52,7 @@ The main constants live in `src/core/config.py`. Environment variables are read 
 | `BDIF_USE_CARD_MODEL` | BDIF service | Boolean: `1`, `true`, `yes`, `on`, `0`, `false`, `no`, or `off`; default `False` |
 | `LIMITLESS_INGESTION_ENABLED` | BDIF service | Same boolean values; default `False` |
 | `BDIF_DB_PATH` | BDIF service | Filesystem path; default `data/limitless.db` |
+| `BDIF_ARTIFACT_DIR` | BDIF service | Directory for `limitless_input.json` and `limitless_model_input.json`; default `data/input` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Telemetry | Endpoint; default `http://localhost:4317` |
 | `MAX_CORES` | Runtime core limit | Explicit override; otherwise cgroup v2 quota, cgroup v1 quota, then half of `os.cpu_count()` with a minimum of 1 |
 

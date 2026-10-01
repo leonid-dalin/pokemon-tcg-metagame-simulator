@@ -1,6 +1,6 @@
 # CLI reference
 
-The entry point is `python -m src.ui.cli`. Argument parsing lives in `src/ui/cli_args.py`
+The simulator entry point is `python -m src.ui.cli`. Argument parsing lives in `src/ui/cli_args.py`. BDIF data and report commands use `python -m src.bdif`, described at the end of this page
 
 ## Input and output
 
@@ -63,3 +63,26 @@ The prediction path always loads with the module-level `MIN_GAMES` value in `src
 ## Output files
 
 A single run writes a timestamped directory containing `simulation_trace.jsonl`, `metagame_history_full.csv`, `ess_equilibrium.csv`, `final_tiers.json`, and `deck_similarity.json`. Unless `--no-plot` is present, it also writes `metagame_evolution.html`, `matchup_heatmap.html`, and `matchup_network.html`
+
+## BDIF commands
+
+`python -m src.bdif` prints one JSON result to stdout and logs to stderr. `-l`, `--log-level` accepts `DEBUG`, `INFO`, `WARNING`, or `ERROR` before the command name
+
+| Command | Options | Result |
+| --- | --- | --- |
+| `status` | none | Read-only database and artefact status |
+| `ingest` | `--limit` from 1 to 1000; default `LIMITLESS_BACKFILL_TOURNAMENTS` | Bounded Limitless ingestion and card-model fit |
+| `refit` | none | Card-model fit from stored observations |
+| `report` | see below | Tournament report with BDIF analytics |
+
+| Report flag | Default | Meaning |
+| --- | --- | --- |
+| `-i`, `--input` | configured simulation input | JSON matchup matrix |
+| `-o`, `--output` | `output/` | Directory that receives `bdif_report.json` |
+| `--seed` | `1312` | Random seed |
+| `-P`, `--players` | `256` | Field size from 4 to 8192 |
+| `--tournament-style` | `pure_swiss` | `pure_swiss` or `championship_series` |
+| `--meta` | empty | Comma-separated `deck:share` constraints |
+| `--panel` | automatic | Comma-separated panel decks, at most 10 |
+
+The commands exit `0` on a result, `1` on failure, `2` on invalid arguments, and `3` when no evidence was produced. [Enable Limitless and BDIF analytics](../how-to/enable-bdif.md) lists the exit-3 cases. `python -m src.ui.cli` does not accept `--bdif-status`, `--bdif-ingest`, or `--bdif-refit`
