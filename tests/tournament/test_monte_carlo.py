@@ -669,3 +669,40 @@ def test_chunked_run_simulates_the_same_tournaments_as_one_engine_call():
     assert [result["metrics"][deck]["win_probability"] for deck in decks] == pytest.approx(
         [champion / entrants for champion, entrants in zip(champions, initial)], abs=1e-12,
     )
+
+
+def _posterior_run_with_halves(monkeypatch, champions):
+    calls = []
+    monkeypatch.setattr(monte_carlo.tcg_engine, "initialize_rayon", lambda cores: None)
+
+    def run_parallel(size, players, meta, matrix, d1, cut, d2, top, seed, *args):
+        draw, half = divmod(len(calls), 2)
+        calls.append(seed)
+        first = champions(draw, half, size)
+        return [size, size], [size, size], [size, size], [first, size - first]
+
+    monkeypatch.setattr(monte_carlo.tcg_engine, "run_parallel_monte_carlo", run_parallel)
+    return monte_carlo.run_monte_carlo_analytics(
+        deck_names=["a", "b"], win_matrix=np.array([[0.5, 0.6], [0.4, 0.5]]),
+        meta_distribution={"a": 0.5, "b": 0.5}, matchup_details=TWO_DECK_DETAILS,
+        d1_rounds=1, cut_points=1, d2_rounds=1, top_cut=1, iterations=6_000, posterior_draws=60, seed=40,
+    )
+
+
+@pytest.mark.unit
+def test_posterior_intervals_say_when_simulation_noise_was_removed(monkeypatch):
+    result = _posterior_run_with_halves(monkeypatch, lambda draw, half, size: 10 + draw % 7)
+
+    metrics = result["metrics"]["a"]
+    assert result["posterior"]["interval_status"] == "ok"
+    assert metrics["win_probability_mc_share"] == 0.0
+    assert metrics["win_probability_interval"] == "denoised"
+
+
+@pytest.mark.unit
+def test_posterior_intervals_say_when_simulation_noise_could_not_be_removed(monkeypatch):
+    result = _posterior_run_with_halves(monkeypatch, lambda draw, half, size: (40 + draw % 2) if half == 0 else 0)
+
+    metrics = result["metrics"]["a"]
+    assert metrics["win_probability_mc_share"] == 1.0
+    assert metrics["win_probability_interval"] == "raw"

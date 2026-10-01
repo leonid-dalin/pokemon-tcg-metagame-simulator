@@ -11,6 +11,7 @@ mutations.bdif-delivered.json::binomial SE in posterior mode
 mutations.bdif-delivered.json::card selection ignores min players
 mutations.bdif-delivered.json::clustered SE not floored at model-based
 mutations.bdif-delivered.json::clustering replaced by model-based SE
+mutations.bdif-delivered.json::dashboard hides intervals that keep simulation noise
 mutations.bdif-delivered.json::dashboard loads the engine to find its input
 mutations.bdif-delivered.json::duplicate canonical rows overwrite each other
 mutations.bdif-delivered.json::explicit unmapped id falls back to provider name
@@ -30,6 +31,7 @@ mutations.bdif-delivered.json::posterior draws run as one engine call
 mutations.bdif-delivered.json::posterior intervals keep simulation noise
 mutations.bdif-delivered.json::provenance hash dropped
 mutations.bdif-delivered.json::provenance seed ignores override
+mutations.bdif-delivered.json::raw intervals reported as denoised
 mutations.bdif-delivered.json::refit creates a missing store
 mutations.bdif-delivered.json::refit failures exit 0
 mutations.bdif-delivered.json::report drops provenance

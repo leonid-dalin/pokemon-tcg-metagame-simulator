@@ -182,13 +182,18 @@ def _draw_metrics(initial: np.ndarray, day2: np.ndarray, top: np.ndarray, champ:
         }
 
 
+def noise_separable(share: float, draws: int) -> bool:
+    """Whether the posterior part of the spread can be estimated within about half of itself."""
+    return 1.0 - share >= 2.0 * np.sqrt(2.0 / (draws - 1))
+
+
 def denoised_interval(values: np.ndarray, first_halves: np.ndarray, second_halves: np.ndarray) -> Tuple[float, float, float]:
     values = np.asarray(values, dtype=float)
     centre = float(values.mean())
     total = float(values.var(ddof=1))
     noise = float(np.mean((np.asarray(first_halves, dtype=float) - np.asarray(second_halves, dtype=float)) ** 2) / 4.0)
     share = min(1.0, noise / total) if total > 0 else 0.0
-    if 1.0 - share < 2.0 * np.sqrt(2.0 / (len(values) - 1)):
+    if not noise_separable(share, len(values)):
         return float(np.quantile(values, 0.025)), float(np.quantile(values, 0.975)), share
     shrunk = centre + (values - centre) * np.sqrt(1.0 - share)
     return float(np.quantile(shrunk, 0.025)), float(np.quantile(shrunk, 0.975)), share
@@ -439,8 +444,10 @@ def run_monte_carlo_analytics(
                         np.array([second[metric][i] for _, second in half_metrics]),
                     )
                     results[deck][f"{metric}_mc_share"] = share
+                    results[deck][f"{metric}_interval"] = "denoised" if noise_separable(share, len(values)) else "raw"
                 else:
                     lower, upper = float(np.quantile(values[:, i], 0.025)), float(np.quantile(values[:, i], 0.975))
+                    results[deck][f"{metric}_interval"] = "raw"
                 results[deck][f"{metric}_lower"] = lower
                 results[deck][f"{metric}_upper"] = upper
     ranked_metrics = {
