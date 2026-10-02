@@ -36,6 +36,7 @@ The main constants live in `src/core/config.py`. Environment variables are read 
 | `BDIF_CARD_MIN_WITHIN_RATE` | `0.05` | Minimum within-archetype card presence |
 | `BDIF_CARD_MAX_WITHIN_RATE` | `0.95` | Maximum within-archetype card presence |
 | `BDIF_CARD_MAX_ABS_LOGIT` | `5.0` | Maximum absolute card-model logit |
+| `BDIF_CARD_PRIOR_SD` | `1.0` | Prior standard deviation of each card-model logit coefficient |
 | `LIMITLESS_INGESTION_ENABLED` | `False` | Limitless ingestion switch |
 | `LIMITLESS_BACKFILL_TOURNAMENTS` | `200` | Ingestion tournament limit |
 | `BDIF_USE_CARD_MODEL` | `False` | Card-model report switch |

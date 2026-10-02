@@ -16,6 +16,85 @@ from src.ingestion.model import CardModelNotIdentifiable, PlayerObservation
 from src.ingestion.store import LimitlessStore
 
 
+@pytest.mark.unit
+def test_refit_names_card_packages_and_the_cards_it_could_not_identify(monkeypatch, tmp_path):
+    observations = []
+    for index in range(120):
+        has_engine = index % 2 == 0
+        a_cards = frozenset({"Signature", "Dreepy", "Drakloak"} if has_engine else {"Signature"})
+        result = int(index % 10 < (8 if has_engine else 2))
+        result = 1 - result if index % 11 == 0 else result
+        observations.append(PlayerObservation("a", "b", a_cards, frozenset(), result))
+        observations.append(PlayerObservation("b", "a", frozenset(), a_cards, 1 - result))
+
+    class Store:
+        def __init__(self, path):
+            self.path = path
+
+        def player_observations(self):
+            return observations
+
+    db = tmp_path / "limitless.db"
+    db.touch()
+    monkeypatch.setattr("src.ingestion.store.LimitlessStore", Store)
+    monkeypatch.setattr("src.ingestion.model.select_model_cards", lambda rows: ["Dreepy", "Drakloak", "Signature"])
+
+    result = service.refit_card_model(settings(db_path=str(db), model_input_path=str(tmp_path / "model.json")))
+
+    assert result["status"] == "complete"
+    assert result["card_packages"] == ["Dreepy + Drakloak"]
+    assert result["not_identified"] == ["Signature"]
+    assert (tmp_path / "model.json").exists()
+
+
+@pytest.mark.unit
+def test_report_addons_expand_package_estimates_to_member_card_names(monkeypatch, tmp_path):
+    observations = []
+    for index in range(120):
+        has_engine = index % 2 == 0
+        a_cards = frozenset({"Dreepy", "Drakloak"} if has_engine else set())
+        result = int(index % 10 < (8 if has_engine else 2))
+        result = 1 - result if index % 11 == 0 else result
+        observations.append(PlayerObservation("a", "b", a_cards, frozenset(), result))
+        observations.append(PlayerObservation("b", "a", frozenset(), a_cards, 1 - result))
+
+    class Store:
+        def prepare_for_read(self):
+            return None
+
+        def deck_weights(self):
+            return {"a": 1.0, "b": 0.0}
+
+        def player_observations(self):
+            return observations
+
+        def observed_cards(self, deck):
+            return {"Dreepy", "Drakloak"}
+
+        def observed_pokemon_cards(self, deck):
+            return {"Dreepy", "Drakloak"}
+
+        def observed_card_rules(self, deck):
+            return {card: {"type": "pokemon"} for card in ("Dreepy", "Drakloak")}
+
+        def observed_skeleton(self, deck):
+            return [{"card": "Darkness Energy", "copies": 60}]
+
+        def pairings_with_decklists(self, pattern):
+            return []
+
+    monkeypatch.setattr("src.ingestion.model.select_panel_decks", lambda *args, **kwargs: ["a"])
+    monkeypatch.setattr(service, "_MODEL_CACHE", {})
+    db = tmp_path / "limitless.db"
+    db.touch()
+    recommendations, _ = service.build_report_addons(
+        Store(), settings(db_path=str(db), use_card_model=True)
+    )
+
+    evidence = recommendations["a"]["card_evidence"]
+    assert evidence["Dreepy"]["coefficient"] == evidence["Drakloak"]["coefficient"]
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
