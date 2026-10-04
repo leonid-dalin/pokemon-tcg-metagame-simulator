@@ -416,6 +416,24 @@ def test_prediction_passes_matchup_details_and_report_addons(monkeypatch):
 
 
 @pytest.mark.unit
+def test_prediction_forwards_requested_bdif_archetypes_to_addons(monkeypatch):
+    received = []
+    monkeypatch.setattr(service, "load_matchup_data", lambda *args: (["a", "b"], np.array([[.5, .6], [.4, .5]]), {}))
+    monkeypatch.setattr(service, "predict_best_decks", lambda request: {"full_meta": {"a": .5, "b": .5}})
+    monkeypatch.setattr(service, "swiss_rounds_from_players", lambda players: 1)
+    monkeypatch.setattr(service, "open_store", lambda cfg: None)
+    monkeypatch.setattr(service, "panel_decks_for_report", lambda *args: [])
+    monkeypatch.setattr(service, "build_report_addons", lambda store, settings, requested: received.append(requested) or ({}, {}))
+    monkeypatch.setattr(service, "run_monte_carlo_analytics", lambda **kwargs: {})
+    monkeypatch.setattr(service, "build_bdif_report", lambda result, *args: result)
+    request = PredictionRequest(deck_names=["a", "b"], matchup_matrix=[[.5, .6], [.4, .5]], bdif_archetypes=["a"], total_players=4)
+
+    service.run_prediction(request, settings=settings())
+
+    assert received == [["a"]]
+
+
+@pytest.mark.unit
 def test_prediction_without_a_seed_uses_the_configured_seed(monkeypatch):
     seen = []
     monkeypatch.setattr(service, "load_matchup_data", lambda *args: (["a", "b"], np.array([[.5, .6], [.4, .5]]), {}))

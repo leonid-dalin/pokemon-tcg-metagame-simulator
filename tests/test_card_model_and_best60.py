@@ -532,6 +532,35 @@ def test_observed_skeleton_uses_modal_joint_core_from_legal_sixties(tmp_path):
     assert details["core_count"] == 2
 
 
+def test_skeleton_rejects_a_modal_core_below_the_seventy_five_percent_threshold(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
+    modal = {"pokemon": [{"name": "Mon", "count": 4}], "energy": [{"name": "Grass Energy", "count": 52}], "trainer": [{"name": "Trainer", "count": 4}]}
+    variant = {"pokemon": [{"name": "Alt", "count": 4}], "energy": [{"name": "Grass Energy", "count": 52}], "trainer": [{"name": "Trainer", "count": 4}]}
+    store.upsert_standings("event", [
+        {"player": f"p{index}", "deck": {"id": "a"}, "decklist": decklist}
+        for index, decklist in enumerate([modal, modal, variant, variant])
+    ])
+
+    details = store.observed_skeleton_details("a")
+
+    assert details["cards"] == []
+    assert details["core_share"] == pytest.approx(0.5)
+
+
+def test_database_checkout_requires_git_lfs_documentation():
+    from src.bdif.settings import BdifSettings
+
+    attributes = Path(".gitattributes").read_text(encoding="utf-8")
+    docs = Path("docs/limitless-ingestion.md").read_text(encoding="utf-8")
+    settings = BdifSettings.from_environment()
+
+    assert settings.db_path.endswith("data/limitless.db")
+    assert "data/limitless.db filter=lfs" in attributes
+    assert "Git LFS" in docs
+    assert "git lfs pull" in docs
+
+
+
 def test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec(tmp_path):
     store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
     standings = []
@@ -550,6 +579,19 @@ def test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec(tmp_path):
     skeleton = store.observed_skeleton("a")
     assert {row["card"]: row["copies"] for row in skeleton}["Weird Card"] == 4
     assert not any(row["card"] in {"Prime Catcher", "Master Ball"} for row in skeleton)
+
+
+def test_invalid_ace_spec_decklists_are_excluded_from_feature_inputs(tmp_path):
+    from src.ingestion.features import _valid_decklists
+
+    invalid = {"trainer": [{"name": "Prime Catcher", "count": 1}, {"name": "Master Ball", "count": 1}]}
+    valid = {"trainer": [{"name": "Prime Catcher", "count": 1}]}
+
+    class Store:
+        def _decklists(self, archetype, event_id=None):
+            return [invalid, valid]
+
+    assert list(_valid_decklists(Store(), "Crustle")) == [valid]
 
 
 @pytest.mark.unit

@@ -125,7 +125,7 @@ if "REDIS_URL" in os.environ:
 
 limiter = Limiter(
     key_func=get_remote_address,
-    storage_uri=os.environ.get("RATE_LIMIT_STORAGE_URI", "memory://"),
+    storage_uri=os.environ.get("RATE_LIMIT_STORAGE_URI", redis_url),
     strategy="fixed-window"
 )
 app = FastAPI(

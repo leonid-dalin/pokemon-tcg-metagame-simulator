@@ -24,6 +24,8 @@ List endpoints must return JSON lists and details must return a JSON object. The
 
 `BDIF_DB_PATH` selects the SQLite database and defaults to `data/limitless.db`. The store creates parent directories and maintains three tables:
 
+The default database is tracked with Git LFS. Install Git LFS before cloning, then run `git lfs pull` from the repository root. Without LFS, `data/limitless.db` is a pointer file and SQLite cannot open it.
+
 | Table | Stored fields |
 | --- | --- |
 | `tournaments` | Event `id` primary key; game, format, name, date, player count, and raw details JSON. |

@@ -440,11 +440,14 @@ class LimitlessStore:
             for _, card, copies in sorted(modal_profile, key=lambda item: (0 if item[0] == "pokemon" else 1, item[1]))
             if card not in ACE_SPEC_CARDS
         ]
+        core_share = support / len(legal_rows)
+        if core_share < 0.75:
+            result = []
         return {
             "cards": result,
             "legal_list_count": len(legal_rows),
             "core_support": support,
-            "core_share": support / len(legal_rows),
+            "core_share": core_share,
             "core_count": len(profiles),
         }
 

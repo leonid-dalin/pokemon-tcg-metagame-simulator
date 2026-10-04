@@ -284,7 +284,10 @@ def run_prediction(request: PredictionRequest, progress_callback=None, settings:
             logger.warning("bdif_panel_selection_failed", error=str(exc), exc_info=True)
             panels = list(settings.fallback_panel_decks)
     try:
-        recommendations, h1 = build_report_addons(store, settings)
+        if request.bdif_archetypes:
+            recommendations, h1 = build_report_addons(store, settings, request.bdif_archetypes)
+        else:
+            recommendations, h1 = build_report_addons(store, settings)
     except Exception as exc:
         logger.warning("bdif_report_addons_failed", error=str(exc), exc_info=True)
         recommendations, h1 = {}, {}

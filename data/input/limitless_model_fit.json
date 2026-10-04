@@ -1,0 +1,58 @@
+{
+  "database_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "decks": [
+    "a",
+    "b"
+  ],
+  "cards": [
+    "Dreepy + Drakloak"
+  ],
+  "inclusion": {
+    "a": {
+      "Dreepy": 0.5,
+      "Drakloak": 0.5,
+      "Signature": 1.0
+    },
+    "b": {
+      "Dreepy": 0.0,
+      "Drakloak": 0.0,
+      "Signature": 0.0
+    }
+  },
+  "standard_errors": {
+    "Dreepy + Drakloak": 0.2742272326939939
+  },
+  "match_counts": [
+    [
+      "a",
+      "b",
+      240
+    ]
+  ],
+  "reference_deck": "b",
+  "standard_error_kind": "model-based",
+  "members": {
+    "Dreepy + Drakloak": [
+      "Dreepy",
+      "Drakloak"
+    ]
+  },
+  "not_identified": [
+    "Signature"
+  ],
+  "penalty": 1.0,
+  "max_iter": 10000,
+  "coef": [
+    [
+      -0.9743956264499445,
+      1.9062337926466524
+    ]
+  ],
+  "intercept": [
+    0.0
+  ],
+  "classes": [
+    0,
+    1
+  ]
+}
