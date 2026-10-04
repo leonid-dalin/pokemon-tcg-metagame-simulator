@@ -171,13 +171,17 @@ def build_model_addons(
         }
     coefficients, intervals = model.coefficient_report()
     inclusion = model.inclusion
-    candidates = sorted({card for cards in inclusion.values() for card in cards})
+    members = getattr(model, "members", {})
+    candidates = sorted({card for cards in inclusion.values() for name in cards for card in members.get(name, (name,))})
     recommendations = {}
     for deck in requested:
         if deck not in weights:
             recommendations[deck] = {"status": "unknown archetype"}
             continue
-        core = store.observed_skeleton_details(deck)
+        if hasattr(store, "observed_skeleton_details"):
+            core = store.observed_skeleton_details(deck)
+        else:
+            core = {"cards": store.observed_skeleton(deck)}
         recommendation = recommend_best60(Best60Request(
             archetype=deck,
             candidates=candidates,
@@ -190,7 +194,7 @@ def build_model_addons(
             card_rules=store.observed_card_rules(deck),
             skeleton=core["cards"],
         ))
-        recommendation.update({key: core[key] for key in ("legal_list_count", "core_support", "core_share", "core_count")})
+        recommendation.update({key: core[key] for key in ("legal_list_count", "core_support", "core_share", "core_count") if key in core})
         recommendations[deck] = recommendation
     h1_rows = h1_observations(store.pairings_with_decklists("%alakazam%"))
     h1 = fit_h1_misty_variant(h1_rows) if h1_rows else {}

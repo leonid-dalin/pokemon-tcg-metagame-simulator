@@ -86,9 +86,14 @@ def test_report_addons_expand_package_estimates_to_member_card_names(monkeypatch
         def pairings_with_decklists(self, pattern):
             return []
 
-    monkeypatch.setattr("src.ingestion.model.select_panel_decks", lambda *args, **kwargs: ["a"])
-    monkeypatch.setattr("src.ingestion.model_cache.build_model_addons", lambda *args: ("recommendations", "h1", {"model_cache_reused": True}))
-    monkeypatch.setattr(service, "_MODEL_CACHE", {})
+    class Fitted:
+        inclusion = {"a": {"Dreepy + Drakloak": 1.0}}
+        members = {"Dreepy + Drakloak": ("Dreepy", "Drakloak")}
+
+        def coefficient_report(self):
+            return ({"Dreepy": 1.0, "Drakloak": 1.0}, {"Dreepy": (1.0, 1.0), "Drakloak": (1.0, 1.0)})
+
+    monkeypatch.setattr("src.ingestion.model_cache.load_or_fit_card_model", lambda *args: (Fitted(), True))
     db = tmp_path / "limitless.db"
     db.touch()
     recommendations, _ = service.build_report_addons(
@@ -246,7 +251,7 @@ def test_addons_enforce_observed_pokemon_playability_without_card_rules(monkeypa
     monkeypatch.chdir(tmp_path)
     (tmp_path / "data").mkdir()
     (tmp_path / "data" / "limitless.db").touch()
-    monkeypatch.setattr("src.ingestion.model.fit_card_model", lambda *args: Fitted())
+    monkeypatch.setattr("src.ingestion.model_cache.load_or_fit_card_model", lambda *args: (Fitted(), True))
     monkeypatch.setattr("src.ingestion.model.select_model_cards", lambda observations: ["Unobserved Pokemon", "Observed Tech", "Darkness Energy"])
 
     recommendations, _ = service.build_report_addons(Store(), settings())
@@ -507,8 +512,8 @@ def test_prediction_uses_input_path_or_configured_default(monkeypatch):
     monkeypatch.setattr(service, "build_bdif_report", lambda result, *args: result)
     request = PredictionRequest(job_id="job", deck_names=["a", "b"], matchup_matrix=[[.5, .6], [.4, .5]], total_players=4)
 
-    service.run_prediction(request, settings=settings(), input_path="custom.json")
-    service.run_prediction(request, settings=settings())
+    service.run_prediction(request, settings=settings(model_input_path="missing-model.json"), input_path="custom.json")
+    service.run_prediction(request, settings=settings(model_input_path="missing-model.json"))
 
     assert loaded == ["custom.json", "input.json"]
 
