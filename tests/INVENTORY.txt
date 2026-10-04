@@ -16,6 +16,12 @@ tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/
 tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-correct-token-None-401]
 tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-correct-token-correct-token-200]
 tests/api/test_main.py::test_api_token_policy[asyncio-GET-/api/v1/tasks/task-id/stream-correct-token-wrong-token-401]
+tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/bdif/report--None-200]
+tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/bdif/report-None-None-200]
+tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/bdif/report-correct-token--401]
+tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/bdif/report-correct-token-None-401]
+tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/bdif/report-correct-token-correct-token-200]
+tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/bdif/report-correct-token-wrong-token-401]
 tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/predict--None-200]
 tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/predict-None-None-200]
 tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/predict-correct-token--401]
@@ -24,21 +30,26 @@ tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/predict-corre
 tests/api/test_main.py::test_api_token_policy[asyncio-POST-/api/v1/predict-correct-token-wrong-token-401]
 tests/api/test_main.py::test_authenticated_sse_can_report_the_worker_error[asyncio]
 tests/api/test_main.py::test_authenticated_task_status_can_report_the_worker_error[asyncio]
+tests/api/test_main.py::test_bdif_report_endpoint_returns_structured_success
 tests/api/test_main.py::test_protected_endpoints_accept_the_matching_api_token[asyncio-GET-/api/v1/bdif/status]
 tests/api/test_main.py::test_protected_endpoints_accept_the_matching_api_token[asyncio-GET-/api/v1/tasks/task-id/stream]
 tests/api/test_main.py::test_protected_endpoints_accept_the_matching_api_token[asyncio-GET-/api/v1/tasks/task-id]
+tests/api/test_main.py::test_protected_endpoints_accept_the_matching_api_token[asyncio-POST-/api/v1/bdif/report]
 tests/api/test_main.py::test_protected_endpoints_accept_the_matching_api_token[asyncio-POST-/api/v1/predict]
 tests/api/test_main.py::test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-GET-/api/v1/bdif/status]
 tests/api/test_main.py::test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-GET-/api/v1/tasks/task-id/stream]
 tests/api/test_main.py::test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-GET-/api/v1/tasks/task-id]
+tests/api/test_main.py::test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-POST-/api/v1/bdif/report]
 tests/api/test_main.py::test_protected_endpoints_are_open_when_api_token_is_unset[asyncio-POST-/api/v1/predict]
 tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-GET-/api/v1/bdif/status]
 tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-GET-/api/v1/tasks/task-id/stream]
 tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-GET-/api/v1/tasks/task-id]
+tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-POST-/api/v1/bdif/report]
 tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-None-POST-/api/v1/predict]
 tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-GET-/api/v1/bdif/status]
 tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-GET-/api/v1/tasks/task-id/stream]
 tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-GET-/api/v1/tasks/task-id]
+tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-POST-/api/v1/bdif/report]
 tests/api/test_main.py::test_protected_endpoints_reject_missing_and_mismatched_tokens[asyncio-wrong-token-POST-/api/v1/predict]
 tests/api/test_main.py::test_sse_preserves_a_complete_task_termination[asyncio]
 tests/api/test_main.py::test_sse_redacts_worker_errors[asyncio-None-Task failed]
@@ -53,6 +64,10 @@ tests/api/test_main.py::test_task_status_reports_huey_exceptions_as_failed[async
 tests/api/test_main.py::test_unauthenticated_sse_reports_a_generic_task_failure[asyncio]
 tests/api/test_main.py::test_unauthenticated_task_status_reports_a_generic_failure[asyncio]
 tests/api/test_main.py::test_unrelated_routes_do_not_require_an_api_token[asyncio]
+tests/api/test_models.py::test_bdif_request_model_rejects_invalid_archetype_lists[payload0]
+tests/api/test_models.py::test_bdif_request_model_rejects_invalid_archetype_lists[payload1]
+tests/api/test_models.py::test_bdif_request_model_rejects_invalid_archetype_lists[payload2]
+tests/api/test_models.py::test_bdif_request_model_requires_a_canonical_archetype
 tests/api/test_models.py::test_dead_meta_constraints_field_is_rejected
 tests/api/test_models.py::test_panel_decks_are_capped_at_ten
 tests/api/test_models.py::test_panel_decks_must_be_unique_known_decks[panel0-bdif_panel_decks]
@@ -96,6 +111,7 @@ tests/bdif/test_bdif_module_cli.py::test_module_commands_use_current_service_mod
 tests/bdif/test_bdif_module_cli.py::test_module_commands_write_json_only_to_stdout[ingest-run_ingestion-result1]
 tests/bdif/test_bdif_module_cli.py::test_module_commands_write_json_only_to_stdout[refit-refit_card_model-result2]
 tests/bdif/test_bdif_module_cli.py::test_module_commands_write_json_only_to_stdout[status-bdif_status-result0]
+tests/bdif/test_bdif_module_cli.py::test_report_archetype_argument_sets_requested_recommendations
 tests/bdif/test_bdif_module_cli.py::test_report_exit_code_requires_ranked_metrics[None-0]
 tests/bdif/test_bdif_module_cli.py::test_report_exit_code_requires_ranked_metrics[result0-0]
 tests/bdif/test_bdif_module_cli.py::test_report_exit_code_requires_ranked_metrics[result1-0]
@@ -113,9 +129,13 @@ tests/bdif/test_bdif_module_cli.py::test_report_writes_the_printed_report_into_t
 tests/bdif/test_bdif_module_cli.py::test_service_failure_exits_one_with_structured_stderr
 tests/bdif/test_bdif_module_cli.py::test_unavailable_evidence_exits_three
 tests/bdif/test_bdif_service.py::test_addons_enforce_observed_pokemon_playability_without_card_rules
+tests/bdif/test_bdif_service.py::test_addons_include_requested_low_share_archetypes
 tests/bdif/test_bdif_service.py::test_addons_prepare_supplied_store_before_reading
 tests/bdif/test_bdif_service.py::test_addons_report_non_identifiable_for_each_deck
+tests/bdif/test_bdif_service.py::test_addons_report_unknown_requested_archetype
 tests/bdif/test_bdif_service.py::test_addons_skip_store_when_feature_disabled
+tests/bdif/test_bdif_service.py::test_bdif_request_composes_a_fresh_recommendation_on_each_call
+tests/bdif/test_bdif_service.py::test_bdif_request_returns_per_archetype_statuses
 tests/bdif/test_bdif_service.py::test_bdif_status_counts_a_current_store_without_writing
 tests/bdif/test_bdif_service.py::test_bdif_status_reports_an_old_store_without_writing[tables0-incomplete]
 tests/bdif/test_bdif_service.py::test_bdif_status_reports_an_old_store_without_writing[tables1-legacy]
@@ -197,6 +217,10 @@ tests/ingestion/test_features.py::test_inclusion_rates_excludes_ace_spec_violati
 tests/ingestion/test_features.py::test_inclusion_rates_excludes_standings_without_decklists
 tests/ingestion/test_features.py::test_inclusion_rates_returns_empty_for_empty_window
 tests/ingestion/test_features.py::test_inclusion_rates_treats_valid_ace_spec_as_binary_presence
+tests/ingestion/test_model_cache.py::test_card_model_uses_configured_iteration_limit
+tests/ingestion/test_model_cache.py::test_event_bundle_rejects_duplicate_pairing_identity_before_writing
+tests/ingestion/test_model_cache.py::test_fitted_model_cache_is_reused_only_for_matching_database_sha
+tests/ingestion/test_model_cache.py::test_model_cache_with_another_database_sha_is_not_loaded
 tests/ingestion/test_store_connections.py::test_store_operations_close_every_connection
 tests/ingestion/test_store_construction.py::test_store_construction_does_not_read_the_simulation_input
 tests/ingestion/test_store_construction.py::test_store_warning_is_visible_to_an_ordinary_python_caller
@@ -208,8 +232,8 @@ tests/test_bdif_decision_pins.py::test_card_selection_needs_the_minimum_players_
 tests/test_bdif_decision_pins.py::test_catalogue_backfill_fills_missing_names_and_keeps_stored_ones
 tests/test_bdif_decision_pins.py::test_explicitly_unmapped_id_ignores_the_provider_name
 tests/test_bdif_decision_pins.py::test_field_posterior_interval_is_the_central_95_percent_of_draws
-tests/test_bdif_decision_pins.py::test_skeleton_needs_three_quarters_of_legal_lists_to_share_one_core[2-expected1]
-tests/test_bdif_decision_pins.py::test_skeleton_needs_three_quarters_of_legal_lists_to_share_one_core[3-expected0]
+tests/test_bdif_decision_pins.py::test_skeleton_uses_modal_legal_core_and_reports_support[2-expected1]
+tests/test_bdif_decision_pins.py::test_skeleton_uses_modal_legal_core_and_reports_support[3-expected0]
 tests/test_bdif_stage23.py::test_a_card_that_one_deck_plays_in_every_game_is_reported_as_not_identified
 tests/test_bdif_stage23.py::test_a_rarely_played_card_is_no_more_uncertain_than_its_prior
 tests/test_bdif_stage23.py::test_aggregate_normalises_reversed_player_slots_into_one_pair
@@ -304,6 +328,8 @@ tests/test_bdif_stage23.py::test_decklist_card_names_returns_empty_for_invalid_p
 tests/test_bdif_stage23.py::test_decklist_card_names_returns_empty_for_invalid_payloads[{"pokemon": {}}]
 tests/test_bdif_stage23.py::test_decklist_card_names_returns_empty_for_invalid_payloads[{]
 tests/test_bdif_stage23.py::test_decks_that_never_meet_each_other_raise_not_identifiable
+tests/test_bdif_stage23.py::test_event_bundle_records_source_rows_and_counts
+tests/test_bdif_stage23.py::test_event_bundle_rolls_back_when_a_row_cannot_be_serialised
 tests/test_bdif_stage23.py::test_fetch_event_bundle_without_decklists_preserves_pairings
 tests/test_bdif_stage23.py::test_fitted_card_model_recovers_within_archetype_tech_effect
 tests/test_bdif_stage23.py::test_h1_misty_report_changes_when_hammer_variant_is_controlled
@@ -319,6 +345,8 @@ tests/test_bdif_stage23.py::test_model_based_errors_include_the_prior
 tests/test_bdif_stage23.py::test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec
 tests/test_bdif_stage23.py::test_observed_skeleton_uses_high_frequency_cards
 tests/test_bdif_stage23.py::test_observed_skeleton_uses_modal_joint_core_from_legal_sixties
+tests/test_bdif_stage23.py::test_pairing_schema_migration_preserves_existing_rows
+tests/test_bdif_stage23.py::test_pairings_match_label_preserves_repeated_player_pairs
 tests/test_bdif_stage23.py::test_panel_decks_cap_at_ten_after_share_threshold
 tests/test_bdif_stage23.py::test_panel_decks_include_every_empirical_share_above_threshold
 tests/test_bdif_stage23.py::test_player_observations_carry_both_player_ids
