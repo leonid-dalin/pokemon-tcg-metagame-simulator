@@ -202,26 +202,6 @@ def compute_matchup_cycles(
         logger.info("rps_cycles_detected", cycle_count=len(cycles), win_threshold=win_threshold)
         return cycles
 
-def debug_print_rps_cycles(win_matrix: np.ndarray, deck_names: List[str], final_active_mask: Optional[List[bool]] = None) -> None:
-    """Standalone debug function to print all identified RPS cycles with their exact win rates."""
-    cycles = compute_matchup_cycles(win_matrix, deck_names, final_active_mask=final_active_mask)
-
-    if not cycles:
-        logger.debug("rps_cycle_debug_report", cycle_count=0)
-        return
-
-    for idx, cycle in enumerate(cycles):
-        d1, d2, d3 = cycle
-        i, j, k = deck_names.index(d1), deck_names.index(d2), deck_names.index(d3)
-
-        logger.debug(
-            "rps_cycle_detail",
-            cycle_index=idx,
-            d1=d1, wr1=float(win_matrix[i, j]),
-            d2=d2, wr2=float(win_matrix[j, k]),
-            d3=d3, wr3=float(win_matrix[k, i])
-        )
-
 # ----------------------------
 # Deck Archetype Similarity
 # ----------------------------

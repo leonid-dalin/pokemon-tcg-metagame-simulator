@@ -60,38 +60,3 @@ def _valid_decklists(store: LimitlessStore, archetype: str, event_id: str | None
             )
             continue
         yield decklist
-
-
-def inclusion_rates(
-    store: LimitlessStore,
-    archetype: str,
-    window_days: int | float | None = None,
-) -> dict[str, float]:
-    if window_days is None:
-        decklists = _valid_decklists(store, archetype)
-    else:
-        store.prepare_for_read()
-        now = datetime.now(timezone.utc)
-        cutoff = now - timedelta(days=window_days)
-        event_ids = {
-            str(row[0])
-            for row in store.iter_events()
-            if (event_date := _event_date(row[4])) is not None and cutoff <= event_date <= now
-        }
-        decklists = (
-            decklist
-            for event_id in event_ids
-            for decklist in _valid_decklists(store, archetype, event_id)
-        )
-
-    counts: dict[str, int] = {}
-    total_decks = 0
-    for decklist in decklists:
-        names = _card_names(decklist)
-        total_decks += 1
-        for name in names:
-            counts[name] = counts.get(name, 0) + 1
-
-    if not total_decks:
-        return {}
-    return {name: count / total_decks for name, count in sorted(counts.items())}
