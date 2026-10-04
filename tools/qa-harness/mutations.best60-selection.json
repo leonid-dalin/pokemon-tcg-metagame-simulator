@@ -50,7 +50,7 @@
   {
     "name": "let addon failures kill the job again",
     "file": "src/bdif/service.py",
-    "find": "    try:\n        recommendations, h1 = build_report_addons(store, settings)\n    except Exception as exc:\n        logger.warning(\"bdif_report_addons_failed\", error=str(exc), exc_info=True)\n        recommendations, h1 = {}, {}",
+    "find": "    try:\n        if request.bdif_archetypes:\n            recommendations, h1 = build_report_addons(store, settings, request.bdif_archetypes)\n        else:\n            recommendations, h1 = build_report_addons(store, settings)\n    except Exception as exc:\n        logger.warning(\"bdif_report_addons_failed\", error=str(exc), exc_info=True)\n        recommendations, h1 = {}, {}",
     "replace": "    recommendations, h1 = build_report_addons(store, settings)"
   },
   {
