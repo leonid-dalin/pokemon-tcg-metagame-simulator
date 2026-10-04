@@ -44,8 +44,8 @@
   {
     "name": "task4: remove the feature-flag gate",
     "file": "src/bdif/service.py",
-    "find": "    if not settings.use_card_model or not os.path.exists(settings.db_path):\n        return {}, {}\n",
-    "replace": "    if not os.path.exists(settings.db_path):\n        return {}, {}\n"
+    "find": "    if not settings.use_card_model or not os.path.exists(settings.db_path):\n        return {}, {}, {\"model_status\": \"disabled\"}\n",
+    "replace": "    if not os.path.exists(settings.db_path):\n        return {}, {}, {\"model_status\": \"disabled\"}\n"
   },
   {
     "name": "task4: let addon failures kill the job again",
