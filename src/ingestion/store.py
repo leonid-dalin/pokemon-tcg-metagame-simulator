@@ -15,7 +15,7 @@ from src.ingestion.model import ACE_SPEC_CARDS, BASIC_ENERGY_NAMES, PlayerObserv
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tournaments (id TEXT PRIMARY KEY, game TEXT, format TEXT, name TEXT, date TEXT, players INTEGER, details_json TEXT);
 CREATE TABLE IF NOT EXISTS standings (tournament_id TEXT, player_id TEXT, placing INTEGER, wins INTEGER, losses INTEGER, ties INTEGER, deck_id TEXT, deck_name TEXT, decklist_json TEXT, dropped_round INTEGER, PRIMARY KEY (tournament_id, player_id));
-CREATE TABLE IF NOT EXISTS pairings (tournament_id TEXT, round INTEGER, phase INTEGER, player1 TEXT, player2 TEXT, winner TEXT, PRIMARY KEY (tournament_id, round, phase, player1, player2));
+CREATE TABLE IF NOT EXISTS pairings (tournament_id TEXT, round INTEGER, phase INTEGER, match TEXT, player1 TEXT, player2 TEXT, winner TEXT, PRIMARY KEY (tournament_id, round, phase, match, player1, player2));
 """
 
 
@@ -55,6 +55,21 @@ class LimitlessStore:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(standings)")}
             if "deck_name" not in columns:
                 conn.execute("ALTER TABLE standings ADD COLUMN deck_name TEXT")
+            pairing_columns = {row[1] for row in conn.execute("PRAGMA table_info(pairings)")}
+            if "match" not in pairing_columns:
+                conn.execute("ALTER TABLE pairings RENAME TO pairings_legacy")
+                conn.execute(
+                    "CREATE TABLE pairings (tournament_id TEXT, round INTEGER, phase INTEGER, match TEXT, player1 TEXT, player2 TEXT, winner TEXT, PRIMARY KEY (tournament_id, round, phase, match, player1, player2))"
+                )
+                legacy_columns = {row[1] for row in conn.execute("PRAGMA table_info(pairings_legacy)")}
+                round_expr = "round" if "round" in legacy_columns else "0"
+                phase_expr = "phase" if "phase" in legacy_columns else "0"
+                conn.execute(
+                    f"INSERT INTO pairings (tournament_id, round, phase, match, player1, player2, winner) SELECT tournament_id, {round_expr}, {phase_expr}, '', player1, player2, winner FROM pairings_legacy"
+                )
+                if conn.execute("SELECT COUNT(*) FROM pairings_legacy").fetchone()[0] != conn.execute("SELECT COUNT(*) FROM pairings").fetchone()[0]:
+                    raise sqlite3.IntegrityError("pairing migration changed the row count")
+                conn.execute("DROP TABLE pairings_legacy")
         self._schema_ready = True
 
     def prepare_for_read(self) -> None:
@@ -109,6 +124,52 @@ class LimitlessStore:
             for (raw,) in rows:
                 if raw and raw != "null":
                     yield json.loads(raw)
+
+    def upsert_event_bundle(
+        self,
+        event: dict[str, Any],
+        details: dict[str, Any],
+        standings: Iterable[dict[str, Any]],
+        pairings: Iterable[dict[str, Any]],
+        deck_names: dict[str, str] | None = None,
+    ) -> None:
+        self.ensure_schema()
+        event_id = str(event["id"])
+        pairing_rows = list(pairings)
+        identities = [
+            (
+                event_id,
+                row.get("round", 0),
+                row.get("phase", 0),
+                str(row.get("match") or ""),
+                str(row.get("player1") or ""),
+                str(row.get("player2") or ""),
+            )
+            for row in pairing_rows
+        ]
+        if len(identities) != len(set(identities)):
+            raise sqlite3.IntegrityError("duplicate pairing identity")
+        with self.connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO tournaments (id, game, format, name, date, players, details_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (event_id, event.get("game"), event.get("format"), event.get("name"), event.get("date"), event.get("players"), json.dumps({"source": "Limitless developer API", "catalogue_event": event, "event_details": details})),
+            )
+            conn.execute("DELETE FROM standings WHERE tournament_id=?", (event_id,))
+            conn.execute("DELETE FROM pairings WHERE tournament_id=?", (event_id,))
+            for row in standings:
+                record = row.get("record") or {}
+                deck = row.get("deck") or {}
+                deck_id = deck.get("id")
+                deck_name = self._resolve_deck_name(deck_id, deck.get("name") or (deck_names or {}).get(deck_id))
+                conn.execute(
+                    "INSERT OR REPLACE INTO standings (tournament_id, player_id, placing, wins, losses, ties, deck_id, deck_name, decklist_json, dropped_round) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (event_id, str(row.get("player", row.get("name", ""))), row.get("placing"), record.get("wins", 0), record.get("losses", 0), record.get("ties", 0), deck_id, deck_name, json.dumps(row.get("decklist")) if row.get("decklist") is not None else None, row.get("drop")),
+                )
+            for row in pairing_rows:
+                conn.execute(
+                    "INSERT OR REPLACE INTO pairings (tournament_id, round, phase, match, player1, player2, winner) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (event_id, row.get("round", 0), row.get("phase", 0), str(row.get("match") or ""), str(row.get("player1") or ""), str(row.get("player2") or ""), str(row.get("winner")) if row.get("winner") is not None else ""),
+                )
 
     def upsert_tournament(self, row: dict[str, Any], details: dict[str, Any]) -> None:
         self.ensure_schema()
@@ -194,11 +255,12 @@ class LimitlessStore:
         return deck_name if deck_name and deck_name.strip() else None
 
     def upsert_pairings(self, tournament_id: str, rows: Iterable[dict[str, Any]]) -> None:
+        self.ensure_schema()
         with self.connect() as conn:
             for row in rows:
-                conn.execute("INSERT OR REPLACE INTO pairings (tournament_id, round, phase, player1, player2, winner) VALUES (?, ?, ?, ?, ?, ?)", (
-                    tournament_id, row.get("round", 0), row.get("phase", 0), str(row.get("player1", "")),
-                    str(row.get("player2", "")), str(row.get("winner", ""))
+                conn.execute("INSERT OR REPLACE INTO pairings (tournament_id, round, phase, match, player1, player2, winner) VALUES (?, ?, ?, ?, ?, ?, ?)", (
+                    tournament_id, row.get("round", 0), row.get("phase", 0), str(row.get("match") or ""),
+                    str(row.get("player1", "")), str(row.get("player2", "")), str(row.get("winner", ""))
                 ))
 
     def iter_events(self):
@@ -294,10 +356,52 @@ class LimitlessStore:
             ))
         return observations
 
-    def observed_skeleton(self, archetype: str) -> list[dict[str, object]]:
+    def player_observations(self) -> list[PlayerObservation]:
+        self.prepare_for_read()
+        query = """
+        SELECT s1.deck_name, s2.deck_name, s1.decklist_json, s2.decklist_json,
+               p.winner, p.player1, p.player2
+        FROM pairings p
+        JOIN standings s1 ON s1.tournament_id=p.tournament_id AND s1.player_id=p.player1
+        JOIN standings s2 ON s2.tournament_id=p.tournament_id AND s2.player_id=p.player2
+        WHERE p.player1 != '' AND p.player2 != '' AND p.winner NOT IN ('0', '-1', '')
+          AND s1.deck_name IS NOT NULL AND s2.deck_name IS NOT NULL
+          AND s1.decklist_json IS NOT NULL AND s2.decklist_json IS NOT NULL
+        """
+        with self.connect() as conn:
+            rows = conn.execute(query).fetchall()
+        observations = []
+        for deck, opponent, decklist, opponent_decklist, winner, player1, player2 in rows:
+            deck_cards = _decklist_card_names(decklist)
+            opponent_cards = _decklist_card_names(opponent_decklist)
+            if not deck_cards or not opponent_cards:
+                continue
+            if str(winner) == str(player1):
+                result = 1
+            elif str(winner) == str(player2):
+                result = 0
+            else:
+                continue
+            observations.append(PlayerObservation(
+                str(deck), str(opponent), deck_cards, opponent_cards, result, (str(player1), str(player2)),
+            ))
+        return observations
+
+    def tournament_date_range(self) -> tuple[str | None, str | None]:
+        with self.connect() as conn:
+            return conn.execute("SELECT MIN(date), MAX(date) FROM tournaments").fetchone()
+
+    def matchup_games_by_archetype(self) -> dict[str, int]:
+        totals: dict[str, int] = {}
+        for row in self.aggregate_rows():
+            if not row.get("deck1") or not row.get("deck2") or row["deck1"] == row["deck2"]:
+                continue
+            for deck in (row["deck1"], row["deck2"]):
+                totals[str(deck)] = totals.get(str(deck), 0) + 1
+        return totals
+
+    def observed_skeleton_details(self, archetype: str) -> dict[str, Any]:
         raw_rows = list(self._decklists(archetype))
-        if not raw_rows:
-            return []
         legal_rows = []
         for decklist in raw_rows:
             cards = []
@@ -315,7 +419,7 @@ class LimitlessStore:
                         profile.append((group_name, card, copies))
             rules = {
                 row["card"]: {"ace_spec": True} if row["card"] in ACE_SPEC_CARDS else
-                {"basic_energy": True} if row["card"] in {"Grass Energy", "Fire Energy", "Water Energy", "Lightning Energy", "Psychic Energy", "Fighting Energy", "Darkness Energy", "Metal Energy"} else {}
+                {"basic_energy": True} if row["card"] in BASIC_ENERGY_NAMES else {}
                 for row in cards
             }
             if sum(row["copies"] for row in cards) != 60:
@@ -324,21 +428,28 @@ class LimitlessStore:
                 validate_recommendation(cards, card_rules=rules)
             except ValueError:
                 continue
-            legal_rows.append((tuple(sorted(profile)), cards))
+            legal_rows.append(tuple(sorted(profile)))
         if not legal_rows:
-            return []
+            return {"cards": [], "legal_list_count": 0, "core_support": 0, "core_share": 0.0, "core_count": 0}
         profiles: dict[tuple[tuple[str, int], ...], int] = {}
-        for profile, _ in legal_rows:
+        for profile in legal_rows:
             profiles[profile] = profiles.get(profile, 0) + 1
         modal_profile, support = max(profiles.items(), key=lambda item: (item[1], item[0]))
-        if support / len(legal_rows) < 0.75:
-            return []
-        result = []
-        for group_name, card, copies in sorted(modal_profile, key=lambda item: (0 if item[0] == "pokemon" else 1, item[1])):
-            if card in ACE_SPEC_CARDS:
-                continue
-            result.append({"card": card, "copies": min(copies, _card_limit(card, {})) if _card_limit(card, {}) is not None else copies})
-        return result
+        result = [
+            {"card": card, "copies": min(copies, _card_limit(card, {})) if _card_limit(card, {}) is not None else copies}
+            for _, card, copies in sorted(modal_profile, key=lambda item: (0 if item[0] == "pokemon" else 1, item[1]))
+            if card not in ACE_SPEC_CARDS
+        ]
+        return {
+            "cards": result,
+            "legal_list_count": len(legal_rows),
+            "core_support": support,
+            "core_share": support / len(legal_rows),
+            "core_count": len(profiles),
+        }
+
+    def observed_skeleton(self, archetype: str) -> list[dict[str, object]]:
+        return self.observed_skeleton_details(archetype)["cards"]
 
     def deck_weights(self, archetypes: Iterable[str] | None = None) -> dict[str, float]:
         self.prepare_for_read()

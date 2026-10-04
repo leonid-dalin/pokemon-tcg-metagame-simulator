@@ -1,7 +1,5 @@
-import hashlib
-import json
+from pathlib import Path
 import os
-from copy import deepcopy
 from typing import Sequence
 
 import numpy as np
@@ -12,24 +10,23 @@ from src.core import config
 from src.core.logger import logger
 from src.core.data import load_matchup_data
 from src.core.scraper import normalize_archetype
-from src.ingestion.model import PlayerObservation
+from src.ingestion.model import PlayerObservation, select_panel_decks
 from src.tournament.monte_carlo import run_monte_carlo_analytics
 from src.tournament.reporting import build_bdif_report
 from src.tournament.solver import predict_best_decks, get_variant_5_structure, swiss_rounds_from_players
 
-_MODEL_CACHE: dict[tuple[str, float], tuple[dict, dict]] = {}
+_MODEL_CACHE = {}
 
 
 def _file_sha256(path: str) -> str | None:
     if not os.path.isfile(path):
         return None
+    import hashlib
     digest = hashlib.sha256()
     with open(path, "rb") as handle:
         for block in iter(lambda: handle.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
-
-
 def _has_complete_observations(observations: Sequence[PlayerObservation]) -> bool:
     return len(observations) >= 4 and len({row.result for row in observations}) == 2
 
@@ -80,58 +77,100 @@ def panel_decks_for_report(deck_names: list[str] | None = None, store=None, sett
     return map_panel_decks_to_matrix(selected, deck_names or [])
 
 
-def build_report_addons(store=None, settings: BdifSettings | None = None) -> tuple[dict, dict]:
+def _build_report_addons(
+    store=None,
+    settings: BdifSettings | None = None,
+    requested_archetypes: Sequence[str] | None = None,
+) -> tuple[dict, dict, dict]:
     settings = settings or BdifSettings.from_environment()
     if not settings.use_card_model or not os.path.exists(settings.db_path):
-        return {}, {}
-    from src.ingestion.model import Best60Request, CardModelNotIdentifiable, fit_card_model, select_model_cards, fit_h1_misty_variant, h1_observations, recommend_best60, select_panel_decks
+        return {}, {}, {"model_status": "disabled"}
+    from src.ingestion.model_cache import build_model_addons
     store = store or open_store(settings)
     store.prepare_for_read()
-    key = (os.path.abspath(settings.db_path), float(os.path.getmtime(settings.db_path)))
-    if key in _MODEL_CACHE:
-        result = _MODEL_CACHE[key]
-        return deepcopy(result[0]), deepcopy(result[1])
-    _MODEL_CACHE.clear()
+    database_sha256 = _file_sha256(settings.db_path)
+    if database_sha256 is None:
+        return {deck: {"status": "missing"} for deck in requested}, {}, {"model_status": "missing"}
+    if settings.model_cache_path:
+        cache_path = Path(settings.model_cache_path)
+    else:
+        cache_path = Path(settings.db_path).with_suffix(".model.json")
     weights = store.deck_weights()
+    requested = tuple(requested_archetypes or ())
     if not weights:
-        return {}, {}
-    top = select_panel_decks(weights, threshold=settings.panel_share_threshold)
+        return {}, {}, {"database_sha256": database_sha256, "model_status": "insufficient observations"}
+    top = [deck for deck in requested if deck in weights] if requested else select_panel_decks(weights, threshold=settings.panel_share_threshold)
+    unknown = {deck: {"status": "unknown archetype"} for deck in requested if deck not in weights}
+    if not top:
+        return unknown, {}, {"database_sha256": database_sha256}
     observations = store.player_observations()
     if not _has_complete_observations(observations):
-        return {deck: {"status": "insufficient stored observations"} for deck in top}, {}
-    try:
-        fitted = fit_card_model(observations, select_model_cards(observations))
-    except CardModelNotIdentifiable as exc:
-        return {deck: {"status": "not identifiable", "reason": str(exc)} for deck in top}, {}
-    coefficients, intervals = fitted.coefficient_report()
-    inclusion = fitted.inclusion
-    candidates = sorted({card for cards in inclusion.values() for card in cards})
-    recommendations = {
-        deck: recommend_best60(Best60Request(
-            archetype=deck, candidates=candidates, coefficients=coefficients,
-            coefficient_intervals=intervals, inclusion=inclusion, meta_weights=weights,
-            playable_cards=store.observed_cards(deck), observed_pokemon_cards=store.observed_pokemon_cards(deck), card_rules=store.observed_card_rules(deck), skeleton=store.observed_skeleton(deck),
-        )) for deck in top
+        return {**unknown, **{deck: {"status": "insufficient stored observations"} for deck in top}}, {}, {
+            "database_sha256": database_sha256,
+            "model_status": "insufficient observations",
+        }
+    import src.ingestion.model_cache as model_cache
+    recommendations, h1, model_provenance = model_cache.build_model_addons(
+        observations,
+        weights,
+        top,
+        database_sha256,
+        cache_path,
+        store,
+    )
+    if not isinstance(recommendations, dict):
+        recommendations = {deck: {"status": "complete"} for deck in top}
+    return {**unknown, **recommendations}, h1, model_provenance
+
+
+def build_report_addons(
+    store=None,
+    settings: BdifSettings | None = None,
+    requested_archetypes: Sequence[str] | None = None,
+) -> tuple[dict, dict]:
+    recommendations, h1, _ = _build_report_addons(store, settings, requested_archetypes)
+    return recommendations, h1
+
+
+def request_bdif_report(
+    archetype: str,
+    additional_archetypes: Sequence[str] | None = None,
+    settings: BdifSettings | None = None,
+    store=None,
+) -> dict:
+    settings = settings or BdifSettings.from_environment()
+    requested = [archetype, *(additional_archetypes or ())]
+    if not settings.use_card_model:
+        return {
+            "status": "unavailable",
+            "best60_recommendations": {deck: {"status": "disabled"} for deck in requested},
+            "provenance": {"model_status": "disabled"},
+        }
+    recommendations, h1, provenance = _build_report_addons(store, settings, requested)
+    statuses = [recommendation.get("status", "complete") for recommendation in recommendations.values()]
+    status = "complete" if statuses and all(value == "complete" for value in statuses) else "partial"
+    return {
+        "status": status,
+        "best60_recommendations": recommendations,
+        "h1_report": h1,
+        "provenance": provenance,
     }
-    rows = store.pairings_with_decklists("%alakazam%")
-    h1_data = h1_observations(rows)
-    result = (recommendations, fit_h1_misty_variant(h1_data) if h1_data else {})
-    _MODEL_CACHE[key] = deepcopy(result)
-    return deepcopy(result[0]), deepcopy(result[1])
 
 
 def refit_card_model(settings: BdifSettings | None = None) -> dict:
     settings = settings or BdifSettings.from_environment()
     if not os.path.exists(settings.db_path):
         return {"status": "missing", "db_path": settings.db_path}
-    from src.ingestion.model import CardModelNotIdentifiable, fit_card_model, model_artifact, select_model_cards
+    from src.ingestion.model import CardModelNotIdentifiable, model_artifact
     from src.ingestion.store import LimitlessStore
+    from src.ingestion.model_cache import load_or_fit_card_model
     store = LimitlessStore(settings.db_path)
     observations = store.player_observations()
     if not _has_complete_observations(observations):
         return {"status": "insufficient observations"}
+    database_sha256 = _file_sha256(settings.db_path)
     try:
-        fitted = fit_card_model(observations, select_model_cards(observations))
+        fitted, reused = load_or_fit_card_model(observations, database_sha256, settings.model_cache_path)
     except CardModelNotIdentifiable:
         return {"status": "not identifiable"}
     os.makedirs(os.path.dirname(settings.model_input_path), exist_ok=True)
@@ -140,7 +179,11 @@ def refit_card_model(settings: BdifSettings | None = None) -> dict:
     return {
         "status": "complete",
         "path": settings.model_input_path,
-        "card_packages": sorted(fitted.packages),
+        "model_cache_path": settings.model_cache_path,
+        "database_sha256": database_sha256,
+        "model_cache_reused": reused,
+        "model_max_iter": 10_000,
+        "card_packages": list(fitted.packages),
         "not_identified": fitted.not_identified,
     }
 

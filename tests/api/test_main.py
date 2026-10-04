@@ -7,10 +7,30 @@ import pytest
 from src.api import main
 
 
+
+
+@pytest.mark.anyio
+def test_bdif_report_endpoint_returns_structured_success(monkeypatch):
+    captured = []
+
+    async def to_thread(function, *args):
+        captured.append((function, args))
+        return {"status": "partial", "best60_recommendations": {"missing": {"status": "unknown archetype"}}}
+
+    monkeypatch.setattr(main.asyncio, "to_thread", to_thread)
+    monkeypatch.setattr(main.BdifSettings, "from_environment", classmethod(lambda cls: "settings"))
+    payload = main.BdifReportRequest(archetype="missing", additional_archetypes=["crustle"])
+    result = asyncio.run(main.post_bdif_report(request_for("POST", "/api/v1/bdif/report"), payload))
+
+    assert captured == [(main.request_bdif_report, ("missing", ["crustle"], "settings"))]
+    assert result == {"status": "partial", "best60_recommendations": {"missing": {"status": "unknown archetype"}}}
+
+
 PROTECTED_ENDPOINTS = (
     ("POST", "/api/v1/predict"),
     ("GET", "/api/v1/tasks/task-id"),
     ("GET", "/api/v1/tasks/task-id/stream"),
+    ("POST", "/api/v1/bdif/report"),
     ("GET", "/api/v1/bdif/status"),
 )
 

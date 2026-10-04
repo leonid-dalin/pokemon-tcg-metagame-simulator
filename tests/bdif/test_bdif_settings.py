@@ -26,6 +26,7 @@ def test_from_environment_uses_live_config_defaults(monkeypatch):
     assert settings.db_path == "data/limitless.db"
     assert settings.ingestion_input_path == "data/input/limitless_input.json"
     assert settings.model_input_path == "data/input/limitless_model_input.json"
+    assert settings.model_cache_path == "data/input/limitless_model_fit.json"
 
 
 def test_from_environment_parses_boolean_aliases(monkeypatch):
