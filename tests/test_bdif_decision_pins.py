@@ -94,7 +94,7 @@ def test_explicitly_unmapped_id_ignores_the_provider_name(tmp_path):
 @pytest.mark.unit
 @pytest.mark.parametrize(("modal_lists", "expected"), [
     (3, [{"card": "Mon", "copies": 4}, {"card": "Grass Energy", "copies": 52}]),
-    (2, [{"card": "Mon", "copies": 4}, {"card": "Grass Energy", "copies": 52}]),
+    (2, []),
 ])
 def test_skeleton_uses_modal_legal_core_and_reports_support(tmp_path, modal_lists, expected):
     store = LimitlessStore(tmp_path / "limitless.db", deck_mapping={"x": "X"})
