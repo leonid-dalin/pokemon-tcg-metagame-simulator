@@ -35,7 +35,7 @@ The SSE stream has a ten-minute lifetime. It first reads the stored progress val
 
 The default data path is `data/input/ea_input.json`. The loader returns deck names, a NumPy win-rate matrix, and matchup details. The matrix contract requires values from `0.0` to `1.0`, exact `0.5` mirrors, and paired values that sum to `1.0`
 
-The daily pipeline fetches live Limitless matchup pages, validates the resulting matrix with `ScrapedMatrix`, and writes the JSON input atomically. The separate Limitless ingestion task stores tournament data in SQLite and can produce card-model artefacts for opt-in BDIF reporting
+The daily pipeline fetches live Limitless matchup pages, validates the resulting matrix with `ScrapedMatrix`, and writes the JSON input atomically. The separate Limitless ingestion task stores tournament data in SQLite and can produce card-model artefacts for opt-in statistical Best-60 selection
 
 ## Engines
 

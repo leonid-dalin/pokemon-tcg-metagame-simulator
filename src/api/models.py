@@ -132,7 +132,7 @@ class PredictionRequest(BaseModel):
     use_tie_convergence: bool = Field(default=True)
     use_drop_feature: bool = Field(default=False)
 
-    # 7. BDIF reporting
+    # 7. Statistical Best-60 selection
     bdif_panel_decks: Optional[List[str]] = Field(default=None, max_length=10)
     bdif_archetypes: Optional[List[str]] = Field(default=None, max_length=10)
 

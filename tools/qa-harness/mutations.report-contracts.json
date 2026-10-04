@@ -104,8 +104,8 @@
   {
     "name": "store drops player ids",
     "file": "src/ingestion/store.py",
-    "find": "                str(deck), str(opponent), deck_cards, opponent_cards, result, (str(player1), str(player2)),",
-    "replace": "                str(deck), str(opponent), deck_cards, opponent_cards, result, None,"
+    "find": "    def player_observations(self) -> list[PlayerObservation]:\n        self.prepare_for_read()\n        query = \"\"\"\n        SELECT s1.deck_name, s2.deck_name, s1.decklist_json, s2.decklist_json,\n               p.winner, p.player1, p.player2\n        FROM pairings p\n        JOIN standings s1 ON s1.tournament_id=p.tournament_id AND s1.player_id=p.player1\n        JOIN standings s2 ON s2.tournament_id=p.tournament_id AND s2.player_id=p.player2\n        WHERE p.player1 != '' AND p.player2 != '' AND p.winner NOT IN ('0', '-1', '')\n          AND s1.deck_name IS NOT NULL AND s2.deck_name IS NOT NULL\n          AND s1.decklist_json IS NOT NULL AND s2.decklist_json IS NOT NULL\n        \"\"\"\n        with self.connect() as conn:\n            rows = conn.execute(query).fetchall()\n        observations = []\n        for deck, opponent, decklist, opponent_decklist, winner, player1, player2 in rows:\n            deck_cards = _decklist_card_names(decklist)\n            opponent_cards = _decklist_card_names(opponent_decklist)\n            if not deck_cards or not opponent_cards:\n                continue\n            if str(winner) == str(player1):\n                result = 1\n            elif str(winner) == str(player2):\n                result = 0\n            else:\n                continue\n            observations.append(PlayerObservation(\n                str(deck), str(opponent), deck_cards, opponent_cards, result, (str(player1), str(player2)),\n            ))\n        return observations",
+    "replace": "    def player_observations(self) -> list[PlayerObservation]:\n        self.prepare_for_read()\n        query = \"\"\"\n        SELECT s1.deck_name, s2.deck_name, s1.decklist_json, s2.decklist_json,\n               p.winner, p.player1, p.player2\n        FROM pairings p\n        JOIN standings s1 ON s1.tournament_id=p.tournament_id AND s1.player_id=p.player1\n        JOIN standings s2 ON s2.tournament_id=p.tournament_id AND s2.player_id=p.player2\n        WHERE p.player1 != '' AND p.player2 != '' AND p.winner NOT IN ('0', '-1', '')\n          AND s1.deck_name IS NOT NULL AND s2.deck_name IS NOT NULL\n          AND s1.decklist_json IS NOT NULL AND s2.decklist_json IS NOT NULL\n        \"\"\"\n        with self.connect() as conn:\n            rows = conn.execute(query).fetchall()\n        observations = []\n        for deck, opponent, decklist, opponent_decklist, winner, player1, player2 in rows:\n            deck_cards = _decklist_card_names(decklist)\n            opponent_cards = _decklist_card_names(opponent_decklist)\n            if not deck_cards or not opponent_cards:\n                continue\n            if str(winner) == str(player1):\n                result = 1\n            elif str(winner) == str(player2):\n                result = 0\n            else:\n                continue\n            observations.append(PlayerObservation(\n                str(deck), str(opponent), deck_cards, opponent_cards, result, None,\n            ))\n        return observations"
   },
   {
     "name": "binomial SE in posterior mode",
@@ -206,8 +206,8 @@
   {
     "name": "skeleton accepts minority profile",
     "file": "src/ingestion/store.py",
-    "find": "    if support / len(legal_rows) < 0.75:",
-    "replace": "    if support / len(legal_rows) < 0.0:"
+    "find": "        modal_profile, support = max(profiles.items(), key=lambda item: (item[1], item[0]))",
+    "replace": "        return {\"cards\": [], \"legal_list_count\": 0, \"core_support\": 0, \"core_share\": 0.0, \"core_count\": 0}\n        profiles = {}"
   },
   {
     "name": "pagination stops after the first page",
@@ -314,7 +314,7 @@
   {
     "name": "refit hides the card packages",
     "file": "src/bdif/service.py",
-    "find": "        \"card_packages\": sorted(fitted.packages),",
+    "find": "        \"card_packages\": list(fitted.packages),",
     "replace": "        \"card_packages\": [],"
   }
 ]
