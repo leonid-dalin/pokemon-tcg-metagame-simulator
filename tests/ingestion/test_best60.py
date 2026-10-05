@@ -17,6 +17,7 @@ from src.ingestion.best60 import (
     trends,
     card_stats,
 )
+from src.ingestion.model import validate_recommendation
 
 
 
@@ -229,6 +230,20 @@ def test_no_legal_lists_is_a_status_not_an_error():
     result = build_best60("X", [_row("e", "p", [("Mon", 4, "pokemon")])], {})
     assert result["status"] == "no legal lists"
     assert result["cards"] == []
+
+
+@pytest.mark.parametrize("copies", range(0, 61, 4))
+@pytest.mark.parametrize("extra_ace_specs", [0, 1, 2])
+def test_best60_legality_matrix_returns_legal_sixty_or_status(copies, extra_ace_specs):
+    cards = [("Mon", 4, "pokemon"), ("Grass Energy", 56 - copies, "energy")]
+    if copies:
+        cards.append(("Tech A", copies, "trainer"))
+    if extra_ace_specs:
+        cards.extend((f"ACE {index}", 1, "trainer") for index in range(extra_ace_specs))
+    result = build_best60("X", [_row("e", "p", cards)], {})
+    assert result["status"] == "no legal lists" or result["total_copies"] == 60
+    if result["status"] != "no legal lists":
+        validate_recommendation(result["cards"])
 
 
 @pytest.mark.unit
