@@ -2,7 +2,7 @@
 
 ## Scope and status
 
-The importer targets the non-Pocket Pokémon TCG (`PTCG`) Standard format, whose decklists contain 60 cards. It does not ingest Pokémon TCG Pocket data. Ingestion and card-model reporting are opt-in; both `LIMITLESS_INGESTION_ENABLED` and `BDIF_USE_CARD_MODEL` default to `False`.
+The importer targets the Pokémon TCG (`PTCG`) Standard format, whose decklists contain 60 cards. It does not ingest Pokémon TCG Pocket data. Ingestion and statistical Best-60 selection are opt-in; both `LIMITLESS_INGESTION_ENABLED` and `BDIF_USE_CARD_MODEL` default to `False`.
 
 Event ingestion and reporting remain blocked when supported event IDs cannot be resolved. Tournament IDs are required to fetch details, standings, and pairings; do not treat unresolved IDs as a usable event source. No live API call is required to inspect or report on already stored local data.
 
@@ -24,6 +24,8 @@ List endpoints must return JSON lists and details must return a JSON object. The
 
 `BDIF_DB_PATH` selects the SQLite database and defaults to `data/limitless.db`. The store creates parent directories and maintains three tables:
 
+The default database is tracked with Git LFS. Install Git LFS before cloning, then run `git lfs pull` from the repository root. Without LFS, `data/limitless.db` is a pointer file and SQLite cannot open it.
+
 | Table | Stored fields |
 | --- | --- |
 | `tournaments` | Event `id` primary key; game, format, name, date, player count, and raw details JSON. |
@@ -32,7 +34,7 @@ List endpoints must return JSON lists and details must return a JSON object. The
 
 The store can add a missing `standings.deck_name` column to an older database when a writing command runs; `status` reads the database without changing it. It retains event responses and decklists as JSON text; aggregate calculations derive matchup and card observations from those records.
 
-The ingestion aggregate is written atomically to `limitless_input.json` in `BDIF_ARTIFACT_DIR`, which defaults to `data/input`. A fitted model artefact, when identifiable, is written to `limitless_model_input.json` in the same directory. The normal simulation input remains `data/input/ea_input.json`. The BDIF settings select the baseline input unless card-model reporting is enabled and the model artefact exists. If the flag is enabled but the artefact is missing, the service logs `card_model_artifact_missing` with the expected path and uses the baseline input. It never substitutes an empty or partially fitted model.
+The ingestion aggregate is written atomically to `limitless_input.json` in `BDIF_ARTIFACT_DIR`, which defaults to `data/input`. A fitted model artefact, when identifiable, is written to `limitless_model_input.json` in the same directory. The normal simulation input remains `data/input/ea_input.json`. The BDIF settings select the baseline input unless statistical Best-60 selection is enabled and the model artefact exists. If the flag is enabled but the artefact is missing, the service logs `card_model_artifact_missing` with the expected path and uses the baseline input. It never substitutes an empty or partially fitted model.
 
 ## Archetype mapping
 

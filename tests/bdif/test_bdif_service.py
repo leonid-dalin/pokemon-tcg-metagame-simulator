@@ -77,14 +77,23 @@ def test_report_addons_expand_package_estimates_to_member_card_names(monkeypatch
         def observed_card_rules(self, deck):
             return {card: {"type": "pokemon"} for card in ("Dreepy", "Drakloak")}
 
+        def observed_skeleton_details(self, deck):
+            return {"cards": [{"card": "Darkness Energy", "copies": 60}], "legal_list_count": 4, "core_support": 4, "core_share": 1.0, "core_count": 1}
+
         def observed_skeleton(self, deck):
-            return [{"card": "Darkness Energy", "copies": 60}]
+            return self.observed_skeleton_details(deck)["cards"]
 
         def pairings_with_decklists(self, pattern):
             return []
 
-    monkeypatch.setattr("src.ingestion.model.select_panel_decks", lambda *args, **kwargs: ["a"])
-    monkeypatch.setattr(service, "_MODEL_CACHE", {})
+    class Fitted:
+        inclusion = {"a": {"Dreepy + Drakloak": 1.0}}
+        members = {"Dreepy + Drakloak": ("Dreepy", "Drakloak")}
+
+        def coefficient_report(self):
+            return ({"Dreepy": 1.0, "Drakloak": 1.0}, {"Dreepy": (1.0, 1.0), "Drakloak": (1.0, 1.0)})
+
+    monkeypatch.setattr("src.ingestion.model_cache.load_or_fit_card_model", lambda *args: (Fitted(), True))
     db = tmp_path / "limitless.db"
     db.touch()
     recommendations, _ = service.build_report_addons(
@@ -99,11 +108,74 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+@pytest.mark.unit
+
+def test_bdif_request_composes_a_fresh_recommendation_on_each_call(monkeypatch, tmp_path):
+    calls = []
+
+    class Store:
+        def prepare_for_read(self):
+            pass
+
+        def deck_weights(self):
+            return {"a": 1.0}
+
+        def player_observations(self):
+            return [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), 1)] * 2 + [
+                PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 0)
+            ] * 2
+
+    def compose(*args):
+        calls.append(len(calls) + 1)
+        return ({"a": {"status": "complete", "cards": [{"card": "Tech", "copies": calls[-1]}]}}, {}, {"model_cache_reused": True})
+
+    db = tmp_path / "limitless.db"
+    db.touch()
+    monkeypatch.setattr("src.ingestion.model_cache.build_model_addons", compose)
+
+    first = service.request_bdif_report("a", settings=settings(db_path=str(db)), store=Store())
+    second = service.request_bdif_report("a", settings=settings(db_path=str(db)), store=Store())
+
+    assert calls == [1, 2]
+    assert first["best60_recommendations"]["a"]["cards"] != second["best60_recommendations"]["a"]["cards"]
+    assert not (tmp_path / "limitless_model_input.json").exists()
+
+
+@pytest.mark.unit
+def test_bdif_request_returns_per_archetype_statuses(monkeypatch, tmp_path):
+    class Store:
+        def prepare_for_read(self):
+            pass
+
+        def deck_weights(self):
+            return {"a": 1.0}
+
+        def player_observations(self):
+            return []
+
+    db = tmp_path / "limitless.db"
+    db.touch()
+
+    result = service.request_bdif_report(
+        "missing",
+        ["a"],
+        settings=settings(db_path=str(db)),
+        store=Store(),
+    )
+
+    assert result["status"] == "partial"
+    assert result["best60_recommendations"] == {
+        "missing": {"status": "unknown archetype"},
+        "a": {"status": "insufficient stored observations"},
+    }
+
 def settings(**overrides):
-    values = dict(use_card_model=True, ingestion_enabled=False, db_path="data/limitless.db", baseline_input_path="input.json", ingestion_input_path="data/input/limitless_input.json", model_input_path="data/input/limitless_model_input.json", panel_share_threshold=0.01, panel_max_decks=10, fallback_panel_decks=("fallback",), backfill_limit=10)
+    values = dict(use_card_model=True, ingestion_enabled=False, db_path="data/limitless.db", baseline_input_path="input.json", ingestion_input_path="data/input/limitless_input.json", model_input_path="data/input/limitless_model_input.json", model_cache_path="data/input/limitless_model_fit.json", panel_share_threshold=0.01, panel_max_decks=10, fallback_panel_decks=("fallback",), backfill_limit=10)
     values.update(overrides)
     return BdifSettings(**values)
 
+
+@pytest.mark.unit
 
 @pytest.mark.unit
 def test_panel_decks_map_limitless_ids_to_simulation_names(monkeypatch, tmp_path):
@@ -179,7 +251,7 @@ def test_addons_enforce_observed_pokemon_playability_without_card_rules(monkeypa
     monkeypatch.chdir(tmp_path)
     (tmp_path / "data").mkdir()
     (tmp_path / "data" / "limitless.db").touch()
-    monkeypatch.setattr("src.ingestion.model.fit_card_model", lambda *args: Fitted())
+    monkeypatch.setattr("src.ingestion.model_cache.load_or_fit_card_model", lambda *args: (Fitted(), True))
     monkeypatch.setattr("src.ingestion.model.select_model_cards", lambda observations: ["Unobserved Pokemon", "Observed Tech", "Darkness Energy"])
 
     recommendations, _ = service.build_report_addons(Store(), settings())
@@ -195,11 +267,15 @@ def test_addons_report_non_identifiable_for_each_deck(monkeypatch, tmp_path):
         def deck_weights(self): return {"a": 0.5, "b": 0.5}
         def player_observations(self):
             return [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), 1)] * 2 + [PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 0)] * 2
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "data").mkdir()
-    (tmp_path / "data" / "limitless.db").touch()
-    monkeypatch.setattr("src.ingestion.model.fit_card_model", lambda *args: (_ for _ in ()).throw(CardModelNotIdentifiable("rank")))
-    assert service.build_report_addons(Store(), settings()) == ({"a": {"status": "not identifiable", "reason": "rank"}, "b": {"status": "not identifiable", "reason": "rank"}}, {})
+    calls = []
+    monkeypatch.setattr("src.ingestion.model_cache.load_or_fit_card_model", lambda *args: calls.append("fit") or (_ for _ in ()).throw(CardModelNotIdentifiable("rank")))
+    recommendations, h1 = service.build_report_addons(Store(), settings(), requested_archetypes=["a", "b"])
+
+    assert recommendations == {
+        "a": {"status": "not identifiable", "reason": "rank"},
+        "b": {"status": "not identifiable", "reason": "rank"},
+    }
+    assert h1 == {}
 
 
 @pytest.mark.unit
@@ -219,6 +295,86 @@ def test_addons_prepare_supplied_store_before_reading(monkeypatch, tmp_path):
     (tmp_path / "data" / "limitless.db").touch()
     assert service.build_report_addons(Store(), settings()) == ({}, {})
     assert calls == ["prepare", "deck_weights"]
+
+
+@pytest.mark.unit
+def test_addons_include_requested_low_share_archetypes(monkeypatch, tmp_path):
+    class Store:
+        def prepare_for_read(self):
+            pass
+
+        def deck_weights(self):
+            return {"a": 0.01, "b": 0.99}
+
+        def player_observations(self):
+            return [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), 1)] * 2 + [
+                PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 0)
+            ] * 2
+
+        def observed_cards(self, deck):
+            return {"Tech", "Grass Energy"}
+
+        def observed_pokemon_cards(self, deck):
+            return set()
+
+        def observed_card_rules(self, deck):
+            return {"Grass Energy": {"basic_energy": True}}
+
+        def observed_skeleton_details(self, deck):
+            return {"cards": [{"card": "Grass Energy", "copies": 60}], "legal_list_count": 6, "core_support": 4, "core_share": 4 / 6, "core_count": 2}
+
+        def observed_skeleton(self, deck):
+            return self.observed_skeleton_details(deck)["cards"]
+
+        def pairings_with_decklists(self, pattern):
+            return []
+
+    class Fitted:
+        inclusion = {"a": {"Tech": 0.5}, "b": {"Tech": 0.0}}
+
+        def coefficient_report(self):
+            return ({"Tech": 1.0}, {"Tech": (0.1, 1.9)})
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "limitless.db").touch()
+    monkeypatch.setattr("src.ingestion.model_cache.load_or_fit_card_model", lambda *args: (Fitted(), True))
+    monkeypatch.setattr("src.ingestion.model.select_model_cards", lambda observations: ["Tech"])
+
+    recommendations1, _ = service.build_report_addons(
+        Store(), settings(panel_share_threshold=0.5), requested_archetypes=["a"]
+    )
+    recommendations2, _ = service.build_report_addons(
+        Store(), settings(panel_share_threshold=0.5), requested_archetypes=["a"]
+    )
+
+    assert list(recommendations1) == ["a"]
+    assert recommendations1 is not recommendations2
+    assert recommendations1["a"] is not recommendations2["a"]
+    assert recommendations1["a"]["cards"] is not recommendations2["a"]["cards"]
+    assert recommendations1["a"]["core_share"] == pytest.approx(4 / 6)
+    assert recommendations1["a"]["core_support"] == 4
+    assert recommendations1["a"]["legal_list_count"] == 6
+
+
+@pytest.mark.unit
+def test_addons_report_unknown_requested_archetype(monkeypatch, tmp_path):
+    class Store:
+        def prepare_for_read(self):
+            pass
+
+        def deck_weights(self):
+            return {"a": 1.0}
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "limitless.db").touch()
+
+    recommendations, _ = service.build_report_addons(
+        Store(), settings(), requested_archetypes=["missing"]
+    )
+
+    assert recommendations == {"missing": {"status": "unknown archetype"}}
 
 
 @pytest.mark.unit
@@ -257,6 +413,24 @@ def test_prediction_passes_matchup_details_and_report_addons(monkeypatch):
     service.run_prediction(request, settings=settings())
     assert seen[0]["matchup_details"] == details
     assert reports == [({"best": 1}, {"h1": 2})]
+
+
+@pytest.mark.unit
+def test_prediction_forwards_requested_bdif_archetypes_to_addons(monkeypatch):
+    received = []
+    monkeypatch.setattr(service, "load_matchup_data", lambda *args: (["a", "b"], np.array([[.5, .6], [.4, .5]]), {}))
+    monkeypatch.setattr(service, "predict_best_decks", lambda request: {"full_meta": {"a": .5, "b": .5}})
+    monkeypatch.setattr(service, "swiss_rounds_from_players", lambda players: 1)
+    monkeypatch.setattr(service, "open_store", lambda cfg: None)
+    monkeypatch.setattr(service, "panel_decks_for_report", lambda *args: [])
+    monkeypatch.setattr(service, "build_report_addons", lambda store, settings, requested: received.append(requested) or ({}, {}))
+    monkeypatch.setattr(service, "run_monte_carlo_analytics", lambda **kwargs: {})
+    monkeypatch.setattr(service, "build_bdif_report", lambda result, *args: result)
+    request = PredictionRequest(deck_names=["a", "b"], matchup_matrix=[[.5, .6], [.4, .5]], bdif_archetypes=["a"], total_players=4)
+
+    service.run_prediction(request, settings=settings())
+
+    assert received == [["a"]]
 
 
 @pytest.mark.unit
@@ -356,8 +530,8 @@ def test_prediction_uses_input_path_or_configured_default(monkeypatch):
     monkeypatch.setattr(service, "build_bdif_report", lambda result, *args: result)
     request = PredictionRequest(job_id="job", deck_names=["a", "b"], matchup_matrix=[[.5, .6], [.4, .5]], total_players=4)
 
-    service.run_prediction(request, settings=settings(), input_path="custom.json")
-    service.run_prediction(request, settings=settings())
+    service.run_prediction(request, settings=settings(model_input_path="missing-model.json"), input_path="custom.json")
+    service.run_prediction(request, settings=settings(model_input_path="missing-model.json"))
 
     assert loaded == ["custom.json", "input.json"]
 

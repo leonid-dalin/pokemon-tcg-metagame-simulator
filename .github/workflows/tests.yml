@@ -2,17 +2,15 @@ name: Python tests
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  api:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -26,29 +24,89 @@ jobs:
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
       - name: Build and install the Rust extension
         run: python -m maturin build --release --manifest-path src/tournament/tcg_engine/Cargo.toml && python -m pip install src/tournament/tcg_engine/target/wheels/*.whl
-      - name: Run tests
-        run: python -m pytest -q
-      - name: Check test inventory
-        run: python tools/qa-harness/test_inventory.py --check
-      - name: Check mutation row inventory
-        run: python tools/qa-harness/mutation_inventory.py --check
-      - name: Audit test quality
-        run: python tools/qa-harness/test_quality_audit.py --tests tests --package src
-      - name: Check reported intervals
-        run: PYTHONPATH=. python tools/qa-harness/interval_sanity.py --spec tools/qa-harness/interval_spec_h1.py
-      - name: Run minimum-match mutation sweep
-        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.minmatches.json --pythonpath .
-      - name: Run remediated mutation sweep
-        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.pr5-remediated.json --pythonpath .
+      - name: Run API and UI request tests
+        run: python -m pytest tests/api tests/ui/test_app.py tests/ui/test_bdif_view.py tests/ui/test_cli_bdif_flags.py -q
+
+  best60:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+      - name: Build and install the Rust extension
+        run: python -m maturin build --release --manifest-path src/tournament/tcg_engine/Cargo.toml && python -m pip install src/tournament/tcg_engine/target/wheels/*.whl
+      - name: Run Best-60 component tests
+        run: python -m pytest tests/bdif tests/ingestion tests/test_card_model_and_best60.py -q
+      - name: Run card-model mutation sweep
+        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.card-model-statistics.json --pythonpath .
+      - name: Run Best-60 mutation sweep
+        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.best60-selection.json --pythonpath .
       - name: Check card-model intervals
         run: PYTHONPATH=. python tools/qa-harness/interval_sanity.py --spec tools/qa-harness/interval_spec_card_model.py --draws 300
       - name: Check clustered card-model errors
         run: PYTHONPATH=. python tools/qa-harness/cluster_se_check.py
-      - name: Run BDIF statistics mutation sweep
-        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.bdif-statistics.json --pythonpath .
-      - name: Run delivered BDIF decisions mutation sweep
-        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.bdif-delivered.json --pythonpath .
-      - name: Check BDIF flag combinations
-        run: PYTHONPATH=. python tools/qa-harness/flag_matrix.py --spec tools/qa-harness/flag_spec_bdif.py
-      - name: Check BDIF data handoffs
-        run: PYTHONPATH=. python tools/qa-harness/contract_probe.py --spec tools/qa-harness/contract_spec_bdif.py
+      - name: Check BDIF flags and contracts
+        run: PYTHONPATH=. python tools/qa-harness/flag_matrix.py --spec tools/qa-harness/flag_spec_bdif.py && PYTHONPATH=. python tools/qa-harness/contract_probe.py --spec tools/qa-harness/contract_spec_bdif.py
+
+  tournament-evolution:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+      - name: Build and install the Rust extension
+        run: python -m maturin build --release --manifest-path src/tournament/tcg_engine/Cargo.toml && python -m pip install src/tournament/tcg_engine/target/wheels/*.whl
+      - name: Run tournament and evolution tests
+        run: python -m pytest tests/tournament tests/evolution -q
+
+  full-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+      - name: Build and install the Rust extension
+        run: python -m maturin build --release --manifest-path src/tournament/tcg_engine/Cargo.toml && python -m pip install src/tournament/tcg_engine/target/wheels/*.whl
+      - name: Run complete test suite
+        run: python -m pytest -q
+      - name: Check inventories and quality
+        run: python tools/qa-harness/test_inventory.py --check && python tools/qa-harness/mutation_inventory.py --check && python tools/qa-harness/test_quality_audit.py --tests tests --package src
+      - name: Check intervals and minimum matches
+        run: PYTHONPATH=. python tools/qa-harness/interval_sanity.py --spec tools/qa-harness/interval_spec_h1.py && python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.minmatches.json --pythonpath .
+
+  repository-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+      - name: Build and install the Rust extension
+        run: python -m maturin build --release --manifest-path src/tournament/tcg_engine/Cargo.toml && python -m pip install src/tournament/tcg_engine/target/wheels/*.whl
+      - name: Run report-contract mutation sweep
+        run: python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.report-contracts.json --pythonpath .
+      - name: Check repository quality
+        run: PYTHONPATH=. python tools/qa-harness/dead_symbol_scan.py --src src --tests tests

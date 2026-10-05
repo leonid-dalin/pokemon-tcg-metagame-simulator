@@ -1,6 +1,6 @@
 # Enable Limitless and BDIF analytics
 
-BDIF card-model reporting is opt-in. By default, ordinary matchup simulation remains active, Limitless ingestion is disabled, and the card model is not fitted
+Statistical Best-60 selection is opt-in. By default, ordinary matchup simulation remains active, Limitless ingestion is disabled, and the card model is not fitted
 
 ## Configure the environment
 

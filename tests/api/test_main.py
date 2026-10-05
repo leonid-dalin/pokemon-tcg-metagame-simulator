@@ -1,5 +1,9 @@
 import asyncio
+import importlib
 import json
+import os
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -7,10 +11,52 @@ import pytest
 from src.api import main
 
 
+
+
+def test_rate_limit_backend_defaults_to_shared_redis(monkeypatch):
+    env = os.environ.copy()
+    env.pop("RATE_LIMIT_STORAGE_URI", None)
+    result = subprocess.run(
+        [sys.executable, "-c", "import src.api.main as m; print(m.limiter._storage_uri)"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    assert result.stdout.strip().splitlines()[-1] == "redis://localhost:6379/0"
+
+
+@pytest.fixture(autouse=True)
+def use_memory_rate_limit_storage(monkeypatch):
+    monkeypatch.setenv("RATE_LIMIT_STORAGE_URI", "memory://")
+    reloaded = importlib.reload(main)
+    yield reloaded
+    importlib.reload(main)
+
+
+@pytest.mark.anyio
+def test_bdif_report_endpoint_returns_structured_success(monkeypatch):
+    captured = []
+
+    async def to_thread(function, *args):
+        captured.append((function, args))
+        return {"status": "partial", "best60_recommendations": {"missing": {"status": "unknown archetype"}}}
+
+    monkeypatch.setattr(main.asyncio, "to_thread", to_thread)
+    monkeypatch.setattr(main.BdifSettings, "from_environment", classmethod(lambda cls: "settings"))
+    payload = main.BdifReportRequest(archetype="missing", additional_archetypes=["crustle"])
+    result = asyncio.run(main.post_bdif_report(request_for("POST", "/api/v1/bdif/report"), payload))
+
+    assert captured == [(main.request_bdif_report, ("missing", ["crustle"], "settings"))]
+    assert result == {"status": "partial", "best60_recommendations": {"missing": {"status": "unknown archetype"}}}
+
+
 PROTECTED_ENDPOINTS = (
     ("POST", "/api/v1/predict"),
     ("GET", "/api/v1/tasks/task-id"),
     ("GET", "/api/v1/tasks/task-id/stream"),
+    ("POST", "/api/v1/bdif/report"),
     ("GET", "/api/v1/bdif/status"),
 )
 

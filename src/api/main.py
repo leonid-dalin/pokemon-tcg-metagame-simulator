@@ -16,9 +16,9 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from src.api.models import PredictionRequest
+from src.api.models import BdifReportRequest, PredictionRequest
 from src.api.stream_helpers import resolve_job_id
-from src.bdif.service import bdif_status
+from src.bdif.service import bdif_status, request_bdif_report
 from src.bdif.settings import BdifSettings
 from src.core.logger import logger
 from src.worker.queue import execute_simulation_job, automated_daily_pipeline, huey
@@ -43,6 +43,8 @@ def is_protected_request(request: Request) -> bool:
     if (request.method, path) == ("POST", "/api/v1/predict"):
         return True
     if (request.method, path) == ("GET", "/api/v1/bdif/status"):
+        return True
+    if (request.method, path) == ("POST", "/api/v1/bdif/report"):
         return True
     if request.method != "GET" or not path.startswith("/api/v1/tasks/"):
         return False
@@ -123,7 +125,7 @@ if "REDIS_URL" in os.environ:
 
 limiter = Limiter(
     key_func=get_remote_address,
-    storage_uri=redis_url,
+    storage_uri=os.environ.get("RATE_LIMIT_STORAGE_URI", redis_url),
     strategy="fixed-window"
 )
 app = FastAPI(
@@ -333,6 +335,18 @@ async def stream_task_progress(request: Request, task_id: str):
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no"
         }
+    )
+
+
+@app.post("/api/v1/bdif/report")
+@limiter.limit("10/minute")
+async def post_bdif_report(request: Request, payload: BdifReportRequest):
+    _ = request
+    return await asyncio.to_thread(
+        request_bdif_report,
+        payload.archetype,
+        payload.additional_archetypes,
+        BdifSettings.from_environment(),
     )
 
 

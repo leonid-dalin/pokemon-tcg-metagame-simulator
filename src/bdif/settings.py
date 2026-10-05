@@ -1,5 +1,6 @@
-from dataclasses import dataclass
 import os
+
+from dataclasses import dataclass
 
 from src.core import config
 from src.core.logger import logger
@@ -30,6 +31,7 @@ class BdifSettings:
     panel_max_decks: int
     fallback_panel_decks: tuple[str, ...]
     backfill_limit: int
+    model_cache_path: str = "data/input/limitless_model_fit.json"
 
     @classmethod
     def from_environment(cls) -> "BdifSettings":
@@ -45,6 +47,7 @@ class BdifSettings:
             baseline_input_path=config.INPUT_DATA,
             ingestion_input_path=f"{artifact_dir}/limitless_input.json",
             model_input_path=f"{artifact_dir}/limitless_model_input.json",
+            model_cache_path=os.environ.get("BDIF_MODEL_CACHE_PATH") or f"{artifact_dir}/limitless_model_fit.json",
             panel_share_threshold=config.BDIF_PANEL_SHARE_THRESHOLD,
             panel_max_decks=config.BDIF_PANEL_MAX_DECKS,
             fallback_panel_decks=tuple(config.BDIF_PANEL_DECKS),

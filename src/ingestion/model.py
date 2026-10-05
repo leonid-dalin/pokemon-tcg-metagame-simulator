@@ -253,7 +253,7 @@ def _card_covariates(design: np.ndarray, deck_columns: int, cards: Sequence[str]
     return members, [packages[k][0] for k in kept], not_identified
 
 
-def fit_card_model(observations: Sequence[PlayerObservation], cards: Sequence[str]) -> FittedCardModel:
+def fit_card_model(observations: Sequence[PlayerObservation], cards: Sequence[str], max_iter: int = 1_000) -> FittedCardModel:
     decks = sorted({deck for row in observations for deck in (row.deck, row.opponent)})
     cards = list(cards)
     if len(decks) < 2 or len({row.result for row in observations}) < 2 or not cards:
@@ -270,7 +270,7 @@ def fit_card_model(observations: Sequence[PlayerObservation], cards: Sequence[st
     design = full_design[:, list(range(deck_columns)) + [deck_columns + index for index in card_columns]]
     target = np.asarray([row.result for row in observations], dtype=int)
     penalty = 1.0 / BDIF_CARD_PRIOR_SD ** 2
-    estimator = LogisticRegression(penalty="l2", C=BDIF_CARD_PRIOR_SD ** 2, fit_intercept=False, tol=1e-8, max_iter=1000, random_state=1312)
+    estimator = LogisticRegression(penalty="l2", C=BDIF_CARD_PRIOR_SD ** 2, fit_intercept=False, tol=1e-8, max_iter=max_iter, random_state=1312)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always", ConvergenceWarning)
         estimator.fit(design, target)

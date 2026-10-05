@@ -15,6 +15,29 @@ def _request_payload(**overrides):
     return payload
 
 
+
+def test_bdif_request_model_requires_a_canonical_archetype():
+    from src.api.models import BdifReportRequest
+
+    request = BdifReportRequest(archetype="crustle", additional_archetypes=["dragapult"])
+
+    assert request.archetype == "crustle"
+    assert request.additional_archetypes == ["dragapult"]
+
+
+@pytest.mark.parametrize("payload", [
+    {"archetype": ""},
+    {"archetype": " crustle"},
+    {"archetype": "crustle", "additional_archetypes": ["crustle"]},
+])
+def test_bdif_request_model_rejects_invalid_archetype_lists(payload):
+    from pydantic import ValidationError
+    from src.api.models import BdifReportRequest
+
+    with pytest.raises(ValidationError):
+        BdifReportRequest(**payload)
+
+
 @pytest.mark.unit
 def test_dead_meta_constraints_field_is_rejected():
     with pytest.raises(ValidationError):

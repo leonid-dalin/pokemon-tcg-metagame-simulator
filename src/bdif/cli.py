@@ -65,6 +65,7 @@ def _parser() -> argparse.ArgumentParser:
     report.add_argument("--tournament-style", choices=("pure_swiss", "championship_series"), default="pure_swiss")
     report.add_argument("--meta", type=_meta_spec, default={})
     report.add_argument("--panel", type=lambda text: [deck.strip() for deck in text.split(",") if deck.strip()], default=None)
+    report.add_argument("--archetype", type=lambda text: [deck.strip() for deck in text.split(",") if deck.strip()], default=None)
     return parser
 
 
@@ -100,6 +101,7 @@ def main() -> int:
                 user_meta_spec=args.meta, tournament_style=args.tournament_style,
                 deck_names=deck_names, matchup_matrix=matrix.tolist(),
                 bdif_panel_decks=args.panel,
+                bdif_archetypes=args.archetype,
             )
             result = service.run_prediction(request, seed=args.seed, input_path=input_path)
         text = json.dumps(result, sort_keys=True, default=lambda value: value.value if hasattr(value, "value") else str(value))

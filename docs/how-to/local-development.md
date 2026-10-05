@@ -51,7 +51,7 @@ Run mutation sweeps only from a committed clean tree:
 
 ```bash
 PYTHONPATH=. python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.minmatches.json --tests tests --pythonpath .
-PYTHONPATH=. python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.pr5-remediated.json --tests tests --pythonpath .
+PYTHONPATH=. python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.best60-selection.json --tests tests --pythonpath .
 ```
 
 On Windows Bash, put `PYTHONPATH=.` before the command. This project uses the repository's active Python environment, so replace `python` with its absolute interpreter path when the shell is not activated

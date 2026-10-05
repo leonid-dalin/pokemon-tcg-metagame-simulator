@@ -61,6 +61,26 @@ class PredictionResult(BaseModel):
     frontrunners: List[str]
 
 
+class BdifReportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    archetype: str = Field(..., min_length=1, max_length=128)
+    additional_archetypes: List[str] = Field(default_factory=list, max_length=9)
+
+    @model_validator(mode="after")
+    def validate_archetypes(self):
+        if self.archetype.strip() != self.archetype:
+            raise ValueError("archetype must not have surrounding whitespace")
+        if not self.archetype:
+            raise ValueError("archetype must not be empty")
+        if any(not item or item.strip() != item for item in self.additional_archetypes):
+            raise ValueError("additional_archetypes must contain non-empty names without surrounding whitespace")
+        requested = [self.archetype, *self.additional_archetypes]
+        if len(set(requested)) != len(requested):
+            raise ValueError("archetypes must be unique")
+        return self
+
+
 class PredictionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")  # Prevents mass-assignment injection attacks
 
@@ -112,8 +132,9 @@ class PredictionRequest(BaseModel):
     use_tie_convergence: bool = Field(default=True)
     use_drop_feature: bool = Field(default=False)
 
-    # 7. BDIF reporting
+    # 7. Statistical Best-60 selection
     bdif_panel_decks: Optional[List[str]] = Field(default=None, max_length=10)
+    bdif_archetypes: Optional[List[str]] = Field(default=None, max_length=10)
 
     @model_validator(mode='after')
     def validate_matrix_integrity(self):

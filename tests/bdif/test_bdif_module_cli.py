@@ -312,3 +312,36 @@ def test_report_panel_argument_sets_requested_decks(monkeypatch, tmp_path, capsy
     assert code == 0
     assert requests[0]["bdif_panel_decks"] == ["A", "B"]
     assert json.loads(captured.out) == {"report": ["A", "B"]}
+
+
+@pytest.mark.unit
+def test_report_archetype_argument_sets_requested_recommendations(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "matrix.json"
+    source.write_text("{}", encoding="utf-8")
+    requests = []
+
+    class Request:
+        def __init__(self, **kwargs):
+            requests.append(kwargs)
+            self.__dict__.update(kwargs)
+
+    monkeypatch.setattr(cli, "PredictionRequest", Request)
+    monkeypatch.setattr(
+        "src.core.data.load_matchup_data",
+        lambda path: (["A", "B"], __import__("numpy").array([[0.5, 0.6], [0.4, 0.5]]), {}),
+    )
+    module = SimpleNamespace(
+        simulation_input_path=lambda: str(source),
+        run_prediction=lambda req, **kwargs: {"report": req.bdif_archetypes},
+    )
+
+    code, captured = _run(
+        monkeypatch,
+        capsys,
+        ["report", "--input", str(source), "--archetype", "Crustle,Dragapult"],
+        module,
+    )
+
+    assert code == 0
+    assert requests[0]["bdif_archetypes"] == ["Crustle", "Dragapult"]
+    assert json.loads(captured.out) == {"report": ["Crustle", "Dragapult"]}

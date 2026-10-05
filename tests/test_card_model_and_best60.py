@@ -1,4 +1,5 @@
 import re
+import json
 import sqlite3
 from pathlib import Path
 
@@ -256,6 +257,95 @@ def test_store_writes_missing_decklists_as_sql_null(tmp_path):
 
 
 @pytest.mark.unit
+def test_pairings_match_label_preserves_repeated_player_pairs(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping={})
+
+    store.upsert_event_bundle(
+        {"id": "event", "game": "PTCG"},
+        {"isOnline": True},
+        [],
+        [
+            {"round": 1, "phase": 1, "match": "swiss", "player1": "p1", "player2": "p2", "winner": "p1"},
+            {"round": 1, "phase": 1, "match": "bracket", "player1": "p1", "player2": "p2", "winner": "p2"},
+        ],
+    )
+
+    with sqlite3.connect(store.path) as connection:
+        rows = connection.execute("SELECT match, winner FROM pairings WHERE tournament_id=? ORDER BY match", ("event",)).fetchall()
+        details = json.loads(connection.execute("SELECT details_json FROM tournaments WHERE id=?", ("event",)).fetchone()[0])
+
+    assert rows == [("bracket", "p2"), ("swiss", "p1")]
+    assert details == {
+        "source": "Limitless developer API",
+        "catalogue_event": {"id": "event", "game": "PTCG"},
+        "event_details": {"isOnline": True},
+    }
+
+
+@pytest.mark.unit
+def test_pairing_schema_migration_preserves_existing_rows(tmp_path):
+    database = tmp_path / "legacy.db"
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "CREATE TABLE pairings (tournament_id TEXT, round INTEGER, phase INTEGER, player1 TEXT, player2 TEXT, winner TEXT, PRIMARY KEY (tournament_id, round, phase, player1, player2))"
+        )
+        connection.execute("INSERT INTO pairings VALUES ('event', 2, 1, 'p1', 'p2', 'p1')")
+
+    LimitlessStore(database, deck_mapping={}).ensure_schema()
+
+    with sqlite3.connect(database) as connection:
+        rows = connection.execute("SELECT match, player1, player2, winner FROM pairings").fetchall()
+
+    assert rows == [("", "p1", "p2", "p1")]
+
+
+@pytest.mark.unit
+def test_event_bundle_records_source_rows_and_counts(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping={"crustle-dri": "Crustle"})
+    event = {"id": "event", "game": "PTCG", "format": "STANDARD", "name": "Online", "date": "2026-10-03T10:00:00Z", "players": 1}
+    details = {"id": "event", "isOnline": True, "decklists": True}
+    standings = [{"player": "p1", "placing": 1, "record": {"wins": 1}, "deck": {"id": "crustle-dri"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 1}]}}]
+    pairings = [{"round": 1, "phase": 1, "match": "T1-1", "player1": "p1", "player2": "", "winner": "-1"}]
+    store.upsert_event_bundle(event, details, standings, pairings)
+    store.upsert_event_bundle(event, details, standings, pairings)
+
+    with sqlite3.connect(store.path) as connection:
+        tournament_count = connection.execute("SELECT COUNT(*) FROM tournaments").fetchone()[0]
+        standing_count = connection.execute("SELECT COUNT(*) FROM standings WHERE tournament_id='event'").fetchone()[0]
+        pairing_count = connection.execute("SELECT COUNT(*) FROM pairings WHERE tournament_id='event'").fetchone()[0]
+        tournament = connection.execute("SELECT name, details_json FROM tournaments WHERE id='event'").fetchone()
+        standing = connection.execute("SELECT deck_name, decklist_json FROM standings WHERE tournament_id='event'").fetchone()
+        pairing = connection.execute("SELECT round, phase, match, player1, player2, winner FROM pairings WHERE tournament_id='event'").fetchone()
+
+    assert tournament_count == 1
+    assert standing_count == 1
+    assert pairing_count == 1
+    assert tournament[0] == "Online"
+    assert json.loads(tournament[1])["event_details"] == details
+    assert standing[0] == "Crustle"
+    assert json.loads(standing[1]) == standings[0]["decklist"]
+    assert pairing == (1, 1, "T1-1", "p1", "", "-1")
+
+
+@pytest.mark.unit
+def test_event_bundle_rolls_back_when_a_row_cannot_be_serialised(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping={})
+
+    with pytest.raises(TypeError, match="not JSON serializable"):
+        store.upsert_event_bundle(
+            {"id": "event", "game": "PTCG"},
+            {"isOnline": True},
+            [{"player": "p1", "deck": {"id": "deck"}, "decklist": {"bad": {1, 2}}}],
+            [{"round": 1, "player1": "p1", "player2": "p2", "winner": "p1"}],
+        )
+
+    with sqlite3.connect(store.path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM tournaments").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM standings").fetchone()[0] == 0
+        assert connection.execute("SELECT COUNT(*) FROM pairings").fetchone()[0] == 0
+
+
+@pytest.mark.unit
 def test_store_construction_does_not_modify_existing_database(tmp_path):
     path = tmp_path / "limitless.db"
     store = LimitlessStore(path)
@@ -435,6 +525,40 @@ def test_observed_skeleton_uses_modal_joint_core_from_legal_sixties(tmp_path):
         {"card": "Munkidori", "copies": 2},
         {"card": "Darkness Energy", "copies": 8},
     ]
+    details = store.observed_skeleton_details("a")
+    assert details["legal_list_count"] == 5
+    assert details["core_support"] == 4
+    assert details["core_share"] == pytest.approx(0.8)
+    assert details["core_count"] == 2
+
+
+def test_skeleton_rejects_a_modal_core_below_the_seventy_five_percent_threshold(tmp_path):
+    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
+    modal = {"pokemon": [{"name": "Mon", "count": 4}], "energy": [{"name": "Grass Energy", "count": 52}], "trainer": [{"name": "Trainer", "count": 4}]}
+    variant = {"pokemon": [{"name": "Alt", "count": 4}], "energy": [{"name": "Grass Energy", "count": 52}], "trainer": [{"name": "Trainer", "count": 4}]}
+    store.upsert_standings("event", [
+        {"player": f"p{index}", "deck": {"id": "a"}, "decklist": decklist}
+        for index, decklist in enumerate([modal, modal, variant, variant])
+    ])
+
+    details = store.observed_skeleton_details("a")
+
+    assert details["cards"] == []
+    assert details["core_share"] == pytest.approx(0.5)
+
+
+def test_database_checkout_requires_git_lfs_documentation():
+    from src.bdif.settings import BdifSettings
+
+    attributes = Path(".gitattributes").read_text(encoding="utf-8")
+    docs = Path("docs/limitless-ingestion.md").read_text(encoding="utf-8")
+    settings = BdifSettings.from_environment()
+
+    assert settings.db_path.endswith("data/limitless.db")
+    assert "data/limitless.db filter=lfs" in attributes
+    assert "Git LFS" in docs
+    assert "git lfs pull" in docs
+
 
 
 def test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec(tmp_path):
@@ -455,6 +579,19 @@ def test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec(tmp_path):
     skeleton = store.observed_skeleton("a")
     assert {row["card"]: row["copies"] for row in skeleton}["Weird Card"] == 4
     assert not any(row["card"] in {"Prime Catcher", "Master Ball"} for row in skeleton)
+
+
+def test_invalid_ace_spec_decklists_are_excluded_from_feature_inputs(tmp_path):
+    from src.ingestion.features import _valid_decklists
+
+    invalid = {"trainer": [{"name": "Prime Catcher", "count": 1}, {"name": "Master Ball", "count": 1}]}
+    valid = {"trainer": [{"name": "Prime Catcher", "count": 1}]}
+
+    class Store:
+        def _decklists(self, archetype, event_id=None):
+            return [invalid, valid]
+
+    assert list(_valid_decklists(Store(), "Crustle")) == [valid]
 
 
 @pytest.mark.unit

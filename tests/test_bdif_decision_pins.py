@@ -96,12 +96,18 @@ def test_explicitly_unmapped_id_ignores_the_provider_name(tmp_path):
     (3, [{"card": "Mon", "copies": 4}, {"card": "Grass Energy", "copies": 52}]),
     (2, []),
 ])
-def test_skeleton_needs_three_quarters_of_legal_lists_to_share_one_core(tmp_path, modal_lists, expected):
+def test_skeleton_uses_modal_legal_core_and_reports_support(tmp_path, modal_lists, expected):
     store = LimitlessStore(tmp_path / "limitless.db", deck_mapping={"x": "X"})
-    lists = [_sixty([("Mon", 4)])] * modal_lists + [_sixty([("Mon", 3), ("Alt", 1)])]
+    lists = [_sixty([("Mon", 4)])] * modal_lists + [_sixty([("Mon", 3), ("Alt", 1)])] * (4 - modal_lists)
     store.upsert_standings("e", [
         {"player": f"p{index}", "deck": {"id": "x"}, "decklist": decklist}
         for index, decklist in enumerate(lists)
     ])
 
-    assert store.observed_skeleton("X") == expected
+    result = store.observed_skeleton_details("X")
+
+    assert result["cards"] == expected
+    assert result["legal_list_count"] == 4
+    assert result["core_support"] == modal_lists
+    assert result["core_share"] == pytest.approx(modal_lists / 4)
+    assert result["core_count"] == 2
