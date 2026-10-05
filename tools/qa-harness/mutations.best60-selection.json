@@ -56,7 +56,7 @@
   {
     "name": "player strength left out of the model",
     "file": "src/ingestion/best60.py",
-    "find": "    return wins, games, skill - skill.mean()",
+    "find": "    return wins, games, skill - skill_mean",
     "replace": "    return wins, games, 0.0 * skill"
   },
   {
