@@ -239,7 +239,8 @@ def test_best60_legality_matrix_returns_legal_sixty_or_status(copies, extra_ace_
     if copies:
         cards.append(("Tech A", copies, "trainer"))
     if extra_ace_specs:
-        cards.extend((f"ACE {index}", 1, "trainer") for index in range(extra_ace_specs))
+        ace_names = ("Prime Catcher", "Master Ball")
+        cards.extend((ace_names[index], 1, "trainer") for index in range(extra_ace_specs))
     result = build_best60("X", [_row("e", "p", cards)], {})
     assert result["status"] == "no legal lists" or result["total_copies"] == 60
     if result["status"] != "no legal lists":
