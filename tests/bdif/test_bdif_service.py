@@ -47,63 +47,6 @@ def test_refit_names_card_packages_and_the_cards_it_could_not_identify(monkeypat
     assert (tmp_path / "model.json").exists()
 
 
-@pytest.mark.unit
-def test_report_addons_expand_package_estimates_to_member_card_names(monkeypatch, tmp_path):
-    observations = []
-    for index in range(120):
-        has_engine = index % 2 == 0
-        a_cards = frozenset({"Dreepy", "Drakloak"} if has_engine else set())
-        result = int(index % 10 < (8 if has_engine else 2))
-        result = 1 - result if index % 11 == 0 else result
-        observations.append(PlayerObservation("a", "b", a_cards, frozenset(), result))
-        observations.append(PlayerObservation("b", "a", frozenset(), a_cards, 1 - result))
-
-    class Store:
-        def prepare_for_read(self):
-            return None
-
-        def deck_weights(self):
-            return {"a": 1.0, "b": 0.0}
-
-        def player_observations(self):
-            return observations
-
-        def observed_cards(self, deck):
-            return {"Dreepy", "Drakloak"}
-
-        def observed_pokemon_cards(self, deck):
-            return {"Dreepy", "Drakloak"}
-
-        def observed_card_rules(self, deck):
-            return {card: {"type": "pokemon"} for card in ("Dreepy", "Drakloak")}
-
-        def observed_skeleton_details(self, deck):
-            return {"cards": [{"card": "Darkness Energy", "copies": 60}], "legal_list_count": 4, "core_support": 4, "core_share": 1.0, "core_count": 1}
-
-        def observed_skeleton(self, deck):
-            return self.observed_skeleton_details(deck)["cards"]
-
-        def pairings_with_decklists(self, pattern):
-            return []
-
-    class Fitted:
-        inclusion = {"a": {"Dreepy + Drakloak": 1.0}}
-        members = {"Dreepy + Drakloak": ("Dreepy", "Drakloak")}
-
-        def coefficient_report(self):
-            return ({"Dreepy": 1.0, "Drakloak": 1.0}, {"Dreepy": (1.0, 1.0), "Drakloak": (1.0, 1.0)})
-
-    monkeypatch.setattr("src.ingestion.model_cache.load_or_fit_card_model", lambda *args: (Fitted(), True))
-    db = tmp_path / "limitless.db"
-    db.touch()
-    recommendations, _ = service.build_report_addons(
-        Store(), settings(db_path=str(db), use_card_model=True)
-    )
-
-    evidence = recommendations["a"]["card_evidence"]
-    assert evidence["Dreepy"]["coefficient"] == evidence["Drakloak"]["coefficient"]
-
-
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -227,54 +170,40 @@ def test_panel_deck_resolution_drops_ambiguous_and_missing_ids(monkeypatch):
     assert dropped == ["foo-bar-baz", "missing-deck"]
 
 
-@pytest.mark.unit
-def test_addons_enforce_observed_pokemon_playability_without_card_rules(monkeypatch, tmp_path):
-    class Fitted:
-        inclusion = {"a": {"Unobserved Pokemon": 1.0, "Observed Tech": 0.0, "Darkness Energy": 1.0}}
+def _stored_list(event, player, deck="a", tech=0):
+    decklist = {
+        "pokemon": [{"name": "Mon", "count": 4}],
+        "trainer": [{"name": "Tech", "count": tech}] if tech else [],
+        "energy": [{"name": "Grass Energy", "count": 56 - tech}],
+    }
+    return {"event": event, "player": player, "deck_id": deck, "placing": None, "wins": 3, "losses": 2,
+            "decklist": decklist, "players": 16, "date": "2026-09-01T00:00:00Z"}
 
-        def coefficient_report(self):
-            cards = ["Unobserved Pokemon", "Observed Tech", "Darkness Energy"]
-            return ({card: 1.0 for card in cards}, {card: (1.0, 1.0) for card in cards})
 
-    class Store:
-        def prepare_for_read(self): pass
-        def deck_weights(self): return {"a": 1.0}
-        def player_observations(self):
-            return [PlayerObservation("a", "b", frozenset({"Observed Tech"}), frozenset(), 1)] * 2 + [PlayerObservation("a", "b", frozenset(), frozenset({"Observed Tech"}), 0)] * 2
-        def observed_cards(self, deck): return {"Unobserved Pokemon", "Observed Tech", "Darkness Energy"}
-        def observed_pokemon_cards(self, deck): return {"Observed Tech"}
-        def observed_card_rules(self, deck):
-            return {"Unobserved Pokemon": {"type": "pokemon"}, "Observed Tech": {"type": "pokemon"}, "Darkness Energy": {"basic_energy": True}}
-        def observed_skeleton(self, deck): return [{"card": "Darkness Energy", "copies": 60}]
-        def pairings_with_decklists(self, pattern): return []
+class _ListStore:
+    def prepare_for_read(self): pass
+    def deck_weights(self): return {"a": 0.5, "b": 0.5}
+    def player_observations(self):
+        return [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), 1)] * 2 + [PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 0)] * 2
+    def archetype_lists(self, deck):
+        return [_stored_list(f"e{index}", f"p{index}", deck, tech=index % 2) for index in range(6)]
+    def player_records(self):
+        return {(f"e{index}", f"p{index}"): (3, 2) for index in range(6)}
+    def pairings_with_decklists(self, pattern): return []
 
+
+def test_addons_still_build_best60_when_the_card_model_is_not_identifiable(monkeypatch, tmp_path):
+    monkeypatch.setattr("src.ingestion.model_cache.load_or_fit_card_model", lambda *args: (_ for _ in ()).throw(CardModelNotIdentifiable("rank")))
     monkeypatch.chdir(tmp_path)
     (tmp_path / "data").mkdir()
     (tmp_path / "data" / "limitless.db").touch()
-    monkeypatch.setattr("src.ingestion.model_cache.load_or_fit_card_model", lambda *args: (Fitted(), True))
-    monkeypatch.setattr("src.ingestion.model.select_model_cards", lambda observations: ["Unobserved Pokemon", "Observed Tech", "Darkness Energy"])
 
-    recommendations, _ = service.build_report_addons(Store(), settings())
+    recommendations, h1, provenance = service._build_report_addons(_ListStore(), settings(), requested_archetypes=["a", "b"])
 
-    assert "Unobserved Pokemon" not in recommendations["a"]["card_evidence"]
-    assert "Observed Tech" in recommendations["a"]["card_evidence"]
-    assert "Darkness Energy" in recommendations["a"]["card_evidence"]
-
-
-def test_addons_report_non_identifiable_for_each_deck(monkeypatch, tmp_path):
-    class Store:
-        def prepare_for_read(self): pass
-        def deck_weights(self): return {"a": 0.5, "b": 0.5}
-        def player_observations(self):
-            return [PlayerObservation("a", "b", frozenset({"Tech"}), frozenset(), 1)] * 2 + [PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 0)] * 2
-    calls = []
-    monkeypatch.setattr("src.ingestion.model_cache.load_or_fit_card_model", lambda *args: calls.append("fit") or (_ for _ in ()).throw(CardModelNotIdentifiable("rank")))
-    recommendations, h1 = service.build_report_addons(Store(), settings(), requested_archetypes=["a", "b"])
-
-    assert recommendations == {
-        "a": {"status": "not identifiable", "reason": "rank"},
-        "b": {"status": "not identifiable", "reason": "rank"},
-    }
+    assert {deck: row["total_copies"] for deck, row in recommendations.items()} == {"a": 60, "b": 60}
+    assert recommendations["a"]["status"] == "consensus only: too few lists to score cards"
+    assert provenance["model_status"] == "not identifiable"
+    assert provenance["model_status_reason"] == "rank"
     assert h1 == {}
 
 
@@ -311,20 +240,11 @@ def test_addons_include_requested_low_share_archetypes(monkeypatch, tmp_path):
                 PlayerObservation("a", "b", frozenset(), frozenset({"Tech"}), 0)
             ] * 2
 
-        def observed_cards(self, deck):
-            return {"Tech", "Grass Energy"}
+        def archetype_lists(self, deck):
+            return [_stored_list(f"e{index}", f"p{index}", deck, tech=int(index % 3 == 0)) for index in range(6)]
 
-        def observed_pokemon_cards(self, deck):
-            return set()
-
-        def observed_card_rules(self, deck):
-            return {"Grass Energy": {"basic_energy": True}}
-
-        def observed_skeleton_details(self, deck):
-            return {"cards": [{"card": "Grass Energy", "copies": 60}], "legal_list_count": 6, "core_support": 4, "core_share": 4 / 6, "core_count": 2}
-
-        def observed_skeleton(self, deck):
-            return self.observed_skeleton_details(deck)["cards"]
+        def player_records(self):
+            return {}
 
         def pairings_with_decklists(self, pattern):
             return []
@@ -352,9 +272,8 @@ def test_addons_include_requested_low_share_archetypes(monkeypatch, tmp_path):
     assert recommendations1 is not recommendations2
     assert recommendations1["a"] is not recommendations2["a"]
     assert recommendations1["a"]["cards"] is not recommendations2["a"]["cards"]
-    assert recommendations1["a"]["core_share"] == pytest.approx(4 / 6)
-    assert recommendations1["a"]["core_support"] == 4
     assert recommendations1["a"]["legal_list_count"] == 6
+    assert {row["card"]: row["copies"] for row in recommendations1["a"]["cards"]} == {"Mon": 4, "Grass Energy": 56}
 
 
 @pytest.mark.unit

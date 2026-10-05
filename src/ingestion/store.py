@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from src.ingestion.mapping import load_archetype_map, resolve_archetype
-from src.ingestion.model import ACE_SPEC_CARDS, BASIC_ENERGY_NAMES, PlayerObservation, _card_limit, validate_recommendation
+from src.ingestion.model import PlayerObservation
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS tournaments (id TEXT PRIMARY KEY, game TEXT, format TEXT, name TEXT, date TEXT, players INTEGER, details_json TEXT);
@@ -400,59 +400,26 @@ class LimitlessStore:
                 totals[str(deck)] = totals.get(str(deck), 0) + 1
         return totals
 
-    def observed_skeleton_details(self, archetype: str) -> dict[str, Any]:
-        raw_rows = list(self._decklists(archetype))
-        legal_rows = []
-        for decklist in raw_rows:
-            cards = []
-            profile = []
-            for group_name, group in decklist.items():
-                if not isinstance(group, list):
-                    continue
-                for item in group:
-                    if not isinstance(item, dict) or not item.get("name"):
-                        continue
-                    card = str(item["name"])
-                    copies = int(item.get("count", 0))
-                    cards.append({"card": card, "copies": copies})
-                    if group_name in {"pokemon", "energy"} and card not in ACE_SPEC_CARDS:
-                        profile.append((group_name, card, copies))
-            rules = {
-                row["card"]: {"ace_spec": True} if row["card"] in ACE_SPEC_CARDS else
-                {"basic_energy": True} if row["card"] in BASIC_ENERGY_NAMES else {}
-                for row in cards
-            }
-            if sum(row["copies"] for row in cards) != 60:
-                continue
-            try:
-                validate_recommendation(cards, card_rules=rules)
-            except ValueError:
-                continue
-            legal_rows.append(tuple(sorted(profile)))
-        if not legal_rows:
-            return {"cards": [], "legal_list_count": 0, "core_support": 0, "core_share": 0.0, "core_count": 0}
-        profiles: dict[tuple[tuple[str, int], ...], int] = {}
-        for profile in legal_rows:
-            profiles[profile] = profiles.get(profile, 0) + 1
-        modal_profile, support = max(profiles.items(), key=lambda item: (item[1], item[0]))
-        result = [
-            {"card": card, "copies": min(copies, _card_limit(card, {})) if _card_limit(card, {}) is not None else copies}
-            for _, card, copies in sorted(modal_profile, key=lambda item: (0 if item[0] == "pokemon" else 1, item[1]))
-            if card not in ACE_SPEC_CARDS
-        ]
-        core_share = support / len(legal_rows)
-        if core_share < 0.75:
-            result = []
-        return {
-            "cards": result,
-            "legal_list_count": len(legal_rows),
-            "core_support": support,
-            "core_share": core_share,
-            "core_count": len(profiles),
-        }
+    def archetype_lists(self, archetype: str) -> list[dict[str, Any]]:
+        """Every stored list of one archetype with its event result, for the Best-60 builder."""
+        self.prepare_for_read()
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT s.tournament_id, s.player_id, s.deck_id, s.placing, s.wins, s.losses, s.decklist_json, t.players, t.date "
+                "FROM standings s LEFT JOIN tournaments t ON t.id=s.tournament_id "
+                "WHERE s.deck_name=? AND s.decklist_json IS NOT NULL AND s.decklist_json != 'null' "
+                "ORDER BY s.tournament_id, s.player_id",
+                (archetype,),
+            ).fetchall()
+        keys = ("event", "player", "deck_id", "placing", "wins", "losses", "decklist", "players", "date")
+        return [dict(zip(keys, row)) for row in rows]
 
-    def observed_skeleton(self, archetype: str) -> list[dict[str, object]]:
-        return self.observed_skeleton_details(archetype)["cards"]
+    def player_records(self) -> dict[tuple[str, str], tuple[int, int]]:
+        """Wins and losses of every player at every event, for player strength."""
+        self.prepare_for_read()
+        with self.connect() as conn:
+            rows = conn.execute("SELECT tournament_id, player_id, wins, losses FROM standings").fetchall()
+        return {(str(event), str(player)): (int(wins or 0), int(losses or 0)) for event, player, wins, losses in rows}
 
     def deck_weights(self, archetypes: Iterable[str] | None = None) -> dict[str, float]:
         self.prepare_for_read()
@@ -465,31 +432,6 @@ class LimitlessStore:
                 rows = conn.execute("SELECT deck_name, COUNT(*) FROM standings WHERE deck_name IS NOT NULL GROUP BY deck_name").fetchall()
         total = sum(count for _, count in rows)
         return {str(deck): count / total for deck, count in rows} if total else {}
-
-    def observed_cards(self, archetype: str) -> set[str]:
-        cards = set()
-        for decklist in self._decklists(archetype):
-            for group in decklist.values():
-                if isinstance(group, list):
-                    cards.update(str(card["name"]) for card in group if isinstance(card, dict) and card.get("name"))
-        return cards
-
-    def observed_pokemon_cards(self, archetype: str) -> set[str]:
-        cards = set()
-        for decklist in self._decklists(archetype):
-            cards.update(str(card["name"]) for card in decklist.get("pokemon", []) if isinstance(card, dict) and card.get("name"))
-        return cards
-
-    def observed_card_rules(self, archetype: str) -> dict[str, dict[str, Any]]:
-        rules: dict[str, dict[str, Any]] = {}
-        for decklist in self._decklists(archetype):
-            for card in decklist.get("pokemon", []):
-                if isinstance(card, dict) and card.get("name"):
-                    rules[str(card["name"])] = {"type": "pokemon"}
-            for card in decklist.get("energy", []):
-                if isinstance(card, dict) and card.get("name"):
-                    rules.setdefault(str(card["name"]), {})["basic_energy"] = str(card["name"]) in BASIC_ENERGY_NAMES
-        return rules
 
     def pairings_with_decklists(self, archetype_pattern: str) -> list[tuple[Any, ...]]:
         self.prepare_for_read()

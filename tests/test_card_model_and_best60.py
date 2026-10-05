@@ -11,7 +11,7 @@ from src.bdif import service
 from src.core.config import BDIF_CARD_PRIOR_SD
 from src.bdif.settings import BdifSettings
 from src.ingestion.client import LimitlessClient
-from src.ingestion.model import Best60Request, CardModelNotIdentifiable, PlayerObservation, _card_design, _logistic_standard_errors, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, recommend_best60, select_model_cards, select_panel_decks, validate_recommendation
+from src.ingestion.model import CardModelNotIdentifiable, PlayerObservation, _card_design, _logistic_standard_errors, fit_card_model, fit_h1_misty_variant, h1_observations, model_artifact, select_model_cards, select_panel_decks, validate_recommendation
 from src.api.models import PredictionRequest
 from src.ingestion.store import LimitlessStore, _decklist_card_names
 from src.ingestion.aggregate import build_artifact
@@ -22,66 +22,6 @@ DECK_LINK = re.compile(r'<a href="/[^/]+/decks/([^"]+)">([^<]+)</a>')
 
 def _recorded_deck_ids(path: Path) -> set[str]:
     return {match.group(1) for match in DECK_LINK.finditer(path.read_text(encoding="utf-8"))}
-
-
-@pytest.mark.unit
-def test_best60_preserves_modal_core_and_selects_ace_spec_separately():
-    result = recommend_best60(Best60Request(
-        archetype="a",
-        candidates=["Core Pokemon", "Observed Tech", "Prime Catcher", "Grass Energy"],
-        coefficients={"Core Pokemon": -10.0, "Observed Tech": 2.0, "Prime Catcher": 3.0, "Grass Energy": 0.0},
-        coefficient_intervals={card: (value, value) for card, value in {
-            "Core Pokemon": -10.0, "Observed Tech": 2.0, "Prime Catcher": 3.0, "Grass Energy": 0.0,
-        }.items()},
-        inclusion={"a": {"Core Pokemon": 1.0, "Observed Tech": 0.0, "Prime Catcher": 1.0, "Grass Energy": 1.0}, "b": {}},
-        meta_weights={"b": 1.0},
-        playable_cards={"Core Pokemon", "Observed Tech", "Prime Catcher", "Grass Energy"},
-        observed_pokemon_cards={"Core Pokemon", "Observed Tech"},
-        skeleton=[{"card": "Core Pokemon", "copies": 2}, {"card": "Grass Energy", "copies": 20}],
-        card_rules={"Core Pokemon": {"type": "pokemon", "max_copies": 4}, "Observed Tech": {"type": "pokemon", "max_copies": 4}, "Grass Energy": {"basic_energy": True}, "Prime Catcher": {"ace_spec": True}},
-    ))
-    cards = {row["card"]: row["copies"] for row in result["cards"]}
-    assert result["total_copies"] == 60
-    assert cards["Core Pokemon"] == 2
-    assert cards["Prime Catcher"] == 1
-
-
-@pytest.mark.unit
-def test_best60_observed_pokemon_cards_are_a_distinct_request_pool():
-    request = Best60Request(
-        archetype="a", candidates=["Pokemon", "Trainer"], coefficients={}, coefficient_intervals={},
-        inclusion={}, meta_weights={}, observed_pokemon_cards={"Pokemon"}, playable_cards={"Pokemon", "Trainer"},
-        skeleton=[{"card": "Pokemon", "copies": 1}],
-    )
-    assert request.observed_pokemon_cards == {"Pokemon"}
-
-
-@pytest.mark.unit
-def test_best60_excludes_unobserved_pokemon_but_keeps_observed_tech_playable():
-    result = recommend_best60(Best60Request(
-        archetype="a", candidates=["Unobserved Pokemon", "Observed Tech", "Darkness Energy"],
-        coefficients={"Unobserved Pokemon": 100, "Observed Tech": 0, "Darkness Energy": 0},
-        coefficient_intervals={card: (0, 0) for card in ["Unobserved Pokemon", "Observed Tech", "Darkness Energy"]},
-        inclusion={"a": {"Unobserved Pokemon": 1.0, "Observed Tech": 0.0, "Darkness Energy": 0.0}},
-        meta_weights={}, playable_cards={"Unobserved Pokemon", "Observed Tech", "Darkness Energy"},
-        observed_pokemon_cards={"Observed Tech"},
-        card_rules={"Unobserved Pokemon": {"type": "pokemon"}, "Observed Tech": {"type": "pokemon"}, "Darkness Energy": {"basic_energy": True}},
-        skeleton=[{"card": "Darkness Energy", "copies": 59}],
-    ))
-    assert "Unobserved Pokemon" not in {row["card"] for row in result["cards"]}
-    assert "Observed Tech" in {row["card"] for row in result["cards"]}
-    assert "Unobserved Pokemon" not in result["card_evidence"]
-
-
-@pytest.mark.unit
-def test_best60_returns_selected_ace_spec_separately():
-    result = recommend_best60(Best60Request(
-        archetype="a", candidates=["Prime Catcher"], coefficients={"Prime Catcher": 2},
-        coefficient_intervals={"Prime Catcher": (1, 3)}, inclusion={}, meta_weights={},
-        playable_cards={"Prime Catcher", "Darkness Energy"},
-        skeleton=[{"card": "Darkness Energy", "copies": 59}],
-    ))
-    assert result["ace_spec_choice"] == "Prime Catcher"
 
 
 def _tech_observations(repeats, with_players):
@@ -482,71 +422,6 @@ def test_h1_reads_opponent_mist_energy_and_alakazam_variant_flag(tmp_path):
     assert h1_observations(store.pairings_with_decklists("%alakazam%")) == [{"misty": 1, "hammer_variant": 1, "result": 0}]
 
 
-@pytest.mark.unit
-def test_observed_skeleton_uses_high_frequency_cards(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
-    store.upsert_standings("event", [
-        {"player": "p1", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 2}], "energy": [{"name": "Darkness Energy", "count": 2}], "trainer": [{"name": f"Trainer {i}", "count": 4} for i in range(14)]}},
-        {"player": "p2", "deck": {"id": "a"}, "decklist": {"pokemon": [{"name": "Crustle", "count": 2}], "energy": [{"name": "Darkness Energy", "count": 2}], "trainer": [{"name": f"Trainer {i}", "count": 4} for i in range(14)]}},
-    ])
-    assert store.observed_skeleton("a") == [{"card": "Crustle", "copies": 2}, {"card": "Darkness Energy", "copies": 2}]
-
-
-@pytest.mark.unit
-def test_observed_skeleton_uses_modal_joint_core_from_legal_sixties(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
-    store.upsert_tournament({"id": "event", "game": "PTCG", "format": "STANDARD"}, {})
-    rows = []
-    for index in range(4):
-        rows.append({
-            "player": f"core-{index}", "deck": {"id": "a"},
-            "decklist": {
-                "pokemon": [{"name": "Crustle", "count": 4}, {"name": "Munkidori", "count": 2}],
-                "energy": [{"name": "Darkness Energy", "count": 8}],
-                "trainer": [{"name": f"Trainer {slot}", "count": 4} for slot in range(11)] + [{"name": "Trainer 11", "count": 2}],
-            },
-        })
-    rows.append({
-        "player": "variant", "deck": {"id": "a"},
-        "decklist": {
-            "pokemon": [{"name": "Crustle", "count": 4}, {"name": "Tech Pokemon", "count": 1}],
-            "energy": [{"name": "Psychic Energy", "count": 4}],
-            "trainer": [{"name": f"Variant Trainer {slot}", "count": 4} for slot in range(12)] + [{"name": "Variant Trainer 12", "count": 3}],
-        },
-    })
-    rows.append({
-        "player": "incomplete", "deck": {"id": "a"},
-        "decklist": {"pokemon": [{"name": "Noise Pokemon", "count": 4}]},
-    })
-    store.upsert_standings("event", rows)
-
-    assert store.observed_skeleton("a") == [
-        {"card": "Crustle", "copies": 4},
-        {"card": "Munkidori", "copies": 2},
-        {"card": "Darkness Energy", "copies": 8},
-    ]
-    details = store.observed_skeleton_details("a")
-    assert details["legal_list_count"] == 5
-    assert details["core_support"] == 4
-    assert details["core_share"] == pytest.approx(0.8)
-    assert details["core_count"] == 2
-
-
-def test_skeleton_rejects_a_modal_core_below_the_seventy_five_percent_threshold(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
-    modal = {"pokemon": [{"name": "Mon", "count": 4}], "energy": [{"name": "Grass Energy", "count": 52}], "trainer": [{"name": "Trainer", "count": 4}]}
-    variant = {"pokemon": [{"name": "Alt", "count": 4}], "energy": [{"name": "Grass Energy", "count": 52}], "trainer": [{"name": "Trainer", "count": 4}]}
-    store.upsert_standings("event", [
-        {"player": f"p{index}", "deck": {"id": "a"}, "decklist": decklist}
-        for index, decklist in enumerate([modal, modal, variant, variant])
-    ])
-
-    details = store.observed_skeleton_details("a")
-
-    assert details["cards"] == []
-    assert details["core_share"] == pytest.approx(0.5)
-
-
 def test_database_checkout_requires_git_lfs_documentation():
     from src.bdif.settings import BdifSettings
 
@@ -558,27 +433,6 @@ def test_database_checkout_requires_git_lfs_documentation():
     assert "data/limitless.db filter=lfs" in attributes
     assert "Git LFS" in docs
     assert "git lfs pull" in docs
-
-
-
-def test_observed_skeleton_clamps_cards_and_keeps_one_ace_spec(tmp_path):
-    store = LimitlessStore(tmp_path / "limitless.db", deck_mapping=SYNTHETIC_DECK_MAPPING)
-    standings = []
-    for index in range(4):
-        standings.append({
-            "player": f"p{index}",
-            "deck": {"id": "a"},
-            "decklist": {"pokemon": [{"name": "Weird Card", "count": 4}], "energy": [{"name": "Darkness Energy", "count": 49}], "trainer": [
-                {"name": "Prime Catcher", "count": 1},
-
-                {"name": "Trainer", "count": 4},
-                {"name": "Trainer 2", "count": 2},
-            ]},
-        })
-    store.upsert_standings("event", standings)
-    skeleton = store.observed_skeleton("a")
-    assert {row["card"]: row["copies"] for row in skeleton}["Weird Card"] == 4
-    assert not any(row["card"] in {"Prime Catcher", "Master Ball"} for row in skeleton)
 
 
 def test_invalid_ace_spec_decklists_are_excluded_from_feature_inputs(tmp_path):
@@ -705,112 +559,11 @@ def test_card_model_fit_has_no_intercept():
 
 
 @pytest.mark.unit
-def test_best60_ranks_positive_pooled_cards_in_score_order():
-    result = recommend_best60(Best60Request(
-        archetype="a",
-        candidates=["High", "Middle", "Low"],
-        coefficients={"High": 3.0, "Middle": 2.0, "Low": 1.0},
-        coefficient_intervals={"High": (1.0, 3.0), "Middle": (1.0, 2.0), "Low": (0.5, 1.5)},
-        inclusion={"a": {"High": 1.0, "Middle": 1.0, "Low": 1.0}, "b": {}},
-        meta_weights={"b": 1.0},
-        skeleton=[{"card": "Darkness Energy", "copies": 48}],
-    ))
-    cards = [row["card"] for row in result["cards"] if row["card"] in {"High", "Middle", "Low"}]
-    assert cards == ["High", "Middle", "Low"]
-
-
-def test_best60_normalizes_skeleton_copy_and_ace_spec_rules():
-    result = recommend_best60(Best60Request(
-        archetype="a",
-        candidates=[],
-        coefficients={},
-        coefficient_intervals={},
-        inclusion={"a": {}, "b": {}},
-        meta_weights={"b": 1.0},
-        playable_cards={"Darkness Energy"},
-        skeleton=[
-            {"card": "Weird Card", "copies": 9},
-            {"card": "Prime Catcher", "copies": 1},
-            {"card": "Master Ball", "copies": 1},
-            {"card": "Darkness Energy", "copies": 50},
-        ],
-    ))
-    assert result["total_copies"] == 60
-    validate_recommendation(result["cards"])
-    assert sum(row["card"] in {"Prime Catcher", "Master Ball"} for row in result["cards"]) <= 1
-
-
-def test_best60_fill_target_preserves_exact_sixty_card_contract():
-    result = recommend_best60(Best60Request(
-        archetype="a",
-        candidates=[],
-        coefficients={},
-        coefficient_intervals={},
-        inclusion={"a": {}, "b": {}},
-        meta_weights={"b": 1.0},
-        playable_cards={"Darkness Energy"},
-        skeleton=[{"card": "Darkness Energy", "copies": 1}],
-    ))
-    assert result["total_copies"] == 60
-    validate_recommendation(result["cards"])
-
-
-def test_best60_benjamini_hochberg_gate_filters_weak_candidates():
-    cards = [f"Card {index}" for index in range(20)]
-    result = recommend_best60(Best60Request(
-        archetype="a",
-        candidates=cards,
-        coefficients={card: 10.0 if index == 0 else 0.01 for index, card in enumerate(cards)},
-        coefficient_intervals={card: (0.9, 1.1) for card in cards},
-        inclusion={"a": {card: 1.0 for card in cards}, "b": {}},
-        meta_weights={"b": 1.0},
-        playable_cards=set(cards) | {"Darkness Energy"},
-        skeleton=[{"card": "Darkness Energy", "copies": 40}],
-    ))
-    assert any(row["card"] != "Card 0" for row in result["no_signal"])
-
-
-@pytest.mark.parametrize("skeleton_size", range(0, 61, 4))
-@pytest.mark.parametrize("signal_count", [0, 1, 2, 10])
-def test_best60_legality_matrix_returns_deck_or_status(skeleton_size, signal_count):
-    signal_cards = [f"Signal {index}" for index in range(signal_count)]
-    result = recommend_best60(Best60Request(
-        archetype="a",
-        candidates=signal_cards,
-        coefficients={card: float(signal_count - index) for index, card in enumerate(signal_cards)},
-        coefficient_intervals={card: (0.1, 0.2) for card in signal_cards},
-        inclusion={"a": {card: 1.0 for card in signal_cards}, "b": {}},
-        meta_weights={"b": 1.0},
-        playable_cards=set(signal_cards) | {"Darkness Energy"},
-        skeleton=[{"card": "Darkness Energy", "copies": skeleton_size}],
-    ))
-    assert "status" in result or result["total_copies"] == 60
-    if "status" not in result:
-        validate_recommendation(result["cards"])
-
-
-@pytest.mark.unit
 def test_best60_rejects_two_ace_specs():
     with pytest.raises(ValueError, match="one ACE SPEC"):
         validate_recommendation(
             [{"card": "Prime Catcher", "copies": 1}, {"card": "Master Ball", "copies": 1}, {"card": "Darkness Energy", "copies": 58}]
         )
-
-
-@pytest.mark.unit
-def test_best60_puts_zero_spanning_interval_in_no_signal_bucket():
-    result = recommend_best60(Best60Request(
-        archetype="a",
-        candidates=["Uncertain"],
-        coefficients={"Uncertain": 0.1},
-        coefficient_intervals={"Uncertain": (-0.2, 0.2)},
-        inclusion={"a": {"Uncertain": 1.0}, "b": {"Uncertain": 0.0}},
-        meta_weights={"b": 1.0},
-        skeleton=[{"card": "Darkness Energy", "copies": 59}],
-    ))
-
-    assert result["total_copies"] == 60
-    assert {row["card"] for row in result["no_signal"]} >= {"Uncertain"}
 
 
 @pytest.mark.unit
@@ -834,31 +587,6 @@ def test_panel_decks_include_every_empirical_share_above_threshold():
 def test_panel_decks_cap_at_ten_after_share_threshold():
     shares = {f"deck-{index}": 0.04 - index / 1000 for index in range(12)}
     assert len(select_panel_decks(shares, threshold=0.03)) == 10
-
-
-@pytest.mark.unit
-def test_best60_reports_card_evidence_and_partial_status():
-    result = recommend_best60(Best60Request(
-        archetype="a",
-        candidates=["Signal Card"],
-        coefficients={"Signal Card": 2.0},
-        coefficient_intervals={"Signal Card": (1.0, 3.0)},
-        inclusion={"a": {"Signal Card": 1.0}, "b": {"Signal Card": 0.0}},
-        meta_weights={"b": 1.0},
-        playable_cards={"Signal Card"},
-        skeleton=[{"card": "Signal Card", "copies": 1}],
-    ))
-    assert result["status"] == "insufficient legal observed cards to complete 60"
-    assert result["card_evidence"]["Signal Card"] == {
-        "inclusion_rate": 1.0,
-        "field_inclusion_rate": 0.0,
-        "inclusion_delta": 1.0,
-        "coefficient": 2.0,
-        "contribution": 2.0,
-        "interval": (1.0, 3.0),
-        "q_value": pytest.approx(8.854896862420247e-05),
-        "bucket": "signal",
-    }
 
 
 @pytest.mark.unit

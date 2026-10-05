@@ -198,18 +198,6 @@
     "replace": "        if False:"
   },
   {
-    "name": "unobserved Pokemon admitted",
-    "file": "src/ingestion/model.py",
-    "find": "    playable_cards -= pokemon_cards - (observed_pokemon_cards or set())",
-    "replace": "    pass"
-  },
-  {
-    "name": "skeleton accepts minority profile",
-    "file": "src/ingestion/store.py",
-    "find": "        modal_profile, support = max(profiles.items(), key=lambda item: (item[1], item[0]))",
-    "replace": "        return {\"cards\": [], \"legal_list_count\": 0, \"core_support\": 0, \"core_share\": 0.0, \"core_count\": 0}\n        profiles = {}"
-  },
-  {
     "name": "pagination stops after the first page",
     "file": "src/ingestion/client.py",
     "find": "            page += 1",

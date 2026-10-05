@@ -1,14 +1,19 @@
-mutations.best60-selection.json::delete the Benjamini-Hochberg gate
-mutations.best60-selection.json::drop the skeleton ACE SPEC guard
-mutations.best60-selection.json::invert the ranking order
+mutations.best60-selection.json::breakthrough ignores the model
+mutations.best60-selection.json::consensus allows two ACE SPECs
+mutations.best60-selection.json::consensus picks the least-played slots
+mutations.best60-selection.json::evolution added without its basic
+mutations.best60-selection.json::finish tiers counted at events too small to earn them
+mutations.best60-selection.json::held-out folds split events
 mutations.best60-selection.json::invert the variance
-mutations.best60-selection.json::let add_cards ignore the per-card limit
 mutations.best60-selection.json::let addon failures kill the job again
 mutations.best60-selection.json::misspell the H1 card constant
+mutations.best60-selection.json::player strength keeps the scored event
+mutations.best60-selection.json::player strength left out of the model
 mutations.best60-selection.json::remove the feature-flag gate
 mutations.best60-selection.json::revert to the unweighted Gram matrix
-mutations.best60-selection.json::stop clamping skeleton copies to the limit
-mutations.best60-selection.json::target 59 cards instead of 60
+mutations.best60-selection.json::swap removes the last Pokemon
+mutations.best60-selection.json::swaps applied at any probability
+mutations.best60-selection.json::swaps applied whatever the held-out gain
 mutations.best60-selection.json::zero the carried match counts
 mutations.card-model-statistics.json::always-together cards fitted separately
 mutations.card-model-statistics.json::drop rank guard
@@ -66,12 +71,10 @@ mutations.report-contracts.json::report not written to the output directory
 mutations.report-contracts.json::request cap back to 64
 mutations.report-contracts.json::service ignores input_path
 mutations.report-contracts.json::service ignores limit
-mutations.report-contracts.json::skeleton accepts minority profile
 mutations.report-contracts.json::status migrates the store before summarising
 mutations.report-contracts.json::store connections left open
 mutations.report-contracts.json::store construction reads the simulation input
 mutations.report-contracts.json::store drops player ids
 mutations.report-contracts.json::stored events fetched again
 mutations.report-contracts.json::ties counted as wins for the first deck
-mutations.report-contracts.json::unobserved Pokemon admitted
 mutations.report-contracts.json::unweighted pooling

@@ -67,16 +67,6 @@ def _logistic_standard_errors(estimator: LogisticRegression, design: np.ndarray,
     return np.sqrt(np.maximum(np.diag(covariance), 0.0))
 
 
-def benjamini_hochberg(p_values: Mapping[str, float]) -> dict[str, float]:
-    ordered = sorted(p_values.items(), key=lambda item: item[1])
-    adjusted = {}
-    running = 1.0
-    for rank, (card, p_value) in reversed(list(enumerate(ordered, start=1))):
-        running = min(running, p_value * len(ordered) / rank)
-        adjusted[card] = min(1.0, running)
-    return adjusted
-
-
 def _card_limit(card: str, card_rules: Mapping[str, Mapping[str, Any]]) -> int | None:
     rule = card_rules.get(card, {})
     if rule.get("basic_energy") or rule.get("type") == "basic_energy" or card in BASIC_ENERGY_NAMES:
@@ -135,21 +125,6 @@ class FittedCardModel:
             card = self.members.get(name, (name,))[0]
             row[0, offset + index] = self.inclusion.get(deck_i, {}).get(card, 0.0) - self.inclusion.get(deck_j, {}).get(card, 0.0)
         return float(self.estimator.predict_proba(row)[0, 1])
-
-
-@dataclass(frozen=True)
-class Best60Request:
-    archetype: str
-    candidates: Sequence[str]
-    coefficients: Mapping[str, float]
-    coefficient_intervals: Mapping[str, tuple[float, float]]
-    inclusion: Mapping[str, Mapping[str, float]]
-    meta_weights: Mapping[str, float]
-    banned_cards: set[str] | None = None
-    card_rules: Mapping[str, Mapping[str, Any]] | None = None
-    playable_cards: set[str] | None = None
-    observed_pokemon_cards: set[str] | None = None
-    skeleton: Sequence[Mapping[str, Any]] | None = None
 
 
 def _mean_presence(observations: Sequence[PlayerObservation], decks: Sequence[str], cards: Sequence[str]) -> dict[str, dict[str, float]]:
@@ -327,170 +302,6 @@ def validate_recommendation(cards: Sequence[Mapping[str, Any]], banned_cards: se
         raise ValueError("recommendation may contain at most one ACE SPEC card")
     if total_copies != 60:
         raise ValueError("recommendation must contain exactly 60 cards")
-
-
-def recommend_best60(request: Best60Request) -> dict[str, Any]:
-    archetype = request.archetype
-    candidates = request.candidates
-    coefficients = request.coefficients
-    coefficient_intervals = request.coefficient_intervals
-    inclusion = request.inclusion
-    meta_weights = request.meta_weights
-    banned_cards = request.banned_cards
-    card_rules = request.card_rules
-    playable_cards = request.playable_cards
-    skeleton = request.skeleton
-    banned_cards = banned_cards or set()
-    card_rules = card_rules or {}
-    playable_cards = set(playable_cards) if playable_cards is not None else set(candidates)
-    observed_pokemon_cards = request.observed_pokemon_cards
-    pokemon_cards = {card for card in set(candidates) | playable_cards if card_rules.get(card, {}).get("type") == "pokemon"}
-    playable_cards -= pokemon_cards - (observed_pokemon_cards or set())
-    candidates = [card for card in candidates if card not in pokemon_cards or card in (observed_pokemon_cards or set())]
-    scored = []
-    for card in candidates:
-        if card in banned_cards or card not in playable_cards:
-            continue
-        delta = sum(weight * (inclusion.get(archetype, {}).get(card, 0.0) - inclusion.get(opponent, {}).get(card, 0.0)) for opponent, weight in meta_weights.items())
-        coefficient = coefficients.get(card, 0.0)
-        lower, upper = coefficient_intervals.get(card, (coefficient, coefficient))
-        score = coefficient * delta
-        interval = (min(lower * delta, upper * delta), max(lower * delta, upper * delta))
-        scored.append({"card": card, "score": score, "lower": interval[0], "upper": interval[1], "bucket": "signal" if interval[0] > 0 or interval[1] < 0 else "no signal"})
-    p_values = {}
-    for row in scored:
-        width = max(row["upper"] - row["lower"], 1e-9)
-        p_values[row["card"]] = min(1.0, 2.0 * (1.0 - norm.cdf(abs(row["score"]) / (width / (2 * 1.96)))))
-    q_values = benjamini_hochberg(p_values)
-    for row in scored:
-        row["q_value"] = q_values[row["card"]]
-        if row["q_value"] > 0.05 or row["lower"] <= 0 <= row["upper"]:
-            row["bucket"] = "no signal"
-    scored.sort(key=lambda row: row["score"], reverse=True)
-    no_signal = [{"card": row["card"]} for row in scored if row["bucket"] == "no signal"]
-    signal = [row for row in scored if row["bucket"] == "signal"]
-    card_evidence = {
-        card: {
-            "inclusion_rate": inclusion.get(archetype, {}).get(card, 0.0),
-            "field_inclusion_rate": sum(
-                weight * inclusion.get(opponent, {}).get(card, 0.0)
-                for opponent, weight in meta_weights.items()
-            ),
-            "inclusion_delta": inclusion.get(archetype, {}).get(card, 0.0)
-            - sum(
-                weight * inclusion.get(opponent, {}).get(card, 0.0)
-                for opponent, weight in meta_weights.items()
-            ),
-            "coefficient": coefficients.get(card, 0.0),
-            "contribution": coefficients.get(card, 0.0)
-            * (
-                inclusion.get(archetype, {}).get(card, 0.0)
-                - sum(
-                    weight * inclusion.get(opponent, {}).get(card, 0.0)
-                    for opponent, weight in meta_weights.items()
-                )
-            ),
-            "interval": coefficient_intervals.get(card, (coefficients.get(card, 0.0), coefficients.get(card, 0.0))),
-            "q_value": next((row["q_value"] for row in scored if row["card"] == card), None),
-            "bucket": next((row["bucket"] for row in scored if row["card"] == card), "not scored"),
-        }
-        for card in candidates
-    }
-    if not skeleton:
-        return {
-            "archetype": archetype,
-            "cards": [],
-            "no_signal": no_signal,
-            "card_evidence": card_evidence,
-            "observational": True,
-            "total_copies": 0,
-            "status": "missing observed skeleton",
-            "ace_spec_choice": None,
-        }
-
-    selected: list[dict[str, Any]] = []
-    selected_by_card: dict[str, dict[str, Any]] = {}
-    ace_selected = False
-    for item in skeleton:
-        card = str(item["card"])
-        copies = int(item["copies"])
-        if copies <= 0 or card in banned_cards:
-            continue
-        if _is_ace_spec(card, card_rules):
-            if ace_selected:
-                continue
-            copies = 1
-            ace_selected = True
-        else:
-            limit = _card_limit(card, card_rules)
-            if limit is not None:
-                copies = min(copies, limit)
-        if copies:
-            selected_by_card[card] = {"card": card, "copies": copies}
-    selected = list(selected_by_card.values())
-
-    def add_cards(card: str, copies: int) -> int:
-        if copies <= 0 or card in banned_cards or card not in playable_cards:
-            return 0
-        if _is_ace_spec(card, card_rules) and ace_selected:
-            return 0
-        existing = selected_by_card.get(card, {"card": card, "copies": 0})
-        limit = _card_limit(card, card_rules)
-        available = copies if limit is None else min(copies, max(0, limit - int(existing["copies"])))
-        available = min(available, 60 - sum(int(item["copies"]) for item in selected_by_card.values()))
-        if available <= 0:
-            return 0
-        existing["copies"] = int(existing["copies"]) + available
-        selected_by_card[card] = existing
-        return available
-
-    for row in signal:
-        if row["card"] in selected_by_card or _is_ace_spec(row["card"], card_rules):
-            continue
-        if sum(int(item["copies"]) for item in selected_by_card.values()) >= 60:
-            break
-        add_cards(row["card"], 60)
-
-    ace_candidates = [row for row in scored if _is_ace_spec(row["card"], card_rules)]
-    if not ace_selected and ace_candidates:
-        ace_selected = bool(add_cards(ace_candidates[0]["card"], 1))
-
-    fallback_cards = sorted(
-        (card for card in playable_cards if card not in banned_cards),
-        key=lambda card: inclusion.get(archetype, {}).get(card, 0.0),
-        reverse=True,
-    )
-    for card in fallback_cards:
-        if card in selected_by_card or _is_ace_spec(card, card_rules):
-            continue
-        if sum(int(item["copies"]) for item in selected_by_card.values()) >= 60:
-            break
-        add_cards(card, 60)
-
-    total_copies = sum(int(item["copies"]) for item in selected_by_card.values())
-    if total_copies < 60:
-        basic_energy = next(
-            (card for card in fallback_cards if _card_limit(card, card_rules) is None),
-            next((item["card"] for item in selected if _card_limit(item["card"], card_rules) is None), None),
-        )
-        if basic_energy:
-            add_cards(basic_energy, 60 - total_copies)
-
-    selected = list(selected_by_card.values())
-    total_copies = sum(int(item["copies"]) for item in selected)
-    if total_copies != 60:
-        return {
-            "archetype": archetype,
-            "cards": selected,
-            "no_signal": no_signal,
-            "card_evidence": card_evidence,
-            "observational": True,
-            "total_copies": total_copies,
-            "status": "insufficient legal observed cards to complete 60",
-            "ace_spec_choice": next((row["card"] for row in selected if _is_ace_spec(row["card"], card_rules)), None),
-        }
-    validate_recommendation(selected, banned_cards, card_rules)
-    return {"archetype": archetype, "cards": selected, "no_signal": no_signal, "card_evidence": card_evidence, "observational": True, "total_copies": total_copies, "ace_spec_choice": next((row["card"] for row in selected if _is_ace_spec(row["card"], card_rules)), None)}
 
 
 def fit_h1_misty_variant(observations: Sequence[Mapping[str, Any]]) -> dict[str, Any]:

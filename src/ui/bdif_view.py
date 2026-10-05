@@ -70,28 +70,67 @@ def panel_rows(matchup_panel: Mapping[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _swap_rows(swaps: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "Out": f"{swap['remove']} (copy {swap['remove_copy']})",
+            "In": f"{swap['add']} (copy {swap['add_copy']})",
+            "Gain (log-odds)": round(float(swap["gain"]), 3),
+            "Chance it helps %": _percent(swap["probability"]),
+        }
+        for swap in swaps
+    ]
+
+
 def best60_view(recommendation: Mapping[str, Any]) -> dict[str, Any]:
     cards = recommendation.get("cards", [])
-    evidence = recommendation.get("card_evidence", {})
+    stats = recommendation.get("card_stats", {})
+    rates = recommendation.get("match_win_rate", {})
+    model = recommendation.get("model", {})
+    trend = recommendation.get("trends", {})
+
+    def tier(card: str, name: str) -> float | None:
+        value = stats.get(card, {}).get(name, {}).get("with_card")
+        return None if value is None else _percent(value)
+
     return {
         "status": recommendation.get("status", "complete"),
+        "deck_ids": list(recommendation.get("deck_ids", [])),
+        "legal_list_count": int(recommendation.get("legal_list_count", 0)),
         "ace_spec_choice": recommendation.get("ace_spec_choice"),
         "total_copies": int(recommendation.get("total_copies", sum(int(c["copies"]) for c in cards))),
-        "cards": [{"Card": c["card"], "Copies": int(c["copies"])} for c in cards],
-        "evidence": [
+        "cards": [
             {
-                "Card": card,
-                "Inclusion %": round(float(e["inclusion_rate"]) * 100, 1),
-                "Field inclusion %": round(float(e["field_inclusion_rate"]) * 100, 1),
-                "Coefficient": round(float(e["coefficient"]), 3),
-                "95% low": round(float(e["interval"][0]), 3),
-                "95% high": round(float(e["interval"][1]), 3),
-                "q-value": None if e.get("q_value") is None else round(float(e["q_value"]), 3),
-                "Verdict": e.get("bucket", "not scored"),
+                "Card": c["card"],
+                "Copies": int(c["copies"]),
+                "Consensus": int(c.get("consensus_copies", c["copies"])),
+                "Source": c.get("source", "consensus"),
+                "Play rate %": None if c["card"] not in stats else _percent(stats[c["card"]]["play_rate"]),
+                "Top 25% rate %": tier(c["card"], "top25"),
             }
-            for card, e in sorted(evidence.items(), key=lambda item: -abs(float(item[1]["contribution"])))
+            for c in [*cards, *recommendation.get("removed_cards", [])]
         ],
-        "no_signal": [row["card"] for row in recommendation.get("no_signal", [])],
+        "swaps": _swap_rows(recommendation.get("swaps", [])),
+        "proposed_swaps": _swap_rows(recommendation.get("proposed_swaps", [])),
+        "leaning_swaps": _swap_rows(recommendation.get("leaning_swaps", [])),
+        "win_rates": {
+            "Archetype average %": None if "archetype_average" not in rates else _percent(rates["archetype_average"]),
+            "With swaps, held out %": None if "with_swaps_held_out" not in rates else _percent(rates["with_swaps_held_out"]),
+            "With swaps, in sample %": None if "with_swaps_in_sample" not in rates else _percent(rates["with_swaps_in_sample"]),
+        },
+        "prior_sd": model.get("prior_sd"),
+        "breakthrough": list(trend.get("breakthrough", [])),
+        "trends": [
+            {
+                "Card": row["card"],
+                "Start %": _percent(row["start_share"]),
+                "End %": _percent(row["end_share"]),
+                "Change (points)": _percent(row["change"]),
+                "Copies change": round(float(row["copies_change"]), 2),
+                "Model effect": None if row.get("model_effect") is None else round(float(row["model_effect"]), 3),
+            }
+            for row in [*trend.get("rising", []), *trend.get("falling", [])]
+        ],
     }
 
 

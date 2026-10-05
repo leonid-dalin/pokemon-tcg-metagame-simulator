@@ -80,31 +80,36 @@ def test_field_posterior_rows_rank_by_best_pick_and_label_thin_decks():
 
 
 @pytest.mark.unit
-def test_best60_view_surfaces_status_evidence_and_no_signal_cards():
+def test_best60_view_shows_sources_swaps_held_out_rates_and_breakthroughs():
+    swap = {"remove": "Boss's Orders", "remove_copy": 4, "add": "Judge", "add_copy": 1, "gain": 0.0512, "probability": 0.8123}
     view = bdif_view.best60_view({
-        "cards": [],
-        "status": "missing observed skeleton",
-        "ace_spec_choice": "Prime Catcher",
-        "total_copies": 0,
-        "no_signal": [{"card": "Weak"}],
-        "card_evidence": {
-            "Weak": {
-                "inclusion_rate": 0.5,
-                "field_inclusion_rate": 0.4,
-                "coefficient": 0.01,
-                "contribution": 0.001,
-                "interval": (-1.0, 1.0),
-                "q_value": 0.9,
-                "bucket": "no signal",
-            }
-        },
+        "status": "consensus kept: swaps did not hold up on held-out events",
+        "deck_ids": ["crustle-dri"],
+        "legal_list_count": 1073,
+        "ace_spec_choice": "Hero's Cape",
+        "total_copies": 60,
+        "cards": [{"card": "Crustle", "copies": 3, "consensus_copies": 3, "source": "consensus"}],
+        "removed_cards": [{"card": "Lumiose City", "copies": 0, "consensus_copies": 1, "source": "swap"}],
+        "swaps": [],
+        "proposed_swaps": [swap],
+        "leaning_swaps": [],
+        "model": {"prior_sd": 0.05},
+        "match_win_rate": {"archetype_average": 0.5032, "with_swaps_in_sample": 0.5592, "with_swaps_held_out": 0.4986},
+        "card_stats": {"Crustle": {"play_rate": 1.0, "top25": {"with_card": 0.37}}},
+        "trends": {"breakthrough": ["Judge"], "rising": [{"card": "Judge", "start_share": 0.1, "end_share": 0.5, "change": 0.4, "copies_change": 0.5, "model_effect": 0.02}], "falling": []},
     })
 
-    assert view["status"] == "missing observed skeleton"
-    assert view["ace_spec_choice"] == "Prime Catcher"
-    assert view["no_signal"] == ["Weak"]
-    assert view["evidence"][0]["Verdict"] == "no signal"
-    assert view["evidence"][0]["95% low"] == -1.0
+    assert view["status"] == "consensus kept: swaps did not hold up on held-out events"
+    assert view["deck_ids"] == ["crustle-dri"]
+    assert view["cards"] == [
+        {"Card": "Crustle", "Copies": 3, "Consensus": 3, "Source": "consensus", "Play rate %": 100.0, "Top 25% rate %": 37.0},
+        {"Card": "Lumiose City", "Copies": 0, "Consensus": 1, "Source": "swap", "Play rate %": None, "Top 25% rate %": None},
+    ]
+    assert view["swaps"] == []
+    assert view["proposed_swaps"] == [{"Out": "Boss's Orders (copy 4)", "In": "Judge (copy 1)", "Gain (log-odds)": 0.051, "Chance it helps %": 81.23}]
+    assert view["win_rates"] == {"Archetype average %": 50.32, "With swaps, held out %": 49.86, "With swaps, in sample %": 55.92}
+    assert view["breakthrough"] == ["Judge"]
+    assert view["trends"][0]["Change (points)"] == 40.0
 
 
 @pytest.mark.unit

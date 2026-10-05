@@ -1,5 +1,13 @@
 # Changelog
 
+## October 2026
+
+### Best-60 from results
+
+- Best-60 starts from each archetype's consensus list and applies card-count swaps only when they hold up on held-out events, with player strength controlled
+- The report adds finish-tier rates per card, rising and falling cards, and breakthrough cards
+- The 75% core gate, the four-of fill and the Benjamini-Hochberg card gate are gone; Best-60 no longer depends on the card model fitting
+
 ## September 2026
 
 The September release cycle added live matchup discovery, stronger request and matrix validation, Redis-backed SSE reliability, reproducible simulation seeds, the data-backed BDIF card model, posterior field analytics, the BDIF command line, and the dashboard views that expose those results
