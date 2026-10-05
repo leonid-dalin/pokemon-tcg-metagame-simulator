@@ -281,18 +281,27 @@ def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
         for archetype, recommendation in recommendations.items():
             view = bdif_view.best60_view(recommendation)
             st.markdown(f"#### {archetype}")
-            st.caption("Observational associations, not causal effects.")
+            st.caption(
+                f"Consensus of {view['legal_list_count']} legal lists ({', '.join(view['deck_ids']) or 'no deck id'}), "
+                "changed only by swaps that held up on held-out events. Observational, player strength controlled."
+            )
             st.caption(f"ACE SPEC choice: {view['ace_spec_choice'] or 'No ACE SPEC selected'}")
             if view["status"] != "complete":
                 st.warning(f"{archetype}: {view['status']}")
             if view["cards"]:
                 st.dataframe(pd.DataFrame(view["cards"]), width="stretch", hide_index=True)
                 st.caption(f"{view['total_copies']} cards")
-            if view["evidence"]:
-                with st.expander("Card evidence"):
-                    st.dataframe(pd.DataFrame(view["evidence"]), width="stretch", hide_index=True)
-            if view["no_signal"]:
-                st.caption("No signal: " + ", ".join(view["no_signal"]))
+            if any(value is not None for value in view["win_rates"].values()):
+                st.dataframe(pd.DataFrame([view["win_rates"]]), width="stretch", hide_index=True)
+            for title, key in (("Applied swaps", "swaps"), ("Proposed swaps that did not hold up", "proposed_swaps"), ("Leaning swaps", "leaning_swaps")):
+                if view[key]:
+                    with st.expander(title):
+                        st.dataframe(pd.DataFrame(view[key]), width="stretch", hide_index=True)
+            if view["breakthrough"]:
+                st.caption("Breakthrough cards: " + ", ".join(view["breakthrough"]))
+            if view["trends"]:
+                with st.expander("Rising and falling cards"):
+                    st.dataframe(pd.DataFrame(view["trends"]), width="stretch", hide_index=True)
     with h1_tab:
         h1_report = mc_res.get("h1_report", {})
         if h1_report:

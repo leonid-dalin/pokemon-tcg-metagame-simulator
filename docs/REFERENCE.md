@@ -24,7 +24,7 @@ This page lists the current entry points for the simulator. Read it with the sou
 - `execute_simulation_job`: runs the solver, tournament structure selection, Monte Carlo engine, and optional BDIF reports
 - `automated_daily_pipeline`: fetches and validates the live matchup matrix every two hours at minute 0 (`0 */2 * * *`). Each run makes outbound requests to LimitlessTCG
 - `ingest_limitless_results`: stores Limitless tournaments and builds optional model artefacts
-- `_build_bdif_report_addons`: builds Best-60 and H1 reports when the card model flag is enabled
+- `_build_bdif_report_addons`: builds Best-60 and H1 reports when the card model flag is enabled; Best-60 comes from `src/ingestion/best60.py`
 
 ## Core modules
 
@@ -82,7 +82,7 @@ Calls the Limitless API with `LIMITLESS_API_KEY` in the `X-Access-Key` header
 
 ### `src/ingestion/model.py`
 
-Fits card covariates, computes H1 reports, selects empirical panel decks, and builds legality-aware Best-60 recommendations
+Fits card covariates, computes H1 reports, selects empirical panel decks, and checks list legality. Best-60 lists are built in `src/ingestion/best60.py`
 
 ### `src/ingestion/aggregate.py`
 
