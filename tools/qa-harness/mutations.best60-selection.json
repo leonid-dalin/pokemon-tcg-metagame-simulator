@@ -70,5 +70,71 @@
     "file": "src/ingestion/model.py",
     "find": "        if row[\"q_value\"] > 0.05 or row[\"lower\"] <= 0 <= row[\"upper\"]:\n            row[\"bucket\"] = \"no signal\"",
     "replace": "        pass"
+  },
+  {
+    "name": "consensus picks the least-played slots",
+    "file": "src/ingestion/best60.py",
+    "find": "    for card, copy in sorted(support, key=lambda slot: (-support[slot], slot[0], slot[1])):",
+    "replace": "    for card, copy in sorted(support, key=lambda slot: (support[slot], slot[0], slot[1])):"
+  },
+  {
+    "name": "consensus allows two ACE SPECs",
+    "file": "src/ingestion/best60.py",
+    "find": "        if card in ACE_SPEC_CARDS and any(other in ACE_SPEC_CARDS for other in deck):\n            continue\n",
+    "replace": ""
+  },
+  {
+    "name": "player strength keeps the scored event",
+    "file": "src/ingestion/best60.py",
+    "find": "        other_wins = totals[player][0] - wins\n",
+    "replace": "        other_wins = totals[player][0]\n"
+  },
+  {
+    "name": "player strength left out of the model",
+    "file": "src/ingestion/best60.py",
+    "find": "    return wins, games, skill - skill.mean()",
+    "replace": "    return wins, games, 0.0 * skill"
+  },
+  {
+    "name": "held-out folds split events",
+    "file": "src/ingestion/best60.py",
+    "find": "    fold_of = dict(zip(events, order))\n    return np.array([fold_of[entry.event] for entry in lists])",
+    "replace": "    return np.arange(len(lists)) % FOLDS"
+  },
+  {
+    "name": "swaps applied at any probability",
+    "file": "src/ingestion/best60.py",
+    "find": "if swap[\"probability\"] >= BDIF_BEST60_APPLY_PROBABILITY]",
+    "replace": "if swap[\"probability\"] >= 0.0]"
+  },
+  {
+    "name": "swaps applied whatever the held-out gain",
+    "file": "src/ingestion/best60.py",
+    "find": "            if gain_held_out > 0:",
+    "replace": "            if True:"
+  },
+  {
+    "name": "evolution added without its basic",
+    "file": "src/ingestion/best60.py",
+    "find": "        if copy == 1 and not needs.get(card, set()) <= present:\n            continue\n",
+    "replace": ""
+  },
+  {
+    "name": "swap removes the last Pokemon",
+    "file": "src/ingestion/best60.py",
+    "find": "groups.get(card) == \"pokemon\" or ",
+    "replace": ""
+  },
+  {
+    "name": "finish tiers counted at events too small to earn them",
+    "file": "src/ingestion/best60.py",
+    "find": "    if entry.players < floor or entry.placing is None:",
+    "replace": "    if entry.placing is None:"
+  },
+  {
+    "name": "breakthrough ignores the model",
+    "file": "src/ingestion/best60.py",
+    "find": " and (row[\"model_effect\"] is None or row[\"model_effect\"] > 0)",
+    "replace": ""
   }
 ]
