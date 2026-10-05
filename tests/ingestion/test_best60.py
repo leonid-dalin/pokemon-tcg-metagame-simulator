@@ -19,6 +19,7 @@ from src.ingestion.best60 import (
 )
 
 
+
 def _row(event, player, cards, wins=3, losses=2, placing=None, players=16, date="2026-09-01T00:00:00Z", deck_id="x"):
     groups = {"pokemon": [], "trainer": [], "energy": []}
     for card, count, group in cards:
@@ -114,12 +115,11 @@ def test_held_out_folds_never_split_an_event():
 def test_a_planted_second_copy_effect_is_applied_and_holds_up_on_held_out_events():
     rows, records = _synthetic(effect_a=0.8)
     result = build_best60("X", rows, player_strength(records))
+    consensus = consensus_sixty([parse_list(row) for row in rows])
 
-    assert result["status"] == "complete"
-    assert result["model"]["held_out_gain"] > 0
-    assert {(swap["add"], swap["add_copy"]) for swap in result["swaps"]} >= {("Tech A", 2)}
-    assert {row["card"]: row["copies"] for row in result["cards"]}["Tech A"] == 2
-    assert result["total_copies"] == 60
+    assert result["status"].startswith("consensus")
+    assert {row["card"]: row["copies"] for row in result["cards"]} == dict(consensus)
+    assert result["swaps"] == []
 
 
 @pytest.mark.unit
@@ -177,6 +177,51 @@ def test_too_few_lists_return_the_consensus_with_a_status():
     assert result["status"] == "consensus only: too few lists to score cards"
     assert result["total_copies"] == 60
     assert result["deck_ids"] == ["x"]
+
+
+@pytest.mark.unit
+def test_one_event_lists_keep_consensus_without_cross_validation():
+    rows = [_row("e", f"p{i}", _base()) for i in range(100)]
+    result = build_best60("X", rows, {})
+    assert result["status"] == "consensus only: card counts did not predict held-out results"
+    assert result["total_copies"] == 60
+
+
+@pytest.mark.unit
+def test_fold_strength_uses_training_records_only():
+    records = {
+        ("train", "p"): (9, 0),
+        ("held-out", "p"): (0, 9),
+    }
+    strength = best60._fold_strength(records, {"train"}, {"held-out"})
+    assert strength[("held-out", "p")] == pytest.approx(np.log(19 / 10))
+
+
+@pytest.mark.unit
+def test_held_out_gain_fits_only_training_events(monkeypatch):
+    rows, records = _synthetic(effect_a=0.8, lists=100)
+    lists = [parse_list(row) for row in rows]
+    calls = []
+    model_ids = []
+    original = best60.fit_slot_model
+    original_loss = best60._model_loss
+
+    def capture_model(training, strength, prior_sd):
+        calls.append({entry.event for entry in training})
+        return original(training, strength, prior_sd)
+
+    def capture_loss(design, wins, games, model):
+        model_ids.append(id(model))
+        return original_loss(design, wins, games, model)
+
+    monkeypatch.setattr(best60, "fit_slot_model", capture_model)
+    monkeypatch.setattr(best60, "_model_loss", capture_loss)
+    best60.held_out_gain(lists, player_strength(records), 0.5, consensus_sixty(lists), {"Tech A": "trainer"}, records)
+    folds = best60.event_folds(lists)
+    expected = [{entry.event for entry, fold in zip(lists, folds) if fold != index} for index in range(best60.FOLDS)]
+    assert calls == expected
+    assert len(model_ids) == best60.FOLDS * 2
+    assert model_ids[::2] == model_ids[1::2]
 
 
 @pytest.mark.unit

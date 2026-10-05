@@ -160,9 +160,10 @@ def build_model_addons(
     cache_path: str | Path,
     store,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    strength = player_strength(store.player_records())
+    records = store.player_records()
+    strength = player_strength(records)
     recommendations = {
-        deck: build_best60(deck, store.archetype_lists(deck), strength) if deck in weights else {"status": "unknown archetype"}
+        deck: build_best60(deck, store.archetype_lists(deck), strength, records) if deck in weights else {"status": "unknown archetype"}
         for deck in requested
     }
     try:

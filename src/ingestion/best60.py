@@ -62,6 +62,10 @@ class SlotModel:
     beta: np.ndarray
     covariance: np.ndarray
     prior_sd: float
+    intercept: float = 0.0
+    strength_beta: float = 0.0
+    slot_means: np.ndarray | None = None
+    strength_mean: float = 0.0
 
 
 def parse_list(row: Mapping[str, Any]) -> ArchetypeList | None:
@@ -169,11 +173,42 @@ def _fit(design: np.ndarray, wins: np.ndarray, games: np.ndarray, penalty: np.nd
     return result.x
 
 
-def _outcomes(lists: Sequence[ArchetypeList], strength: Mapping[tuple[str, str], float]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _fit_strength_model(
+    lists: Sequence[ArchetypeList],
+    strength: Mapping[tuple[str, str], float],
+) -> SlotModel:
+    strength_values = _strength_values(lists, strength)
+    strength_mean = float(strength_values.mean()) if len(strength_values) else 0.0
+    wins, games, skill = _outcomes(lists, strength, strength_mean)
+    design = np.column_stack([np.ones(len(skill)), skill])
+    coef = _fit(design, wins, games, np.full(2, 1e-4))
+    return SlotModel(
+        slots=[],
+        beta=np.zeros(0),
+        covariance=np.zeros((0, 0)),
+        prior_sd=0.0,
+        intercept=float(coef[0]),
+        strength_beta=float(coef[1]),
+        slot_means=np.zeros(0),
+        strength_mean=strength_mean,
+    )
+
+
+def _strength_values(lists: Sequence[ArchetypeList], strength: Mapping[tuple[str, str], float]) -> np.ndarray:
+    return np.array([strength.get((entry.event, entry.player), 0.0) for entry in lists], dtype=float)
+
+
+def _outcomes(
+    lists: Sequence[ArchetypeList],
+    strength: Mapping[tuple[str, str], float],
+    skill_mean: float | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     wins = np.array([entry.wins for entry in lists], dtype=float)
     games = np.array([entry.wins + entry.losses for entry in lists], dtype=float)
-    skill = np.array([strength.get((entry.event, entry.player), 0.0) for entry in lists], dtype=float)
-    return wins, games, skill - skill.mean()
+    skill = _strength_values(lists, strength)
+    if skill_mean is None:
+        skill_mean = float(skill.mean()) if len(skill) else 0.0
+    return wins, games, skill - skill_mean
 
 
 def _design(slot_matrix: np.ndarray, skill: np.ndarray, with_slots: bool) -> np.ndarray:
@@ -194,22 +229,82 @@ def event_folds(lists: Sequence[ArchetypeList]) -> np.ndarray:
     return np.array([fold_of[entry.event] for entry in lists])
 
 
-def held_out_losses(lists: Sequence[ArchetypeList], strength: Mapping[tuple[str, str], float]) -> dict[str, float]:
+def _fold_strength(
+    records: Mapping[tuple[str, str], tuple[int, int]],
+    training_events: set[str],
+    validation_events: set[str],
+) -> dict[tuple[str, str], float]:
+    training_records = {key: value for key, value in records.items() if key[0] in training_events}
+    strength = player_strength(training_records)
+    totals: dict[str, list[int]] = {}
+    for (_, player), (wins, losses) in training_records.items():
+        total = totals.setdefault(player, [0, 0])
+        total[0] += wins
+        total[1] += losses
+    prior = BDIF_BEST60_STRENGTH_PRIOR_GAMES
+    for (event, player) in records:
+        if event in validation_events:
+            wins, losses = totals.get(player, (0, 0))
+            strength[(event, player)] = math.log((wins + prior) / (losses + prior))
+    return strength
+
+
+def _model_design(
+    lists: Sequence[ArchetypeList],
+    strength: Mapping[tuple[str, str], float],
+    model: SlotModel,
+) -> np.ndarray:
+    matrix = _slot_matrix(lists, model.slots)
+    slot_means = model.slot_means if model.slot_means is not None else np.zeros(len(model.slots))
+    skill = _strength_values(lists, strength) - model.strength_mean
+    return np.hstack([np.ones((len(lists), 1)), skill[:, None], matrix - slot_means])
+
+
+def _model_loss(design: np.ndarray, wins: np.ndarray, games: np.ndarray, model: SlotModel) -> float:
+    coefficient = np.r_[model.intercept, model.strength_beta, model.beta]
+    eta = design @ coefficient
+    return float(-(wins * eta - games * np.logaddexp(0.0, eta)).sum())
+
+
+def _fixed_deck_design(
+    lists: Sequence[ArchetypeList],
+    strength: Mapping[tuple[str, str], float],
+    model: SlotModel,
+    deck: Mapping[str, int],
+) -> np.ndarray:
+    slot_matrix = np.array(
+        [[deck.get(card, 0) >= copy for card, copy in model.slots] for _ in lists],
+        dtype=float,
+    )
+    slot_means = model.slot_means if model.slot_means is not None else np.zeros(len(model.slots))
+    skill = _strength_values(lists, strength) - model.strength_mean
+    return np.hstack([np.ones((len(lists), 1)), skill[:, None], slot_matrix - slot_means])
+
+
+def held_out_losses(
+    lists: Sequence[ArchetypeList],
+    strength: Mapping[tuple[str, str], float],
+    records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
+) -> dict[str, float]:
     """Log loss per game on held-out events: player strength alone, then with slots at each prior width."""
-    slots = _modelled_slots(lists)
-    matrix = _slot_matrix(lists, slots)
-    wins, games, skill = _outcomes(lists, strength)
+    if len(set(entry.event for entry in lists)) < FOLDS:
+        return {"strength only": 0.0}
     folds = event_folds(lists)
+    games = np.array([entry.wins + entry.losses for entry in lists], dtype=float)
     losses = {}
     for label, prior_sd in [("strength only", None), *((f"prior sd {sd}", sd) for sd in BDIF_BEST60_PRIOR_GRID)]:
-        design = _design(matrix, skill, prior_sd is not None)
-        penalty = _penalty(len(slots), prior_sd)
         total = 0.0
         for fold in range(FOLDS):
             train, test = folds != fold, folds == fold
-            coef = _fit(design[train], wins[train], games[train], penalty)
-            eta = design[test] @ coef
-            total += float(-(wins[test] * eta - games[test] * np.logaddexp(0.0, eta)).sum())
+            train_events = {entry.event for entry, selected in zip(lists, train) if selected}
+            test_events = {entry.event for entry, selected in zip(lists, test) if selected}
+            fold_strength = _fold_strength(records, train_events, test_events) if records is not None else strength
+            train_lists = [entry for entry, selected in zip(lists, train) if selected]
+            test_lists = [entry for entry, selected in zip(lists, test) if selected]
+            model = _fit_strength_model(train_lists, fold_strength) if prior_sd is None else fit_slot_model(train_lists, fold_strength, prior_sd)
+            test_wins = np.array([entry.wins for entry in test_lists], dtype=float)
+            test_games = games[test]
+            total += _model_loss(_model_design(test_lists, fold_strength, model), test_wins, test_games, model)
         losses[label] = total / max(1.0, float(games.sum()))
     return losses
 
@@ -217,14 +312,25 @@ def held_out_losses(lists: Sequence[ArchetypeList], strength: Mapping[tuple[str,
 def fit_slot_model(lists: Sequence[ArchetypeList], strength: Mapping[tuple[str, str], float], prior_sd: float) -> SlotModel:
     slots = _modelled_slots(lists)
     matrix = _slot_matrix(lists, slots)
-    wins, games, skill = _outcomes(lists, strength)
+    strength_values = _strength_values(lists, strength)
+    strength_mean = float(strength_values.mean()) if len(strength_values) else 0.0
+    wins, games, skill = _outcomes(lists, strength, strength_mean)
     design = _design(matrix, skill, True)
     penalty = _penalty(len(slots), prior_sd)
     coef = _fit(design, wins, games, penalty)
     probability = 1.0 / (1.0 + np.exp(-(design @ coef)))
     information = design.T @ (design * (games * probability * (1.0 - probability))[:, None]) + np.diag(penalty)
     covariance = np.linalg.inv(information)
-    return SlotModel(slots=slots, beta=coef[2:], covariance=covariance[2:, 2:], prior_sd=prior_sd)
+    return SlotModel(
+        slots=slots,
+        beta=coef[2:],
+        covariance=covariance[2:, 2:],
+        prior_sd=prior_sd,
+        intercept=float(coef[0]),
+        strength_beta=float(coef[1]),
+        slot_means=matrix.mean(axis=0) if len(matrix) else np.zeros(len(slots)),
+        strength_mean=strength_mean,
+    )
 
 
 def prerequisites(lists: Sequence[ArchetypeList]) -> dict[str, set[str]]:
@@ -401,17 +507,26 @@ def held_out_gain(
     prior_sd: float,
     consensus: Counter[str],
     groups: Mapping[str, str],
+    records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
 ) -> float:
     """Cross-fitted value of the swap procedure: choose swaps on four folds, price them on the fifth."""
     folds = event_folds(lists)
+    if len(set(entry.event for entry in lists)) < FOLDS:
+        return 0.0
     gains = []
     for fold in range(FOLDS):
         train = [entry for entry, f in zip(lists, folds) if f != fold]
+        train_events = {entry.event for entry in train}
+        test_events = {entry.event for entry, f in zip(lists, folds) if f == fold}
+        fold_strength = _fold_strength(records, train_events, test_events) if records is not None else strength
+        train_model = fit_slot_model(train, fold_strength, prior_sd)
+        improved, applied, _ = improve(consensus, train_model, groups, prerequisites(train))
         test = [entry for entry, f in zip(lists, folds) if f == fold]
-        _, applied, _ = improve(consensus, fit_slot_model(train, strength, prior_sd), groups, prerequisites(train))
-        priced = fit_slot_model(test, strength, prior_sd)
-        beta = dict(zip(priced.slots, priced.beta))
-        gains.append(sum(beta.get((s["add"], s["add_copy"]), 0.0) - beta.get((s["remove"], s["remove_copy"]), 0.0) for s in applied))
+        test_wins = np.array([entry.wins for entry in test], dtype=float)
+        test_games = np.array([entry.wins + entry.losses for entry in test], dtype=float)
+        consensus_loss = _model_loss(_fixed_deck_design(test, fold_strength, train_model, consensus), test_wins, test_games, train_model)
+        improved_loss = _model_loss(_fixed_deck_design(test, fold_strength, train_model, improved), test_wins, test_games, train_model)
+        gains.append((consensus_loss - improved_loss) / max(1.0, float(test_games.sum())))
     return float(np.mean(gains))
 
 
@@ -427,9 +542,11 @@ def build_best60(
     archetype: str,
     rows: Sequence[Mapping[str, Any]],
     strength: Mapping[tuple[str, str], float],
+    records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
 ) -> dict[str, Any]:
     """The Best-60 report for one archetype from its stored lists."""
     lists = [entry for entry in (parse_list(row) for row in rows) if entry is not None]
+    records = records or {(entry.event, entry.player): (entry.wins, entry.losses) for entry in lists}
     deck_ids = sorted({str(row.get("deck_id")) for row in rows if row.get("deck_id")})
     report: dict[str, Any] = {
         "archetype": archetype, "deck_ids": deck_ids, "list_count": len(rows),
@@ -447,7 +564,7 @@ def build_best60(
     if len(lists) < BDIF_BEST60_MIN_MODEL_LISTS:
         status = "consensus only: too few lists to score cards"
     else:
-        losses = held_out_losses(lists, strength)
+        losses = held_out_losses(lists, strength, records)
         best_label = min(losses, key=lambda label: (losses[label], label))
         model_report["held_out_loss"] = losses
         if best_label == "strength only":
@@ -456,7 +573,7 @@ def build_best60(
             prior_sd = float(best_label.removeprefix("prior sd "))
             model = fit_slot_model(lists, strength, prior_sd)
             improved, proposed, leaning = improve(consensus, model, groups, prerequisites(lists))
-            gain_held_out = held_out_gain(lists, strength, prior_sd, consensus, groups)
+            gain_held_out = held_out_gain(lists, strength, prior_sd, consensus, groups, records)
             model_report.update({"prior_sd": prior_sd, "slots": len(model.slots), "held_out_gain": gain_held_out})
             if gain_held_out > 0:
                 deck, applied, status = improved, proposed, "complete"
