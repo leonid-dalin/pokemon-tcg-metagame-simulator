@@ -25,9 +25,8 @@ from src.ingestion.model import (
     fit_h1_misty_variant,
     h1_observations,
     select_model_cards,
-    Best60Request,
-    recommend_best60,
 )
+from src.ingestion.best60 import build_best60, player_strength
 
 MODEL_MAX_ITER = 10_000
 _FIT_MAX_ITER = MODEL_MAX_ITER
@@ -161,41 +160,20 @@ def build_model_addons(
     cache_path: str | Path,
     store,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    strength = player_strength(store.player_records())
+    recommendations = {
+        deck: build_best60(deck, store.archetype_lists(deck), strength) if deck in weights else {"status": "unknown archetype"}
+        for deck in requested
+    }
     try:
         model, reused = load_or_fit_card_model(observations, database_sha256, cache_path)
     except CardModelNotIdentifiable as exc:
-        return {deck: {"status": "not identifiable", "reason": str(exc)} for deck in requested}, {}, {
+        return recommendations, {}, {
             "database_sha256": database_sha256,
             "model_status": "not identifiable",
+            "model_status_reason": str(exc),
             "model_cache_path": str(cache_path),
         }
-    coefficients, intervals = model.coefficient_report()
-    inclusion = model.inclusion
-    members = getattr(model, "members", {})
-    candidates = sorted({card for cards in inclusion.values() for name in cards for card in members.get(name, (name,))})
-    recommendations = {}
-    for deck in requested:
-        if deck not in weights:
-            recommendations[deck] = {"status": "unknown archetype"}
-            continue
-        if hasattr(store, "observed_skeleton_details"):
-            core = store.observed_skeleton_details(deck)
-        else:
-            core = {"cards": store.observed_skeleton(deck)}
-        recommendation = recommend_best60(Best60Request(
-            archetype=deck,
-            candidates=candidates,
-            coefficients=coefficients,
-            coefficient_intervals=intervals,
-            inclusion=inclusion,
-            meta_weights=weights,
-            playable_cards=store.observed_cards(deck),
-            observed_pokemon_cards=store.observed_pokemon_cards(deck),
-            card_rules=store.observed_card_rules(deck),
-            skeleton=core["cards"],
-        ))
-        recommendation.update({key: core[key] for key in ("legal_list_count", "core_support", "core_share", "core_count") if key in core})
-        recommendations[deck] = recommendation
     h1_rows = h1_observations(store.pairings_with_decklists("%alakazam%"))
     h1 = fit_h1_misty_variant(h1_rows) if h1_rows else {}
     provenance = {

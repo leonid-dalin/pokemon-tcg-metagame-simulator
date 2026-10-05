@@ -37,7 +37,8 @@ def test_store_operations_close_every_connection(monkeypatch, tmp_path):
     store.player_observations()
     store.deck_weights()
     store.unmapped_deck_ids()
-    store.observed_skeleton("A")
+    store.archetype_lists("A")
+    store.player_records()
     store.existing_tournament_ids()
     build_artifact(store)
 

@@ -4,6 +4,7 @@ from contextlib import closing
 import numpy as np
 import pytest
 
+from src.ingestion.best60 import build_best60
 from src.ingestion.model import PlayerObservation, fit_card_model, select_model_cards
 from src.ingestion.store import LimitlessStore
 from src.tournament import monte_carlo
@@ -93,10 +94,10 @@ def test_explicitly_unmapped_id_ignores_the_provider_name(tmp_path):
 
 @pytest.mark.unit
 @pytest.mark.parametrize(("modal_lists", "expected"), [
-    (3, [{"card": "Mon", "copies": 4}, {"card": "Grass Energy", "copies": 52}]),
-    (2, []),
+    (3, {"Mon": 4, "Ultra Ball": 4, "Grass Energy": 52}),
+    (2, {"Alt": 1, "Mon": 3, "Ultra Ball": 4, "Grass Energy": 52}),
 ])
-def test_skeleton_uses_modal_legal_core_and_reports_support(tmp_path, modal_lists, expected):
+def test_consensus_takes_the_most_played_slots_and_breaks_ties_by_name(tmp_path, modal_lists, expected):
     store = LimitlessStore(tmp_path / "limitless.db", deck_mapping={"x": "X"})
     lists = [_sixty([("Mon", 4)])] * modal_lists + [_sixty([("Mon", 3), ("Alt", 1)])] * (4 - modal_lists)
     store.upsert_standings("e", [
@@ -104,10 +105,8 @@ def test_skeleton_uses_modal_legal_core_and_reports_support(tmp_path, modal_list
         for index, decklist in enumerate(lists)
     ])
 
-    result = store.observed_skeleton_details("X")
+    result = build_best60("X", store.archetype_lists("X"), {})
 
-    assert result["cards"] == expected
+    assert {row["card"]: row["copies"] for row in result["cards"]} == expected
     assert result["legal_list_count"] == 4
-    assert result["core_support"] == modal_lists
-    assert result["core_share"] == pytest.approx(modal_lists / 4)
-    assert result["core_count"] == 2
+    assert result["deck_ids"] == ["x"]
