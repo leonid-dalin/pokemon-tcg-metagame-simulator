@@ -115,12 +115,22 @@ def test_held_out_folds_never_split_an_event():
 @pytest.mark.unit
 def test_a_planted_second_copy_effect_is_applied_and_holds_up_on_held_out_events():
     rows, records = _synthetic(effect_a=0.8)
-    result = build_best60("X", rows, player_strength(records))
-    consensus = consensus_sixty([parse_list(row) for row in rows])
+    result = build_best60("X", rows, player_strength(records), records)
 
-    assert result["status"].startswith("consensus")
-    assert {row["card"]: row["copies"] for row in result["cards"]} == dict(consensus)
-    assert result["swaps"] == []
+    assert result["status"] == "complete"
+    assert result["model"]["held_out_gain"] - result["model"]["held_out_gain_se"] > 0
+    assert {(swap["add"], swap["add_copy"]) for swap in result["swaps"]} >= {("Tech A", 2)}
+    assert {row["card"]: row["copies"] for row in result["cards"]}["Tech A"] == 2
+    assert result["total_copies"] == 60
+
+
+@pytest.mark.unit
+def test_a_weaker_planted_effect_is_still_applied():
+    rows, records = _synthetic(effect_a=0.4)
+    result = build_best60("X", rows, player_strength(records), records)
+
+    assert result["status"] == "complete"
+    assert {(swap["add"], swap["add_copy"]) for swap in result["swaps"]} >= {("Tech A", 2)}
 
 
 @pytest.mark.unit
@@ -199,30 +209,27 @@ def test_fold_strength_uses_training_records_only():
 
 
 @pytest.mark.unit
-def test_held_out_gain_fits_only_training_events(monkeypatch):
-    rows, records = _synthetic(effect_a=0.8, lists=100)
+def test_held_out_gain_chooses_on_training_events_and_prices_on_held_out_events(monkeypatch):
+    rows, records = _synthetic(effect_a=0.8, lists=600)
     lists = [parse_list(row) for row in rows]
     calls = []
-    model_ids = []
     original = best60.fit_slot_model
-    original_loss = best60._model_loss
 
-    def capture_model(training, strength, prior_sd):
-        calls.append({entry.event for entry in training})
-        return original(training, strength, prior_sd)
-
-    def capture_loss(design, wins, games, model):
-        model_ids.append(id(model))
-        return original_loss(design, wins, games, model)
+    def capture_model(fitted, strength, prior_sd):
+        calls.append({entry.event for entry in fitted})
+        return original(fitted, strength, prior_sd)
 
     monkeypatch.setattr(best60, "fit_slot_model", capture_model)
-    monkeypatch.setattr(best60, "_model_loss", capture_loss)
-    best60.held_out_gain(lists, player_strength(records), 0.5, consensus_sixty(lists), {"Tech A": "trainer"}, records)
+    mean, se = best60.held_out_gain(lists, player_strength(records), 0.5, consensus_sixty(lists), {"Tech A": "trainer"}, records)
+
     folds = best60.event_folds(lists)
-    expected = [{entry.event for entry, fold in zip(lists, folds) if fold != index} for index in range(best60.FOLDS)]
+    expected = []
+    for index in range(best60.FOLDS):
+        expected.append({entry.event for entry, fold in zip(lists, folds) if fold != index})
+        expected.append({entry.event for entry, fold in zip(lists, folds) if fold == index})
     assert calls == expected
-    assert len(model_ids) == best60.FOLDS * 2
-    assert model_ids[::2] == model_ids[1::2]
+    assert mean > 0
+    assert se >= 0
 
 
 @pytest.mark.unit
@@ -298,7 +305,7 @@ def test_an_unlikely_swap_is_listed_as_leaning_not_applied():
 @pytest.mark.unit
 def test_swaps_that_do_not_hold_up_on_held_out_events_are_proposed_not_applied(monkeypatch):
     rows, records = _synthetic(effect_a=0.8)
-    monkeypatch.setattr(best60, "held_out_gain", lambda *args: -0.01)
+    monkeypatch.setattr(best60, "held_out_gain", lambda *args: (-0.01, 0.0))
 
     result = build_best60("X", rows, player_strength(records))
 
@@ -306,3 +313,16 @@ def test_swaps_that_do_not_hold_up_on_held_out_events_are_proposed_not_applied(m
     assert result["swaps"] == []
     assert {(swap["add"], swap["add_copy"]) for swap in result["proposed_swaps"]} >= {("Tech A", 2)}
     assert {row["card"]: row["copies"] for row in result["cards"]} == dict(consensus_sixty([parse_list(row) for row in rows]))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(("gain", "se", "applied"), [(0.05, 0.01, True), (0.01, 0.02, False)])
+def test_swaps_need_the_held_out_gain_to_clear_one_standard_error(monkeypatch, gain, se, applied):
+    rows, records = _synthetic(effect_a=0.8)
+    monkeypatch.setattr(best60, "held_out_gain", lambda *args: (gain, se))
+
+    result = build_best60("X", rows, player_strength(records), records)
+
+    assert bool(result["swaps"]) is applied
+    assert result["status"] == ("complete" if applied else "consensus kept: swaps did not hold up on held-out events")
+    assert result["model"]["held_out_gain_se"] == se

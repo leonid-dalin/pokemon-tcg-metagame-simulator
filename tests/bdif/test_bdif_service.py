@@ -39,7 +39,7 @@ def test_refit_names_card_packages_and_the_cards_it_could_not_identify(monkeypat
     monkeypatch.setattr("src.ingestion.store.LimitlessStore", Store)
     monkeypatch.setattr("src.ingestion.model.select_model_cards", lambda rows: ["Dreepy", "Drakloak", "Signature"])
 
-    result = service.refit_card_model(settings(db_path=str(db), model_input_path=str(tmp_path / "model.json")))
+    result = service.refit_card_model(settings(db_path=str(db), model_input_path=str(tmp_path / "model.json"), model_cache_path=str(tmp_path / "fit.json")))
 
     assert result["status"] == "complete"
     assert result["card_packages"] == ["Dreepy + Drakloak"]

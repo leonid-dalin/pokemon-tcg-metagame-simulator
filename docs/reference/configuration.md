@@ -42,6 +42,7 @@ The main constants live in `src/core/config.py`. Environment variables are read 
 | `BDIF_BEST60_PRIOR_GRID` | `(0.02, 0.05, 0.1, 0.2, 0.5)` | Prior widths Best-60 compares on held-out events |
 | `BDIF_BEST60_STRENGTH_PRIOR_GAMES` | `10` | Wins and losses added to each player's record before measuring strength |
 | `BDIF_BEST60_APPLY_PROBABILITY` | `0.7` | Chance of helping a swap needs before Best-60 applies it |
+| `BDIF_BEST60_HELD_OUT_SE` | `1.0` | Standard errors by which the held-out gain must clear zero before swaps are applied; 0 accepts any positive gain |
 | `BDIF_BEST60_LEAN_PROBABILITY` | `0.5` | Chance of helping above which a swap is listed as leaning |
 | `BDIF_BEST60_MAX_SWAPS` | `12` | Most swaps Best-60 applies to one list |
 | `BDIF_BEST60_PREREQUISITE_SHARE` | `0.95` | Share of a card's lists a companion must appear in to be required alongside it |

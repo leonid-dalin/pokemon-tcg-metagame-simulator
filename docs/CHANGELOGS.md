@@ -2,6 +2,11 @@
 
 ## October 2026
 
+### Best-60 held-out gate
+
+- The held-out gate prices swaps chosen on four folds with coefficients fitted on the fifth again, keeps training-only player strength, and needs the gain to clear one standard error
+- A planted card effect is applied again; the gate merged in PR #42 rejected every swap, including planted ones
+
 ### Best-60 from results
 
 - Best-60 starts from each archetype's consensus list and applies card-count swaps only when they hold up on held-out events, with player strength controlled
