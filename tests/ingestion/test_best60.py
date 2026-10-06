@@ -326,3 +326,159 @@ def test_swaps_need_the_held_out_gain_to_clear_one_standard_error(monkeypatch, g
     assert bool(result["swaps"]) is applied
     assert result["status"] == ("complete" if applied else "consensus kept: swaps did not hold up on held-out events")
     assert result["model"]["held_out_gain_se"] == se
+
+
+def _tome_synthetic(effect=-0.8, lists=600, seed=11):
+    """Lists that run 'Tome' at 0 or 4 and almost never in between; running it costs `effect` log-odds."""
+    rng = np.random.default_rng(seed)
+    rows, records = [], {}
+    for index in range(lists):
+        event, player = f"e{index % 61}", f"p{index}"
+        skill = rng.normal(0.0, 1.0)
+        tome = 4 if rng.random() < 0.6 else 0
+        tech = int(rng.integers(0, 3))
+        cards = [("Mon", 4, "pokemon"), ("Ultra Ball", 4, "trainer")]
+        if tome:
+            cards.append(("Tome", tome, "trainer"))
+        if tech:
+            cards.append(("Tech C", tech, "trainer"))
+        cards.append(("Grass Energy", 60 - 8 - tome - tech, "energy"))
+        logit = 0.6 * skill + effect * (tome > 0)
+        wins = int(rng.binomial(9, 1.0 / (1.0 + np.exp(-logit))))
+        rows.append(_row(event, player, cards, wins=wins, losses=9 - wins))
+        records[(event, player)] = (wins, 9 - wins)
+        other = int(rng.binomial(40, 1.0 / (1.0 + np.exp(-0.6 * skill))))
+        records[(f"other{index}", player)] = (other, 40 - other)
+    return rows, records
+
+
+@pytest.mark.unit
+def test_count_levels_keep_only_counts_enough_lists_play():
+    rows = (
+        [_row("e", f"a{i}", [("Mon", 4, "pokemon"), ("Tome", 4, "trainer"), ("Grass Energy", 52, "energy")]) for i in range(60)]
+        + [_row("e", f"b{i}", [("Mon", 4, "pokemon"), ("Grass Energy", 56, "energy")]) for i in range(40)]
+        + [_row("e", f"c{i}", [("Mon", 4, "pokemon"), ("Tome", 2, "trainer"), ("Grass Energy", 54, "energy")]) for i in range(5)]
+    )
+    lists = [parse_list(row) for row in rows]
+    levels = best60.count_levels(lists, consensus_sixty(lists))
+    assert levels["Tome"] == {0, 4}
+    assert levels["Mon"] == {4}
+
+
+@pytest.mark.unit
+def test_a_card_played_at_zero_or_four_leaves_in_one_move():
+    rows, records = _tome_synthetic()
+    result = build_best60("X", rows, player_strength(records), records)
+
+    assert result["status"] == "complete"
+    tome_moves = [move for move in result["swaps"] if any(card == "Tome" for card, _ in move["removed"])]
+    assert len(tome_moves) == 1
+    assert sorted(copy for card, copy in tome_moves[0]["removed"] if card == "Tome") == [1, 2, 3, 4]
+    assert "Tome" not in {row["card"] for row in result["cards"]}
+    assert result["joint_probability"] > 0.9
+
+
+@pytest.mark.unit
+def test_moves_never_take_back_an_earlier_move():
+    for rows, records in (_tome_synthetic(), _synthetic(effect_a=0.8)):
+        result = build_best60("X", rows, player_strength(records), records)
+        added = {card for move in result["swaps"] for card, _ in move["added"]}
+        removed = {card for move in result["swaps"] for card, _ in move["removed"]}
+        assert not added & removed
+
+
+@pytest.mark.unit
+def test_a_level_move_that_would_undo_an_earlier_move_is_not_taken():
+    # Adding all 4 "Hammer" first frees the 4 weak "Bad" copies (gain 6). Undoing it and filling with
+    # 4 "Good" would gain 6 again, but would take back the first move.
+    slots = [("Bad", copy) for copy in range(1, 5)] + [("Hammer", copy) for copy in range(1, 5)] + [("Good", copy) for copy in range(1, 5)]
+    beta = np.array([-1.0] * 4 + [0.5] * 4 + [2.0] * 4)
+    model = best60.SlotModel(slots=slots, beta=beta, covariance=np.eye(len(slots)) * 1e-4, prior_sd=0.1)
+    levels = {"Bad": {0, 1, 2, 3, 4}, "Hammer": {0, 4}, "Good": {0, 1, 2, 3, 4}}
+    groups = {card: "trainer" for card in ("Bad", "Hammer", "Good")}
+
+    improved, applied, _ = improve(Counter({"Bad": 4, "Grass Energy": 56}), model, groups, {}, levels)
+
+    assert [sorted({card for card, _ in move["added"]}) for move in applied] == [["Hammer"]]
+    assert improved["Hammer"] == 4
+
+
+@pytest.mark.unit
+def test_observed_mode_never_leaves_lists_people_played():
+    rows, records = _tome_synthetic()
+    observed = build_best60("X", rows, player_strength(records), records, "observed")
+
+    assert observed["list_mode"] == "observed"
+    assert observed["support"]["recommended"][best60.BDIF_BEST60_SUPPORT_CHANGES] >= best60.BDIF_BEST60_SUPPORT_LISTS
+    deck = Counter({"Ultra Ball": 4, "Grass Energy": 56})
+    model = best60.SlotModel(slots=[("Ultra Ball", 4), ("Tech", 1)], beta=np.array([-1.0, 1.0]), covariance=np.eye(2) * 1e-4, prior_sd=0.1)
+    _, applied, _ = improve(deck, model, {"Ultra Ball": "trainer", "Tech": "trainer"}, {}, None, lambda candidate: False)
+    assert applied == []
+
+
+@pytest.mark.unit
+def test_observed_mode_drops_moves_no_played_lists_support(monkeypatch):
+    rows, records = _tome_synthetic()
+    monkeypatch.setattr(best60, "BDIF_BEST60_SUPPORT_LISTS", len(rows) + 1)
+
+    novel = build_best60("X", rows, player_strength(records), records, "novel")
+    observed = build_best60("X", rows, player_strength(records), records, "observed")
+
+    assert novel["swaps"]
+    assert observed["swaps"] == []
+
+
+@pytest.mark.unit
+def test_novel_mode_reports_support_without_limiting_it():
+    rows, records = _tome_synthetic()
+    novel = build_best60("X", rows, player_strength(records), records, "novel")
+    assert novel["list_mode"] == "novel"
+    assert set(novel["support"]["recommended"]) == {2, 4, 6}
+    assert novel["support"]["consensus"][6] >= novel["support"]["consensus"][4] >= novel["support"]["consensus"][2]
+
+
+@pytest.mark.unit
+def test_an_unknown_list_mode_is_rejected():
+    with pytest.raises(ValueError, match="list mode"):
+        build_best60("X", [_row("e", "p", _base())], {}, None, "theoretical")
+
+
+@pytest.mark.unit
+def test_list_support_counts_lists_within_a_number_of_changes():
+    lists = [
+        parse_list(_row("e", "p1", [("Mon", 4, "pokemon"), ("Grass Energy", 56, "energy")])),
+        parse_list(_row("e", "p2", [("Mon", 4, "pokemon"), ("Tech", 2, "trainer"), ("Grass Energy", 54, "energy")])),
+        parse_list(_row("e", "p3", [("Mon", 4, "pokemon"), ("Tech", 4, "trainer"), ("New", 2, "trainer"), ("Grass Energy", 50, "energy")])),
+    ]
+    support = best60.ListSupport(lists)
+    deck = {"Mon": 4, "Grass Energy": 56}
+    assert [support.within(deck, changes) for changes in (0, 2, 4, 6)] == [1, 2, 2, 3]
+    assert support.within({"Mon": 4, "Unseen": 1, "Grass Energy": 55}, 1) == 1
+
+
+@pytest.mark.unit
+def test_moves_and_the_whole_list_are_priced_with_the_full_covariance():
+    model = best60.SlotModel(
+        slots=[("A", 1), ("B", 1)],
+        beta=np.array([0.0, 0.1]),
+        covariance=np.array([[0.01, 0.008], [0.008, 0.01]]),
+        prior_sd=0.1,
+    )
+    expected = float(best60.norm.cdf(0.1 / np.sqrt(0.004)))
+    move = best60._priced_move([("A", 1)], [("B", 1)], {("A", 1): 0, ("B", 1): 1}, model)
+    assert move["probability"] == pytest.approx(expected)
+    assert best60.joint_probability({"A": 1, "Grass Energy": 59}, {"B": 1, "Grass Energy": 59}, model) == pytest.approx(expected)
+
+
+@pytest.mark.unit
+def test_a_card_is_never_left_at_a_count_nobody_plays():
+    # Cutting the 4th "Tome" alone looks good (+1), but 3 copies is not a played count; cutting all 4 costs 5.
+    slots = [("Tome", copy) for copy in range(1, 5)] + [("Tech", copy) for copy in range(1, 5)]
+    beta = np.array([2.0, 2.0, 2.0, -1.0] + [0.0] * 4)
+    model = best60.SlotModel(slots=slots, beta=beta, covariance=np.eye(len(slots)) * 1e-4, prior_sd=0.1)
+    levels = {"Tome": {0, 4}, "Tech": {0, 1, 2, 3, 4}}
+
+    improved, applied, _ = improve(Counter({"Tome": 4, "Grass Energy": 56}), model, {"Tome": "trainer", "Tech": "trainer"}, {}, levels)
+
+    assert applied == []
+    assert improved["Tome"] == 4

@@ -1,6 +1,8 @@
+mutations.best60-selection.json::basic Energy held to count levels
 mutations.best60-selection.json::breakthrough ignores the model
 mutations.best60-selection.json::consensus allows two ACE SPECs
 mutations.best60-selection.json::consensus picks the least-played slots
+mutations.best60-selection.json::count levels ignore the level floor
 mutations.best60-selection.json::evolution added without its basic
 mutations.best60-selection.json::finish tiers counted at events too small to earn them
 mutations.best60-selection.json::held-out folds split events
@@ -9,6 +11,10 @@ mutations.best60-selection.json::held-out swaps priced on training events
 mutations.best60-selection.json::invert the variance
 mutations.best60-selection.json::let addon failures kill the job again
 mutations.best60-selection.json::misspell the H1 card constant
+mutations.best60-selection.json::moves ignore count levels
+mutations.best60-selection.json::moves may take back earlier moves
+mutations.best60-selection.json::moves priced without covariance
+mutations.best60-selection.json::observed mode ignores support
 mutations.best60-selection.json::player strength keeps the scored event
 mutations.best60-selection.json::player strength left out of the model
 mutations.best60-selection.json::remove the feature-flag gate
@@ -16,6 +22,7 @@ mutations.best60-selection.json::revert to the unweighted Gram matrix
 mutations.best60-selection.json::swap removes the last Pokemon
 mutations.best60-selection.json::swaps applied at any probability
 mutations.best60-selection.json::swaps applied whatever the held-out gain
+mutations.best60-selection.json::whole-list chance priced without covariance
 mutations.best60-selection.json::zero the carried match counts
 mutations.card-model-statistics.json::always-together cards fitted separately
 mutations.card-model-statistics.json::drop rank guard

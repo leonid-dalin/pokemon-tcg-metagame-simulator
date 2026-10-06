@@ -291,6 +291,10 @@ def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
             if view["cards"]:
                 st.dataframe(pd.DataFrame(view["cards"]), width="stretch", hide_index=True)
                 st.caption(f"{view['total_copies']} cards")
+            if view["joint_probability"] is not None:
+                st.caption(f"Chance the whole list beats the consensus: {view['joint_probability']}% ({view['list_mode']} mode)")
+            if view["support"]:
+                st.dataframe(pd.DataFrame(view["support"]), width="stretch", hide_index=True)
             if any(value is not None for value in view["win_rates"].values()):
                 st.dataframe(pd.DataFrame([view["win_rates"]]), width="stretch", hide_index=True)
             for title, key in (("Applied swaps", "swaps"), ("Proposed swaps that did not hold up", "proposed_swaps"), ("Leaning swaps", "leaning_swaps")):

@@ -70,11 +70,21 @@ def panel_rows(matchup_panel: Mapping[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _slots_text(slots: Sequence[Sequence[Any]]) -> str:
+    counts: dict[str, list[int]] = {}
+    for card, copy in slots:
+        counts.setdefault(str(card), []).append(int(copy))
+    return ", ".join(
+        f"{card} (copy {copies[0]})" if len(copies) == 1 else f"{card} (copies {min(copies)}-{max(copies)})"
+        for card, copies in counts.items()
+    )
+
+
 def _swap_rows(swaps: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     return [
         {
-            "Out": f"{swap['remove']} (copy {swap['remove_copy']})",
-            "In": f"{swap['add']} (copy {swap['add_copy']})",
+            "Out": _slots_text(swap["removed"]) if "removed" in swap else f"{swap['remove']} (copy {swap['remove_copy']})",
+            "In": _slots_text(swap["added"]) if "added" in swap else f"{swap['add']} (copy {swap['add_copy']})",
             "Gain (log-odds)": round(float(swap["gain"]), 3),
             "Chance it helps %": _percent(swap["probability"]),
         }
@@ -119,6 +129,13 @@ def best60_view(recommendation: Mapping[str, Any]) -> dict[str, Any]:
             "With swaps, in sample %": None if "with_swaps_in_sample" not in rates else _percent(rates["with_swaps_in_sample"]),
         },
         "prior_sd": model.get("prior_sd"),
+        "list_mode": recommendation.get("list_mode", "novel"),
+        "joint_probability": None if recommendation.get("joint_probability") is None else _percent(recommendation["joint_probability"]),
+        "support": [
+            {"List": name, **{f"Played lists within {changes} changes": count for changes, count in sorted(profile.items(), key=lambda item: int(item[0]))}}
+            for name, profile in (("Consensus", recommendation.get("support", {}).get("consensus")), ("Recommended", recommendation.get("support", {}).get("recommended")))
+            if profile
+        ],
         "breakthrough": list(trend.get("breakthrough", [])),
         "trends": [
             {

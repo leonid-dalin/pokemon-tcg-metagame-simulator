@@ -32,6 +32,7 @@ class BdifSettings:
     fallback_panel_decks: tuple[str, ...]
     backfill_limit: int
     model_cache_path: str = "data/input/limitless_model_fit.json"
+    best60_list_mode: str = config.BDIF_BEST60_LIST_MODE
 
     @classmethod
     def from_environment(cls) -> "BdifSettings":
@@ -52,6 +53,7 @@ class BdifSettings:
             panel_max_decks=config.BDIF_PANEL_MAX_DECKS,
             fallback_panel_decks=tuple(config.BDIF_PANEL_DECKS),
             backfill_limit=config.LIMITLESS_BACKFILL_TOURNAMENTS,
+            best60_list_mode=os.environ.get("BDIF_BEST60_LIST_MODE") or config.BDIF_BEST60_LIST_MODE,
         )
 
 
