@@ -117,6 +117,7 @@ def _build_report_addons(
         database_sha256,
         cache_path,
         store,
+        settings.best60_list_mode,
     )
     if not isinstance(recommendations, dict):
         recommendations = {deck: {"status": "complete"} for deck in top}

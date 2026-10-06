@@ -61,3 +61,12 @@ def test_from_environment_rejects_invalid_boolean_values(monkeypatch, value):
 
     with pytest.raises(ValueError, match="BDIF_USE_CARD_MODEL"):
         BdifSettings.from_environment()
+
+
+def test_from_environment_reads_the_best60_list_mode(monkeypatch):
+    from src.core import config
+
+    monkeypatch.delenv("BDIF_BEST60_LIST_MODE", raising=False)
+    assert BdifSettings.from_environment().best60_list_mode == config.BDIF_BEST60_LIST_MODE == "novel"
+    monkeypatch.setenv("BDIF_BEST60_LIST_MODE", "observed")
+    assert BdifSettings.from_environment().best60_list_mode == "observed"

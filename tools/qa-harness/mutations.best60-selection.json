@@ -68,8 +68,8 @@
   {
     "name": "swaps applied at any probability",
     "file": "src/ingestion/best60.py",
-    "find": "if swap[\"probability\"] >= BDIF_BEST60_APPLY_PROBABILITY]",
-    "replace": "if swap[\"probability\"] >= 0.0]"
+    "find": "swap[\"probability\"] >= BDIF_BEST60_APPLY_PROBABILITY and keeps_direction(swap)]",
+    "replace": "swap[\"probability\"] >= 0.0 and keeps_direction(swap)]"
   },
   {
     "name": "swaps applied whatever the held-out gain",
@@ -80,7 +80,7 @@
   {
     "name": "evolution added without its basic",
     "file": "src/ingestion/best60.py",
-    "find": "        if copy == 1 and not needs.get(card, set()) <= present:\n            continue\n",
+    "find": "            if copy == 1 and not needs.get(card, set()) <= present:\n                continue\n",
     "replace": ""
   },
   {
@@ -112,5 +112,47 @@
     "file": "src/ingestion/best60.py",
     "find": "            if gain_held_out - BDIF_BEST60_HELD_OUT_SE * gain_se > 0:",
     "replace": "            if gain_held_out > 0:"
+  },
+  {
+    "name": "count levels ignore the level floor",
+    "file": "src/ingestion/best60.py",
+    "find": "        levels[card] = {count for count, seen in exact.items() if seen >= floor} | {consensus.get(card, 0)}",
+    "replace": "        levels[card] = {count for count, seen in exact.items() if seen >= 1} | {consensus.get(card, 0)}"
+  },
+  {
+    "name": "moves ignore count levels",
+    "file": "src/ingestion/best60.py",
+    "find": "    return levels is None or card in BASIC_ENERGY_NAMES or count in levels.get(card, {count})",
+    "replace": "    return True"
+  },
+  {
+    "name": "basic Energy held to count levels",
+    "file": "src/ingestion/best60.py",
+    "find": "    return levels is None or card in BASIC_ENERGY_NAMES or count in levels.get(card, {count})",
+    "replace": "    return levels is None or count in levels.get(card, {count})"
+  },
+  {
+    "name": "moves may take back earlier moves",
+    "file": "src/ingestion/best60.py",
+    "find": "        return not ({card for card, _ in move[\"removed\"]} & raised or {card for card, _ in move[\"added\"]} & lowered)",
+    "replace": "        return True"
+  },
+  {
+    "name": "observed mode ignores support",
+    "file": "src/ingestion/best60.py",
+    "find": "    return lambda deck: support.within(deck, BDIF_BEST60_SUPPORT_CHANGES) >= BDIF_BEST60_SUPPORT_LISTS",
+    "replace": "    return None"
+  },
+  {
+    "name": "moves priced without covariance",
+    "file": "src/ingestion/best60.py",
+    "find": "    variance = float(weights @ model.covariance @ weights)",
+    "replace": "    variance = float((weights ** 2) @ np.diag(model.covariance))"
+  },
+  {
+    "name": "whole-list chance priced without covariance",
+    "file": "src/ingestion/best60.py",
+    "find": "    return float(norm.cdf(gain / math.sqrt(max(float(weights @ model.covariance @ weights), 1e-12))))",
+    "replace": "    return float(norm.cdf(gain / math.sqrt(max(float((weights ** 2) @ np.diag(model.covariance)), 1e-12))))"
   }
 ]

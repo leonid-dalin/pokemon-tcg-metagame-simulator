@@ -135,3 +135,26 @@ def test_panel_rows_preserve_the_eight_report_columns():
         "Deck", "Opponent", "Posterior mean %", "95% lower %", "95% upper %",
         "Matches", "Reliable", "Mirror",
     ]
+
+
+@pytest.mark.unit
+def test_best60_view_shows_level_moves_support_and_the_whole_list_chance():
+    move = {
+        "remove": "Transformation Tome", "remove_copy": 4, "add": "Cyrano", "add_copy": 3,
+        "removed": [["Transformation Tome", 4], ["Transformation Tome", 3], ["Transformation Tome", 2], ["Transformation Tome", 1]],
+        "added": [["Cyrano", 3], ["Judge", 1], ["Team Rocket's Watchtower", 1], ["Team Rocket's Watchtower", 2]],
+        "gain": 0.111, "probability": 0.998,
+    }
+    view = bdif_view.best60_view({
+        "cards": [], "swaps": [move], "list_mode": "observed", "joint_probability": 0.9951,
+        "support": {"consensus": {2: 489, 4: 1446, 6: 1790}, "recommended": {2: 0, 4: 48, 6: 533}},
+    })
+
+    assert view["swaps"][0]["Out"] == "Transformation Tome (copies 1-4)"
+    assert view["swaps"][0]["In"] == "Cyrano (copy 3), Judge (copy 1), Team Rocket's Watchtower (copies 1-2)"
+    assert view["list_mode"] == "observed"
+    assert view["joint_probability"] == 99.51
+    assert view["support"] == [
+        {"List": "Consensus", "Played lists within 2 changes": 489, "Played lists within 4 changes": 1446, "Played lists within 6 changes": 1790},
+        {"List": "Recommended", "Played lists within 2 changes": 0, "Played lists within 4 changes": 48, "Played lists within 6 changes": 533},
+    ]

@@ -2,6 +2,12 @@
 
 ## October 2026
 
+### Best-60 judges whole moves and lists
+
+- Cards stay at counts the archetype plays; a card played at 0 or 4 moves in one priced step
+- The report gives the chance the whole list beats the consensus and how many played lists sit near it
+- `BDIF_BEST60_LIST_MODE` chooses `novel` lists (default) or lists near ones people played (`observed`)
+
 ### Best-60 held-out gate
 
 - The held-out gate prices swaps chosen on four folds with coefficients fitted on the fifth again, keeps training-only player strength, and needs the gain to clear one standard error

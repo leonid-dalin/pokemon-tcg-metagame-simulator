@@ -13,7 +13,7 @@ import math
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
 from scipy.optimize import minimize
@@ -23,12 +23,16 @@ from src.core.config import (
     BDIF_BEST60_APPLY_PROBABILITY,
     BDIF_BEST60_HELD_OUT_SE,
     BDIF_BEST60_LEAN_PROBABILITY,
+    BDIF_BEST60_LEVEL_SHARE,
+    BDIF_BEST60_LIST_MODE,
     BDIF_BEST60_MAX_SWAPS,
     BDIF_BEST60_MIN_MODEL_LISTS,
     BDIF_BEST60_MIN_SLOT_LISTS,
     BDIF_BEST60_PREREQUISITE_SHARE,
     BDIF_BEST60_PRIOR_GRID,
     BDIF_BEST60_STRENGTH_PRIOR_GAMES,
+    BDIF_BEST60_SUPPORT_CHANGES,
+    BDIF_BEST60_SUPPORT_LISTS,
     BDIF_BEST60_TREND_DAYS,
     BDIF_BEST60_TREND_POINTS,
 )
@@ -334,48 +338,171 @@ def prerequisites(lists: Sequence[ArchetypeList]) -> dict[str, set[str]]:
     return needs
 
 
+def count_levels(lists: Sequence[ArchetypeList], consensus: Mapping[str, int]) -> dict[str, set[int]]:
+    """Counts of each card that enough lists play exactly (BDIF_BEST60_LEVEL_SHARE of them, and at least
+    BDIF_BEST60_MIN_SLOT_LISTS), plus its consensus count.
+
+    A card such as Transformation Tome that is played at 0 or 4 and almost never in between has
+    levels {0, 4}: Best-60 may move it from 4 to 0 in one step, but never leaves it at 1 to 3.
+    """
+    floor = max(BDIF_BEST60_MIN_SLOT_LISTS, BDIF_BEST60_LEVEL_SHARE * len(lists))
+    levels = {}
+    for card in {card for entry in lists for card in entry.counts}:
+        exact = Counter(entry.counts.get(card, 0) for entry in lists)
+        levels[card] = {count for count, seen in exact.items() if seen >= floor} | {consensus.get(card, 0)}
+    return levels
+
+
+class ListSupport:
+    """How many observed lists sit within a number of card changes of a 60-card list."""
+
+    def __init__(self, lists: Sequence[ArchetypeList]):
+        self.cards = sorted({card for entry in lists for card in entry.counts})
+        self.position = {card: index for index, card in enumerate(self.cards)}
+        self.matrix = np.array([[entry.counts.get(card, 0) for card in self.cards] for entry in lists], dtype=float).reshape(len(lists), len(self.cards))
+
+    def within(self, deck: Mapping[str, int], changes: int) -> int:
+        target = np.zeros(len(self.cards))
+        unseen = 0
+        for card, copies in deck.items():
+            if card in self.position:
+                target[self.position[card]] = copies
+            else:
+                unseen += copies
+        distance = (np.abs(self.matrix - target).sum(axis=1) + unseen) / 2
+        return int((distance <= changes).sum())
+
+    def profile(self, deck: Mapping[str, int]) -> dict[int, int]:
+        return {changes: self.within(deck, changes) for changes in (2, 4, 6)}
+
+
+def _allowed(card: str, count: int, levels: Mapping[str, set[int]] | None) -> bool:
+    """Basic Energy is fungible, so any count is allowed; other cards stay at counts lists play."""
+    return levels is None or card in BASIC_ENERGY_NAMES or count in levels.get(card, {count})
+
+
+def _priced_move(removed: list[Slot], added: list[Slot], index: Mapping[Slot, int], model: SlotModel) -> dict[str, Any]:
+    weights = np.zeros(len(model.slots))
+    for slot in added:
+        weights[index[slot]] += 1.0
+    for slot in removed:
+        weights[index[slot]] -= 1.0
+    gain = float(weights @ model.beta)
+    variance = float(weights @ model.covariance @ weights)
+    probability = float(norm.cdf(gain / math.sqrt(max(variance, 1e-12))))
+    return {
+        "remove": removed[0][0], "remove_copy": removed[0][1],
+        "add": added[0][0], "add_copy": added[0][1],
+        "removed": removed, "added": added,
+        "gain": gain, "probability": probability,
+    }
+
+
 def _candidate_swaps(
     deck: Counter[str],
     model: SlotModel,
     groups: Mapping[str, str],
     needs: Mapping[str, set[str]],
+    levels: Mapping[str, set[int]] | None = None,
 ) -> list[dict[str, Any]]:
+    """Every move from this list: one copy for one copy, or one card to its next played count.
+
+    A level move (for example 4 Transformation Tome to 0) is filled or freed by the best single-copy
+    changes, and the whole move is priced together, with the covariance of every slot it touches.
+    """
     index = {slot: position for position, slot in enumerate(model.slots)}
-    present = set(deck)
-    removable = []
-    for card, copies in deck.items():
-        if (card, copies) not in index:
-            continue
-        if copies == 1 and (groups.get(card) == "pokemon" or any(card in needs.get(other, set()) for other in present if other != card)):
-            continue
-        removable.append((card, copies))
-    addable = []
-    for card in {slot[0] for slot in model.slots}:
-        copy = deck[card] + 1
-        if (card, copy) not in index:
-            continue
-        if card not in BASIC_ENERGY_NAMES and copy > 4:
-            continue
-        if card in ACE_SPEC_CARDS and any(other in ACE_SPEC_CARDS for other in present if other != card):
-            continue
-        if copy == 1 and not needs.get(card, set()) <= present:
-            continue
-        addable.append((card, copy))
-    swaps = []
-    for removed in removable:
-        for added in addable:
-            if added[0] == removed[0]:
+    modelled = sorted({slot[0] for slot in model.slots})
+
+    def keeps_last(card: str, state: Mapping[str, int]) -> bool:
+        present = {other for other, copies in state.items() if copies > 0}
+        return groups.get(card) == "pokemon" or any(card in needs.get(other, set()) for other in present if other != card)
+
+    def removals(state: Mapping[str, int]) -> list[Slot]:
+        found = []
+        for card, copies in state.items():
+            if copies <= 0 or (card, copies) not in index or not _allowed(card, copies - 1, levels):
                 continue
-            a, r = index[added], index[removed]
-            gain = float(model.beta[a] - model.beta[r])
-            variance = float(model.covariance[a, a] + model.covariance[r, r] - 2.0 * model.covariance[a, r])
-            probability = float(norm.cdf(gain / math.sqrt(max(variance, 1e-12))))
-            swaps.append({
-                "remove": removed[0], "remove_copy": removed[1],
-                "add": added[0], "add_copy": added[1],
-                "gain": gain, "probability": probability,
-            })
-    return swaps
+            if copies == 1 and keeps_last(card, state):
+                continue
+            found.append((card, copies))
+        return found
+
+    def additions(state: Mapping[str, int]) -> list[Slot]:
+        present = {card for card, copies in state.items() if copies > 0}
+        found = []
+        for card in modelled:
+            copy = state.get(card, 0) + 1
+            if (card, copy) not in index or not _allowed(card, copy, levels):
+                continue
+            if card not in BASIC_ENERGY_NAMES and copy > 4:
+                continue
+            if card in ACE_SPEC_CARDS and any(other in ACE_SPEC_CARDS for other in present if other != card):
+                continue
+            if copy == 1 and not needs.get(card, set()) <= present:
+                continue
+            found.append((card, copy))
+        return found
+
+    moves = {}
+
+    def keep(move: dict[str, Any]) -> None:
+        moves[(tuple(sorted(move["removed"])), tuple(sorted(move["added"])))] = move
+
+    for removed in removals(deck):
+        for added in additions(deck):
+            if added[0] != removed[0]:
+                keep(_priced_move([removed], [added], index, model))
+    if levels is None:
+        return list(moves.values())
+    for card in modelled:
+        current = deck.get(card, 0)
+        lower = [level for level in levels.get(card, ()) if level < current]
+        if lower and current - max(lower) > 1:
+            target = max(lower)
+            block = [(card, copy) for copy in range(current, target, -1)]
+            if all(slot in index for slot in block) and not (target == 0 and keeps_last(card, deck)):
+                state = Counter(deck)
+                state[card] = target
+                fill = []
+                for _ in block:
+                    options = [slot for slot in additions(state) if slot[0] != card]
+                    if not options:
+                        break
+                    best = max(options, key=lambda slot: (model.beta[index[slot]], slot))
+                    fill.append(best)
+                    state[best[0]] += 1
+                if len(fill) == len(block):
+                    keep(_priced_move(block, fill, index, model))
+        higher = [level for level in levels.get(card, ()) if level > current]
+        if higher and min(higher) - current > 1:
+            target = min(higher)
+            block = [(card, copy) for copy in range(current + 1, target + 1)]
+            present = {other for other, copies in deck.items() if copies > 0}
+            legal = (card in BASIC_ENERGY_NAMES or target <= 4) and not (
+                card in ACE_SPEC_CARDS) and (current > 0 or needs.get(card, set()) <= present)
+            if legal and all(slot in index for slot in block):
+                state = Counter(deck)
+                state[card] = target
+                freed = []
+                for _ in block:
+                    options = [slot for slot in removals(state) if slot[0] != card]
+                    if not options:
+                        break
+                    worst = min(options, key=lambda slot: (model.beta[index[slot]], slot))
+                    freed.append(worst)
+                    state[worst[0]] -= 1
+                if len(freed) == len(block):
+                    keep(_priced_move(freed, block, index, model))
+    return list(moves.values())
+
+
+def _after(deck: Mapping[str, int], move: Mapping[str, Any]) -> Counter[str]:
+    state = Counter(deck)
+    for card, _ in move["removed"]:
+        state[card] -= 1
+    for card, _ in move["added"]:
+        state[card] += 1
+    return Counter({card: copies for card, copies in state.items() if copies > 0})
 
 
 def improve(
@@ -383,26 +510,63 @@ def improve(
     model: SlotModel,
     groups: Mapping[str, str],
     needs: Mapping[str, set[str]],
+    levels: Mapping[str, set[int]] | None = None,
+    supported: Callable[[Mapping[str, int]], bool] | None = None,
 ) -> tuple[Counter[str], list[dict[str, Any]], list[dict[str, Any]]]:
-    """Apply the largest-gain swap that is likely enough to help, until none is; return the leaning ones too."""
+    """Apply the largest-gain move that is likely enough to help, until none is; return the leaning ones too.
+
+    With `supported`, a move is applied only if the list it leads to passes that check (observed mode).
+    """
     deck = Counter(deck)
     applied: list[dict[str, Any]] = []
+    raised: set[str] = set()
+    lowered: set[str] = set()
+
+    def keeps_direction(move: Mapping[str, Any]) -> bool:
+        """A move never takes back an earlier one: no removing a card a move added, or re-adding one it cut."""
+        return not ({card for card, _ in move["removed"]} & raised or {card for card, _ in move["added"]} & lowered)
+
     while len(applied) < BDIF_BEST60_MAX_SWAPS:
-        likely = [swap for swap in _candidate_swaps(deck, model, groups, needs) if swap["probability"] >= BDIF_BEST60_APPLY_PROBABILITY]
-        if not likely:
+        likely = [swap for swap in _candidate_swaps(deck, model, groups, needs, levels) if swap["probability"] >= BDIF_BEST60_APPLY_PROBABILITY and keeps_direction(swap)]
+        likely.sort(key=lambda row: (row["gain"], row["add"], row["remove"]), reverse=True)
+        chosen = next((swap for swap in likely if supported is None or supported(_after(deck, swap))), None)
+        if chosen is None:
             break
-        swap = max(likely, key=lambda row: (row["gain"], row["add"], row["remove"]))
-        deck[swap["remove"]] -= 1
-        if deck[swap["remove"]] == 0:
-            del deck[swap["remove"]]
-        deck[swap["add"]] += 1
-        applied.append(swap)
+        deck = _after(deck, chosen)
+        applied.append(chosen)
+        raised |= {card for card, _ in chosen["added"]}
+        lowered |= {card for card, _ in chosen["removed"]}
     leaning = sorted(
-        (swap for swap in _candidate_swaps(deck, model, groups, needs)
-         if BDIF_BEST60_LEAN_PROBABILITY <= swap["probability"] < BDIF_BEST60_APPLY_PROBABILITY and swap["gain"] > 0),
+        (swap for swap in _candidate_swaps(deck, model, groups, needs, levels)
+         if BDIF_BEST60_LEAN_PROBABILITY <= swap["probability"] < BDIF_BEST60_APPLY_PROBABILITY and swap["gain"] > 0 and keeps_direction(swap)),
         key=lambda row: (-row["gain"], row["add"], row["remove"]),
     )[:5]
     return deck, applied, leaning
+
+
+def joint_probability(consensus: Mapping[str, int], deck: Mapping[str, int], model: SlotModel) -> float | None:
+    """Chance that the whole recommended list beats the consensus, from every slot it changes at once."""
+    index = {slot: position for position, slot in enumerate(model.slots)}
+    weights = np.zeros(len(model.slots))
+    for card in set(consensus) | set(deck):
+        before, after = consensus.get(card, 0), deck.get(card, 0)
+        for copy in range(min(before, after) + 1, max(before, after) + 1):
+            if (card, copy) not in index:
+                return None
+            weights[index[(card, copy)]] += 1.0 if after > before else -1.0
+    if not weights.any():
+        return None
+    gain = float(weights @ model.beta)
+    return float(norm.cdf(gain / math.sqrt(max(float(weights @ model.covariance @ weights), 1e-12))))
+
+
+def _support_check(lists: Sequence[ArchetypeList], mode: str) -> Callable[[Mapping[str, int]], bool] | None:
+    if mode not in ("observed", "novel"):
+        raise ValueError(f"unknown Best-60 list mode: {mode}")
+    if mode == "novel":
+        return None
+    support = ListSupport(lists)
+    return lambda deck: support.within(deck, BDIF_BEST60_SUPPORT_CHANGES) >= BDIF_BEST60_SUPPORT_LISTS
 
 
 def _tier_reached(entry: ArchetypeList, fraction: float | None, floor: int) -> bool | None:
@@ -494,6 +658,7 @@ def held_out_gain(
     consensus: Counter[str],
     groups: Mapping[str, str],
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
+    list_mode: str = "novel",
 ) -> tuple[float, float]:
     """Cross-fitted value of the swap procedure, in log-odds: mean and standard error over five folds.
 
@@ -511,10 +676,16 @@ def held_out_gain(
         train_events = {entry.event for entry in train}
         test_events = {entry.event for entry in test}
         fold_strength = _fold_strength(records, train_events, test_events) if records is not None else strength
-        _, applied, _ = improve(consensus, fit_slot_model(train, fold_strength, prior_sd), groups, prerequisites(train))
+        _, applied, _ = improve(
+            consensus, fit_slot_model(train, fold_strength, prior_sd), groups, prerequisites(train),
+            count_levels(train, consensus), _support_check(train, list_mode),
+        )
         priced = fit_slot_model(test, fold_strength, prior_sd)
         beta = dict(zip(priced.slots, priced.beta))
-        gains.append(sum(beta.get((s["add"], s["add_copy"]), 0.0) - beta.get((s["remove"], s["remove_copy"]), 0.0) for s in applied))
+        gains.append(sum(
+            sum(beta.get(slot, 0.0) for slot in move["added"]) - sum(beta.get(slot, 0.0) for slot in move["removed"])
+            for move in applied
+        ))
     return float(np.mean(gains)), float(np.std(gains, ddof=1) / math.sqrt(len(gains)))
 
 
@@ -531,9 +702,16 @@ def build_best60(
     rows: Sequence[Mapping[str, Any]],
     strength: Mapping[tuple[str, str], float],
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
+    list_mode: str | None = None,
 ) -> dict[str, Any]:
-    """The Best-60 report for one archetype from its stored lists."""
+    """The Best-60 report for one archetype from its stored lists.
+
+    `list_mode` "novel" (the default) may recommend a list nobody has played; "observed" stops before
+    the list has fewer than BDIF_BEST60_SUPPORT_LISTS observed lists within BDIF_BEST60_SUPPORT_CHANGES.
+    """
+    list_mode = list_mode or BDIF_BEST60_LIST_MODE
     lists = [entry for entry in (parse_list(row) for row in rows) if entry is not None]
+    _support_check(lists, list_mode)
     records = records or {(entry.event, entry.player): (entry.wins, entry.losses) for entry in lists}
     deck_ids = sorted({str(row.get("deck_id")) for row in rows if row.get("deck_id")})
     report: dict[str, Any] = {
@@ -560,8 +738,10 @@ def build_best60(
         else:
             prior_sd = float(best_label.removeprefix("prior sd "))
             model = fit_slot_model(lists, strength, prior_sd)
-            improved, proposed, leaning = improve(consensus, model, groups, prerequisites(lists))
-            gain_held_out, gain_se = held_out_gain(lists, strength, prior_sd, consensus, groups, records)
+            improved, proposed, leaning = improve(
+                consensus, model, groups, prerequisites(lists), count_levels(lists, consensus), _support_check(lists, list_mode),
+            )
+            gain_held_out, gain_se = held_out_gain(lists, strength, prior_sd, consensus, groups, records, list_mode)
             model_report.update({
                 "prior_sd": prior_sd, "slots": len(model.slots),
                 "held_out_gain": gain_held_out, "held_out_gain_se": gain_se,
@@ -582,6 +762,7 @@ def build_best60(
     validate_recommendation(cards, card_rules=_rules(deck))
     stats = card_stats(lists)
     gain = sum(swap["gain"] for swap in applied)
+    support = ListSupport(lists)
     return {
         **report,
         "status": status,
@@ -593,6 +774,9 @@ def build_best60(
         "proposed_swaps": [] if applied else proposed,
         "leaning_swaps": leaning,
         "model": model_report,
+        "list_mode": list_mode,
+        "support": {"consensus": support.profile(consensus), "recommended": support.profile(deck)},
+        "joint_probability": None if model is None or not applied else joint_probability(consensus, deck, model),
         "match_win_rate": {
             "archetype_average": _expected_rate(lists, 0.0),
             "with_swaps_in_sample": _expected_rate(lists, gain),

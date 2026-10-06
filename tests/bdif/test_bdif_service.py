@@ -693,3 +693,18 @@ def test_ingestion_limit_overrides_the_configured_backfill(monkeypatch, tmp_path
     service.run_ingestion(settings(ingestion_enabled=True), limit=limit)
 
     assert requested == [expected]
+
+
+def test_addons_pass_the_configured_list_mode_to_best60(monkeypatch, tmp_path):
+    seen = []
+
+    def compose(*args):
+        seen.append(args[-1])
+        return {"a": {"status": "complete"}}, {}, {}
+
+    monkeypatch.setattr("src.ingestion.model_cache.build_model_addons", compose)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "limitless.db").touch()
+    service._build_report_addons(_ListStore(), settings(best60_list_mode="observed"), requested_archetypes=["a"])
+    assert seen == ["observed"]
