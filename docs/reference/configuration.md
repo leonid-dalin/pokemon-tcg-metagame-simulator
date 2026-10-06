@@ -45,6 +45,7 @@ The main constants live in `src/core/config.py`. Environment variables are read 
 | `BDIF_BEST60_LIST_MODE` | `"novel"` | `novel` may recommend lists nobody has played; `observed` keeps the list near played lists. Environment variable `BDIF_BEST60_LIST_MODE` overrides it |
 | `BDIF_BEST60_LEVEL_SHARE` | `0.05` | Share of an archetype's lists that must play a card at exactly a count before Best-60 may leave it there |
 | `BDIF_BEST60_SUPPORT_LISTS` | `30` | Played lists that must sit near the recommended list in `observed` mode |
+| `BDIF_BEST60_STABILITY_DRAWS` | `30` | Event resamples Best-60 runs to measure how stable each change is; 0 turns it off |
 | `BDIF_BEST60_SUPPORT_CHANGES` | `4` | Card changes that count as near in `observed` mode |
 | `BDIF_BEST60_HELD_OUT_SE` | `1.0` | Standard errors by which the held-out gain must clear zero before swaps are applied; 0 accepts any positive gain |
 | `BDIF_BEST60_LEAN_PROBABILITY` | `0.5` | Chance of helping above which a swap is listed as leaning |

@@ -2,6 +2,10 @@
 
 ## October 2026
 
+### Best-60 stability
+
+- Each changed card reports how often resampled events recommend the same count and direction
+
 ### Best-60 judges whole moves and lists
 
 - Cards stay at counts the archetype plays; a card played at 0 or 4 moves in one priced step

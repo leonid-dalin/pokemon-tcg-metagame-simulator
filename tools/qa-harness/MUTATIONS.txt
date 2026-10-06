@@ -19,6 +19,9 @@ mutations.best60-selection.json::player strength keeps the scored event
 mutations.best60-selection.json::player strength left out of the model
 mutations.best60-selection.json::remove the feature-flag gate
 mutations.best60-selection.json::revert to the unweighted Gram matrix
+mutations.best60-selection.json::stability compares with the consensus count
+mutations.best60-selection.json::stability counts a kept consensus as the same direction
+mutations.best60-selection.json::stability resamples lists, not events
 mutations.best60-selection.json::swap removes the last Pokemon
 mutations.best60-selection.json::swaps applied at any probability
 mutations.best60-selection.json::swaps applied whatever the held-out gain

@@ -482,3 +482,63 @@ def test_a_card_is_never_left_at_a_count_nobody_plays():
 
     assert applied == []
     assert improved["Tome"] == 4
+
+
+def test_a_planted_change_is_stable_across_event_resamples():
+    rows, records = _synthetic(effect_a=0.8)
+    lists = [parse_list(row) for row in rows]
+    consensus = consensus_sixty(lists)
+    recommended = dict(consensus, **{"Tech A": 2})
+    recommended["Grass Energy"] = consensus["Grass Energy"] - (2 - consensus.get("Tech A", 0))
+    groups = {"Mon": "pokemon", "Mon ex": "pokemon", "Ultra Ball": "trainer", "Tech A": "trainer", "Tech B": "trainer", "Grass Energy": "energy"}
+
+    stable = best60.stability(lists, player_strength(records), 0.2, consensus, recommended, groups, "novel", draws=10)
+
+    assert stable["Tech A"]["same_direction"] >= 0.9
+    assert stable["Tech A"]["draws"] == 10
+
+
+@pytest.mark.unit
+def test_stability_resamples_whole_events(monkeypatch):
+    rows, records = _synthetic(effect_a=0.8, lists=120)
+    lists = [parse_list(row) for row in rows]
+    sizes = Counter(entry.event for entry in lists)
+    samples = []
+    original = best60.fit_slot_model
+
+    def capture(sample, strength, prior_sd):
+        samples.append(Counter(entry.event for entry in sample))
+        return original(sample, strength, prior_sd)
+
+    monkeypatch.setattr(best60, "fit_slot_model", capture)
+    consensus = consensus_sixty(lists)
+    best60.stability(lists, player_strength(records), 0.2, consensus, dict(consensus, **{"Tech A": 3}), {}, "novel", draws=3)
+
+    assert len(samples) == 3
+    assert all(count % sizes[event] == 0 for sample in samples for event, count in sample.items())
+
+
+@pytest.mark.unit
+def test_a_resample_that_keeps_the_consensus_counts_as_neither_same_count_nor_same_direction(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    consensus = consensus_sixty(lists)
+    recommended = dict(consensus)
+    recommended["Ultra Ball"] = consensus["Ultra Ball"] - 1
+    recommended["Grass Energy"] = consensus["Grass Energy"] + 1
+    monkeypatch.setattr(best60, "improve", lambda deck, *args: (Counter(deck), [], []))
+
+    stable = best60.stability(lists, player_strength(records), 0.2, consensus, recommended, {}, "novel", draws=2)
+
+    assert {card: (row["same_count"], row["same_direction"]) for card, row in stable.items()} == {
+        "Grass Energy": (0.0, 0.0), "Ultra Ball": (0.0, 0.0),
+    }
+
+
+@pytest.mark.unit
+def test_stability_is_skipped_without_changes_or_draws():
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    consensus = consensus_sixty(lists)
+    assert best60.stability(lists, player_strength(records), 0.2, consensus, dict(consensus), {}, "novel", draws=5) == {}
+    assert best60.stability(lists, player_strength(records), 0.2, consensus, dict(consensus, **{"Tech A": 2}), {}, "novel", draws=0) == {}

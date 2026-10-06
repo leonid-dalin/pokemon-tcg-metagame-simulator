@@ -60,6 +60,8 @@ Best-60 builds one list per archetype from that archetype's stored legal 60-card
 
 `BDIF_BEST60_LIST_MODE` chooses how far the list may go from what people play. `novel` (the default) may recommend a list nobody has played. `observed` applies a move only while at least 30 played lists (`BDIF_BEST60_SUPPORT_LISTS`) sit within 4 card changes (`BDIF_BEST60_SUPPORT_CHANGES`) of the result. Either way, the report counts the played lists within 2, 4 and 6 changes of the consensus and of the recommended list, and gives the chance that the whole recommended list beats the consensus.
 
+When moves are applied, Best-60 reruns them on 30 resamples of whole events (`BDIF_BEST60_STABILITY_DRAWS`), with the same prior width, count levels and list mode. For each card it changed, the report gives the share of resamples that recommend exactly the same count and the share that move it the same way. A change that appears in fewer than half the resamples rests on a few events.
+
 The report gives the archetype's average match win rate, the rate with the swaps in sample, and the rate with the held-out gain. Quote the held-out rate; the in-sample rate is optimistic because the swaps were chosen on the same data.
 
 Each card also gets its play rate, average copies, and top 50%, top 25% and winner rates with and without it, counted only at events with at least 8, 12 and 2 players. Trends compare play rates in the first and last 21 days of the snapshot. A card is rising or falling when its play rate moves by 15 points or more, and a breakthrough when it is rising, its top 25% rate beats the archetype's, and the slot model does not rate its first copy negative.

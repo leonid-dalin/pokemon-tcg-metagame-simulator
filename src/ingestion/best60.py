@@ -30,6 +30,7 @@ from src.core.config import (
     BDIF_BEST60_MIN_SLOT_LISTS,
     BDIF_BEST60_PREREQUISITE_SHARE,
     BDIF_BEST60_PRIOR_GRID,
+    BDIF_BEST60_STABILITY_DRAWS,
     BDIF_BEST60_STRENGTH_PRIOR_GAMES,
     BDIF_BEST60_SUPPORT_CHANGES,
     BDIF_BEST60_SUPPORT_LISTS,
@@ -689,6 +690,54 @@ def held_out_gain(
     return float(np.mean(gains)), float(np.std(gains, ddof=1) / math.sqrt(len(gains)))
 
 
+def stability(
+    lists: Sequence[ArchetypeList],
+    strength: Mapping[tuple[str, str], float],
+    prior_sd: float,
+    consensus: Counter[str],
+    recommended: Mapping[str, int],
+    groups: Mapping[str, str],
+    list_mode: str = "novel",
+    draws: int | None = None,
+) -> dict[str, dict[str, Any]]:
+    """How often each card the recommendation changes lands the same way on resampled events.
+
+    Each draw resamples whole events with replacement, refits the slot model with the same prior
+    width, and reruns the same moves (count levels and list mode included). For every card whose
+    count differs from the consensus, it reports the share of draws that recommend exactly the same
+    count, and the share that move it in the same direction.
+    """
+    draws = BDIF_BEST60_STABILITY_DRAWS if draws is None else draws
+    changed = sorted(card for card in set(consensus) | set(recommended) if consensus.get(card, 0) != recommended.get(card, 0))
+    if not changed or draws <= 0:
+        return {}
+    events = sorted({entry.event for entry in lists})
+    by_event: dict[str, list[ArchetypeList]] = {}
+    for entry in lists:
+        by_event.setdefault(entry.event, []).append(entry)
+    rng = np.random.default_rng(SEED)
+    same = Counter()
+    direction = Counter()
+    for _ in range(draws):
+        sample = [entry for event in rng.choice(events, size=len(events), replace=True) for entry in by_event[event]]
+        model = fit_slot_model(sample, strength, prior_sd)
+        deck, _, _ = improve(consensus, model, groups, prerequisites(sample), count_levels(sample, consensus), _support_check(sample, list_mode))
+        for card in changed:
+            before, wanted, got = consensus.get(card, 0), recommended.get(card, 0), deck.get(card, 0)
+            same[card] += got == wanted
+            direction[card] += (got > before) == (wanted > before) and got != before
+    return {
+        card: {
+            "consensus": consensus.get(card, 0),
+            "recommended": recommended.get(card, 0),
+            "same_count": same[card] / draws,
+            "same_direction": direction[card] / draws,
+            "draws": draws,
+        }
+        for card in changed
+    }
+
+
 def _expected_rate(lists: Sequence[ArchetypeList], gain: float) -> float:
     wins = sum(entry.wins for entry in lists)
     games = sum(entry.wins + entry.losses for entry in lists)
@@ -763,6 +812,7 @@ def build_best60(
     stats = card_stats(lists)
     gain = sum(swap["gain"] for swap in applied)
     support = ListSupport(lists)
+    stable = stability(lists, strength, model_report["prior_sd"], consensus, deck, groups, list_mode) if applied else {}
     return {
         **report,
         "status": status,
@@ -777,6 +827,7 @@ def build_best60(
         "list_mode": list_mode,
         "support": {"consensus": support.profile(consensus), "recommended": support.profile(deck)},
         "joint_probability": None if model is None or not applied else joint_probability(consensus, deck, model),
+        "stability": stable,
         "match_win_rate": {
             "archetype_average": _expected_rate(lists, 0.0),
             "with_swaps_in_sample": _expected_rate(lists, gain),
