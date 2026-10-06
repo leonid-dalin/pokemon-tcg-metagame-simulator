@@ -102,8 +102,8 @@ def test_best60_view_shows_sources_swaps_held_out_rates_and_breakthroughs():
     assert view["status"] == "consensus kept: swaps did not hold up on held-out events"
     assert view["deck_ids"] == ["crustle-dri"]
     assert view["cards"] == [
-        {"Card": "Crustle", "Copies": 3, "Consensus": 3, "Source": "consensus", "Play rate %": 100.0, "Top 25% rate %": 37.0},
-        {"Card": "Lumiose City", "Copies": 0, "Consensus": 1, "Source": "swap", "Play rate %": None, "Top 25% rate %": None},
+        {"Card": "Crustle", "Copies": 3, "Consensus": 3, "Source": "consensus", "Play rate %": 100.0, "Top 25% rate %": 37.0, "Same count in resamples %": None},
+        {"Card": "Lumiose City", "Copies": 0, "Consensus": 1, "Source": "swap", "Play rate %": None, "Top 25% rate %": None, "Same count in resamples %": None},
     ]
     assert view["swaps"] == []
     assert view["proposed_swaps"] == [{"Out": "Boss's Orders (copy 4)", "In": "Judge (copy 1)", "Gain (log-odds)": 0.051, "Chance it helps %": 81.23}]
@@ -158,3 +158,16 @@ def test_best60_view_shows_level_moves_support_and_the_whole_list_chance():
         {"List": "Consensus", "Played lists within 2 changes": 489, "Played lists within 4 changes": 1446, "Played lists within 6 changes": 1790},
         {"List": "Recommended", "Played lists within 2 changes": 0, "Played lists within 4 changes": 48, "Played lists within 6 changes": 533},
     ]
+
+
+@pytest.mark.unit
+def test_best60_view_shows_how_often_resamples_keep_each_change():
+    view = bdif_view.best60_view({
+        "cards": [{"card": "Cyrano", "copies": 3, "consensus_copies": 2, "source": "swap"}],
+        "removed_cards": [{"card": "Transformation Tome", "copies": 0, "consensus_copies": 4, "source": "swap"}],
+        "stability": {
+            "Cyrano": {"consensus": 2, "recommended": 3, "same_count": 0.9, "same_direction": 0.9, "draws": 30},
+            "Transformation Tome": {"consensus": 4, "recommended": 0, "same_count": 1.0, "same_direction": 1.0, "draws": 30},
+        },
+    })
+    assert [(row["Card"], row["Same count in resamples %"]) for row in view["cards"]] == [("Cyrano", 90.0), ("Transformation Tome", 100.0)]

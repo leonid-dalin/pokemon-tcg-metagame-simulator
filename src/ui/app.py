@@ -291,6 +291,8 @@ def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
             if view["cards"]:
                 st.dataframe(pd.DataFrame(view["cards"]), width="stretch", hide_index=True)
                 st.caption(f"{view['total_copies']} cards")
+            if any(row["Same count in resamples %"] is not None for row in view["cards"]):
+                st.caption("Same count in resamples: share of event resamples that recommend exactly this count.")
             if view["joint_probability"] is not None:
                 st.caption(f"Chance the whole list beats the consensus: {view['joint_probability']}% ({view['list_mode']} mode)")
             if view["support"]:

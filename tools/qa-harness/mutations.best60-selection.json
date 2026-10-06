@@ -154,5 +154,23 @@
     "file": "src/ingestion/best60.py",
     "find": "    return float(norm.cdf(gain / math.sqrt(max(float(weights @ model.covariance @ weights), 1e-12))))",
     "replace": "    return float(norm.cdf(gain / math.sqrt(max(float((weights ** 2) @ np.diag(model.covariance)), 1e-12))))"
+  },
+  {
+    "name": "stability resamples lists, not events",
+    "file": "src/ingestion/best60.py",
+    "find": "        sample = [entry for event in rng.choice(events, size=len(events), replace=True) for entry in by_event[event]]",
+    "replace": "        sample = [lists[index] for index in rng.integers(0, len(lists), size=len(lists))]"
+  },
+  {
+    "name": "stability counts a kept consensus as the same direction",
+    "file": "src/ingestion/best60.py",
+    "find": "            direction[card] += (got > before) == (wanted > before) and got != before",
+    "replace": "            direction[card] += (got > before) == (wanted > before)"
+  },
+  {
+    "name": "stability compares with the consensus count",
+    "file": "src/ingestion/best60.py",
+    "find": "            same[card] += got == wanted",
+    "replace": "            same[card] += got == before"
   }
 ]

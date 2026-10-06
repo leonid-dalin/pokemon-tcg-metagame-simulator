@@ -99,6 +99,8 @@ def best60_view(recommendation: Mapping[str, Any]) -> dict[str, Any]:
     model = recommendation.get("model", {})
     trend = recommendation.get("trends", {})
 
+    stable = recommendation.get("stability", {})
+
     def tier(card: str, name: str) -> float | None:
         value = stats.get(card, {}).get(name, {}).get("with_card")
         return None if value is None else _percent(value)
@@ -117,6 +119,7 @@ def best60_view(recommendation: Mapping[str, Any]) -> dict[str, Any]:
                 "Source": c.get("source", "consensus"),
                 "Play rate %": None if c["card"] not in stats else _percent(stats[c["card"]]["play_rate"]),
                 "Top 25% rate %": tier(c["card"], "top25"),
+                "Same count in resamples %": None if c["card"] not in stable else _percent(stable[c["card"]]["same_count"]),
             }
             for c in [*cards, *recommendation.get("removed_cards", [])]
         ],
