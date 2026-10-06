@@ -132,6 +132,18 @@ def best60_view(recommendation: Mapping[str, Any]) -> dict[str, Any]:
             "With swaps, in sample %": None if "with_swaps_in_sample" not in rates else _percent(rates["with_swaps_in_sample"]),
         },
         "prior_sd": model.get("prior_sd"),
+        "model_settings": {
+            "Card-effect prior SD": model.get("prior_sd"),
+            "Opponent-specific SD": model.get("opponent_sd", 0.0),
+            "Recency half-life (days)": model.get("half_life_days"),
+            "As of": model.get("as_of") or "latest event",
+            "Field": model.get("field_source", "observed"),
+        },
+        "field": [{"Deck": deck, "Share %": _percent(share)} for deck, share in recommendation.get("field", {}).items()],
+        "matchups": [
+            {"Card": slot, **{f"vs {deck}": round(float(values[0]), 3) for deck, values in by_deck.items()}}
+            for slot, by_deck in recommendation.get("card_matchups", {}).items()
+        ],
         "list_mode": recommendation.get("list_mode", "novel"),
         "joint_probability": None if recommendation.get("joint_probability") is None else _percent(recommendation["joint_probability"]),
         "support": [

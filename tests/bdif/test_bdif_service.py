@@ -708,3 +708,19 @@ def test_addons_pass_the_configured_list_mode_to_best60(monkeypatch, tmp_path):
     (tmp_path / "data" / "limitless.db").touch()
     service._build_report_addons(_ListStore(), settings(best60_list_mode="observed"), requested_archetypes=["a"])
     assert seen == ["observed"]
+
+
+def test_addons_pass_a_configured_field_and_as_of_date_to_best60(monkeypatch, tmp_path):
+    seen = []
+
+    def compose(*args, **kwargs):
+        seen.append(kwargs)
+        return {"a": {"status": "complete"}}, {}, {}
+
+    monkeypatch.setattr("src.ingestion.model_cache.build_model_addons", compose)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "limitless.db").touch()
+    service._build_report_addons(_ListStore(), settings(best60_field={"b": 1.0}, best60_as_of="2026-09-26"), requested_archetypes=["a"])
+    service._build_report_addons(_ListStore(), settings(), requested_archetypes=["a"])
+    assert seen == [{"field": {"b": 1.0}, "as_of": "2026-09-26"}, {}]
