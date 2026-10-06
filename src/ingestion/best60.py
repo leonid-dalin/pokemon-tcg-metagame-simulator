@@ -21,6 +21,7 @@ from scipy.stats import norm
 
 from src.core.config import (
     BDIF_BEST60_APPLY_PROBABILITY,
+    BDIF_BEST60_HELD_OUT_SE,
     BDIF_BEST60_LEAN_PROBABILITY,
     BDIF_BEST60_MAX_SWAPS,
     BDIF_BEST60_MIN_MODEL_LISTS,
@@ -266,21 +267,6 @@ def _model_loss(design: np.ndarray, wins: np.ndarray, games: np.ndarray, model: 
     return float(-(wins * eta - games * np.logaddexp(0.0, eta)).sum())
 
 
-def _fixed_deck_design(
-    lists: Sequence[ArchetypeList],
-    strength: Mapping[tuple[str, str], float],
-    model: SlotModel,
-    deck: Mapping[str, int],
-) -> np.ndarray:
-    slot_matrix = np.array(
-        [[deck.get(card, 0) >= copy for card, copy in model.slots] for _ in lists],
-        dtype=float,
-    )
-    slot_means = model.slot_means if model.slot_means is not None else np.zeros(len(model.slots))
-    skill = _strength_values(lists, strength) - model.strength_mean
-    return np.hstack([np.ones((len(lists), 1)), skill[:, None], slot_matrix - slot_means])
-
-
 def held_out_losses(
     lists: Sequence[ArchetypeList],
     strength: Mapping[tuple[str, str], float],
@@ -508,26 +494,28 @@ def held_out_gain(
     consensus: Counter[str],
     groups: Mapping[str, str],
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
-) -> float:
-    """Cross-fitted value of the swap procedure: choose swaps on four folds, price them on the fifth."""
+) -> tuple[float, float]:
+    """Cross-fitted value of the swap procedure, in log-odds: mean and standard error over five folds.
+
+    Swaps are chosen by a model fitted on four folds, then valued by slot coefficients fitted only on
+    the fifth. The held-out lists never influence which swaps are chosen, and the training lists never
+    influence their value, so a swap that only looks good in sample is worth about zero here.
+    """
     folds = event_folds(lists)
     if len(set(entry.event for entry in lists)) < FOLDS:
-        return 0.0
+        return 0.0, 0.0
     gains = []
     for fold in range(FOLDS):
         train = [entry for entry, f in zip(lists, folds) if f != fold]
-        train_events = {entry.event for entry in train}
-        test_events = {entry.event for entry, f in zip(lists, folds) if f == fold}
-        fold_strength = _fold_strength(records, train_events, test_events) if records is not None else strength
-        train_model = fit_slot_model(train, fold_strength, prior_sd)
-        improved, applied, _ = improve(consensus, train_model, groups, prerequisites(train))
         test = [entry for entry, f in zip(lists, folds) if f == fold]
-        test_wins = np.array([entry.wins for entry in test], dtype=float)
-        test_games = np.array([entry.wins + entry.losses for entry in test], dtype=float)
-        consensus_loss = _model_loss(_fixed_deck_design(test, fold_strength, train_model, consensus), test_wins, test_games, train_model)
-        improved_loss = _model_loss(_fixed_deck_design(test, fold_strength, train_model, improved), test_wins, test_games, train_model)
-        gains.append((consensus_loss - improved_loss) / max(1.0, float(test_games.sum())))
-    return float(np.mean(gains))
+        train_events = {entry.event for entry in train}
+        test_events = {entry.event for entry in test}
+        fold_strength = _fold_strength(records, train_events, test_events) if records is not None else strength
+        _, applied, _ = improve(consensus, fit_slot_model(train, fold_strength, prior_sd), groups, prerequisites(train))
+        priced = fit_slot_model(test, fold_strength, prior_sd)
+        beta = dict(zip(priced.slots, priced.beta))
+        gains.append(sum(beta.get((s["add"], s["add_copy"]), 0.0) - beta.get((s["remove"], s["remove_copy"]), 0.0) for s in applied))
+    return float(np.mean(gains)), float(np.std(gains, ddof=1) / math.sqrt(len(gains)))
 
 
 def _expected_rate(lists: Sequence[ArchetypeList], gain: float) -> float:
@@ -573,9 +561,12 @@ def build_best60(
             prior_sd = float(best_label.removeprefix("prior sd "))
             model = fit_slot_model(lists, strength, prior_sd)
             improved, proposed, leaning = improve(consensus, model, groups, prerequisites(lists))
-            gain_held_out = held_out_gain(lists, strength, prior_sd, consensus, groups, records)
-            model_report.update({"prior_sd": prior_sd, "slots": len(model.slots), "held_out_gain": gain_held_out})
-            if gain_held_out > 0:
+            gain_held_out, gain_se = held_out_gain(lists, strength, prior_sd, consensus, groups, records)
+            model_report.update({
+                "prior_sd": prior_sd, "slots": len(model.slots),
+                "held_out_gain": gain_held_out, "held_out_gain_se": gain_se,
+            })
+            if gain_held_out - BDIF_BEST60_HELD_OUT_SE * gain_se > 0:
                 deck, applied, status = improved, proposed, "complete"
             else:
                 status = "consensus kept: swaps did not hold up on held-out events"

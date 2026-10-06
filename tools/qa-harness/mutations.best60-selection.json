@@ -74,7 +74,7 @@
   {
     "name": "swaps applied whatever the held-out gain",
     "file": "src/ingestion/best60.py",
-    "find": "            if gain_held_out > 0:",
+    "find": "            if gain_held_out - BDIF_BEST60_HELD_OUT_SE * gain_se > 0:",
     "replace": "            if True:"
   },
   {
@@ -100,5 +100,17 @@
     "file": "src/ingestion/best60.py",
     "find": " and (row[\"model_effect\"] is None or row[\"model_effect\"] > 0)",
     "replace": ""
+  },
+  {
+    "name": "held-out swaps priced on training events",
+    "file": "src/ingestion/best60.py",
+    "find": "        priced = fit_slot_model(test, fold_strength, prior_sd)",
+    "replace": "        priced = fit_slot_model(train, fold_strength, prior_sd)"
+  },
+  {
+    "name": "held-out gate ignores the standard error",
+    "file": "src/ingestion/best60.py",
+    "find": "            if gain_held_out - BDIF_BEST60_HELD_OUT_SE * gain_se > 0:",
+    "replace": "            if gain_held_out > 0:"
   }
 ]
