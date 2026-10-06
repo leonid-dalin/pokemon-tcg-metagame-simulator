@@ -160,6 +160,47 @@ def test_recency_losses_score_the_last_days_with_a_model_fitted_on_the_days_befo
 
 
 @pytest.mark.unit
+def test_as_of_removes_games_after_the_cutoff_even_when_the_list_is_earlier(monkeypatch):
+    rows, games, records = _games(lists=1)
+    cutoff = (START + timedelta(days=40)).isoformat()
+    later_game = Game(games[0].event, games[0].player, games[0].opponent, games[0].opponent_deck, games[0].won, cutoff)
+    seen = []
+
+    def held_out(*args):
+        seen.append(args[3])
+        return {"strength only": 0.0}
+
+    monkeypatch.setattr(best60, "BDIF_BEST60_MIN_MODEL_LISTS", 0)
+    monkeypatch.setattr(best60, "held_out_losses", held_out)
+    build_best60("X", rows, player_strength(records), records, games=[later_game], as_of=cutoff)
+
+    assert seen == [None]
+
+
+@pytest.mark.unit
+def test_recency_losses_fit_only_on_the_earlier_split(monkeypatch):
+    rows, games, records = _games(lists=600)
+    lists = [parse_list(row) for row in rows]
+    captured = []
+
+    class Probe:
+        def loss(self, test, strength):
+            return 0.0, 500.0
+
+    def fit(train, *args, **kwargs):
+        captured.append(tuple(entry.date for entry in train))
+        return Probe()
+
+    monkeypatch.setattr(best60, "fit_game", fit)
+    best60.recency_losses(lists, player_strength(records), records, ModelSpec(prior_sd=0.5, games=tuple(games)))
+
+    reference = max(datetime.fromisoformat(entry.date) for entry in lists)
+    cutoff = reference - timedelta(days=best60.BDIF_BEST60_RECENT_DAYS)
+    assert captured
+    assert all(datetime.fromisoformat(date) < cutoff for dates in captured for date in dates)
+
+
+@pytest.mark.unit
 def test_as_of_ignores_every_list_and_game_on_or_after_the_date():
     rows, games, records = _games()
     cutoff = (START + timedelta(days=40)).isoformat()
