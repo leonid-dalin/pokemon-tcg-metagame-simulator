@@ -356,37 +356,6 @@ class LimitlessStore:
             ))
         return observations
 
-    def player_observations(self) -> list[PlayerObservation]:
-        self.prepare_for_read()
-        query = """
-        SELECT s1.deck_name, s2.deck_name, s1.decklist_json, s2.decklist_json,
-               p.winner, p.player1, p.player2
-        FROM pairings p
-        JOIN standings s1 ON s1.tournament_id=p.tournament_id AND s1.player_id=p.player1
-        JOIN standings s2 ON s2.tournament_id=p.tournament_id AND s2.player_id=p.player2
-        WHERE p.player1 != '' AND p.player2 != '' AND p.winner NOT IN ('0', '-1', '')
-          AND s1.deck_name IS NOT NULL AND s2.deck_name IS NOT NULL
-          AND s1.decklist_json IS NOT NULL AND s2.decklist_json IS NOT NULL
-        """
-        with self.connect() as conn:
-            rows = conn.execute(query).fetchall()
-        observations = []
-        for deck, opponent, decklist, opponent_decklist, winner, player1, player2 in rows:
-            deck_cards = _decklist_card_names(decklist)
-            opponent_cards = _decklist_card_names(opponent_decklist)
-            if not deck_cards or not opponent_cards:
-                continue
-            if str(winner) == str(player1):
-                result = 1
-            elif str(winner) == str(player2):
-                result = 0
-            else:
-                continue
-            observations.append(PlayerObservation(
-                str(deck), str(opponent), deck_cards, opponent_cards, result, (str(player1), str(player2)),
-            ))
-        return observations
-
     def tournament_date_range(self) -> tuple[str | None, str | None]:
         with self.connect() as conn:
             return conn.execute("SELECT MIN(date), MAX(date) FROM tournaments").fetchone()
