@@ -45,6 +45,14 @@ The main constants live in `src/core/config.py`. Environment variables are read 
 | `BDIF_BEST60_LIST_MODE` | `"novel"` | `novel` may recommend lists nobody has played; `observed` keeps the list near played lists. Environment variable `BDIF_BEST60_LIST_MODE` overrides it |
 | `BDIF_BEST60_LEVEL_SHARE` | `0.05` | Share of an archetype's lists that must play a card at exactly a count before Best-60 may leave it there |
 | `BDIF_BEST60_SUPPORT_LISTS` | `30` | Played lists that must sit near the recommended list in `observed` mode |
+| `BDIF_BEST60_OPPONENT_GRID` | `(0.02, 0.05, 0.1)` | Opponent-specific prior widths Best-60 compares on held-out events |
+| `BDIF_BEST60_MIN_OPPONENT_GAMES` | `300` | Games against a deck before Best-60 gives card counts their own effect against it |
+| `BDIF_BEST60_HALF_LIFE_GRID` | `(42, 21, 14)` | Recency half-lives in days Best-60 compares with no weighting |
+| `BDIF_BEST60_RECENT_DAYS` | `21` | Most recent days the recency half-life is scored on |
+| `BDIF_BEST60_MIN_RECENT_GAMES` | `500` | Games those days need before a half-life is chosen |
+| `BDIF_BEST60_WORKERS` | `4` | Threads for Best-60's cross-validation folds and stability resamples |
+| `BDIF_BEST60_FIELD` (environment only) | unset | JSON object of deck names to shares; the field Best-60 optimises against instead of the observed one |
+| `BDIF_BEST60_AS_OF` (environment only) | unset | ISO date; Best-60 ignores everything on or after it |
 | `BDIF_BEST60_STABILITY_DRAWS` | `30` | Event resamples Best-60 runs to measure how stable each change is; 0 turns it off |
 | `BDIF_BEST60_SUPPORT_CHANGES` | `4` | Card changes that count as near in `observed` mode |
 | `BDIF_BEST60_HELD_OUT_SE` | `1.0` | Standard errors by which the held-out gain must clear zero before swaps are applied; 0 accepts any positive gain |

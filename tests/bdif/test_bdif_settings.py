@@ -70,3 +70,22 @@ def test_from_environment_reads_the_best60_list_mode(monkeypatch):
     assert BdifSettings.from_environment().best60_list_mode == config.BDIF_BEST60_LIST_MODE == "novel"
     monkeypatch.setenv("BDIF_BEST60_LIST_MODE", "observed")
     assert BdifSettings.from_environment().best60_list_mode == "observed"
+
+
+def test_from_environment_reads_the_best60_field_and_as_of_date(monkeypatch):
+    monkeypatch.delenv("BDIF_BEST60_FIELD", raising=False)
+    monkeypatch.delenv("BDIF_BEST60_AS_OF", raising=False)
+    assert BdifSettings.from_environment().best60_field is None
+    assert BdifSettings.from_environment().best60_as_of is None
+    monkeypatch.setenv("BDIF_BEST60_FIELD", '{"Dragapult": 0.4, "N\'s Zoroark": 1}')
+    monkeypatch.setenv("BDIF_BEST60_AS_OF", "2026-09-26")
+    settings = BdifSettings.from_environment()
+    assert settings.best60_field == {"Dragapult": 0.4, "N's Zoroark": 1.0}
+    assert settings.best60_as_of == "2026-09-26"
+
+
+@pytest.mark.parametrize("value", ['["Dragapult"]', '{"Dragapult": -1}', '{"Dragapult": "lots"}'])
+def test_from_environment_rejects_a_malformed_best60_field(monkeypatch, value):
+    monkeypatch.setenv("BDIF_BEST60_FIELD", value)
+    with pytest.raises(ValueError, match="BDIF_BEST60_FIELD"):
+        BdifSettings.from_environment()

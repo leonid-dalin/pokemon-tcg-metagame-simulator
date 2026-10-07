@@ -1,9 +1,13 @@
+mutations.best60-selection.json::as-of keeps later games
+mutations.best60-selection.json::as-of keeps later lists
 mutations.best60-selection.json::basic Energy held to count levels
 mutations.best60-selection.json::breakthrough ignores the model
 mutations.best60-selection.json::consensus allows two ACE SPECs
 mutations.best60-selection.json::consensus picks the least-played slots
 mutations.best60-selection.json::count levels ignore the level floor
 mutations.best60-selection.json::evolution added without its basic
+mutations.best60-selection.json::field ignores opponent-specific effects
+mutations.best60-selection.json::field shares not normalised
 mutations.best60-selection.json::finish tiers counted at events too small to earn them
 mutations.best60-selection.json::held-out folds split events
 mutations.best60-selection.json::held-out gate ignores the standard error
@@ -14,9 +18,16 @@ mutations.best60-selection.json::misspell the H1 card constant
 mutations.best60-selection.json::moves ignore count levels
 mutations.best60-selection.json::moves may take back earlier moves
 mutations.best60-selection.json::moves priced without covariance
+mutations.best60-selection.json::observed field ignores recency
 mutations.best60-selection.json::observed mode ignores support
+mutations.best60-selection.json::opponent strength left out of game rows
+mutations.best60-selection.json::opponent-specific effects never kept
+mutations.best60-selection.json::player records ignore the as-of date
 mutations.best60-selection.json::player strength keeps the scored event
 mutations.best60-selection.json::player strength left out of the model
+mutations.best60-selection.json::recency never applied
+mutations.best60-selection.json::recency weighting ignored
+mutations.best60-selection.json::recent split trains on the recent days
 mutations.best60-selection.json::remove the feature-flag gate
 mutations.best60-selection.json::revert to the unweighted Gram matrix
 mutations.best60-selection.json::stability compares with the consensus count

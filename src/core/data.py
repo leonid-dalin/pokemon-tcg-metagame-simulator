@@ -170,7 +170,11 @@ def cluster_decks_by_matchup_profile(
 
         max_possible_k = min(6, n_samples - 1) if n_samples > 2 else 2
 
-        if method == "kmeans":
+        if len(np.unique(wm_scaled, axis=0)) == 1:
+            labels = np.zeros(n_samples, dtype=int)
+            centroids = wm_scaled[:1]
+            final_k = 1
+        elif method == "kmeans":
             best_k = min(5, n_samples) if isinstance(n_clusters, str) else n_clusters
             best_labels, best_centroids = None, None
 

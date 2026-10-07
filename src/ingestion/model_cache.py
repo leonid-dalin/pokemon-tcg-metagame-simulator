@@ -160,11 +160,18 @@ def build_model_addons(
     cache_path: str | Path,
     store,
     list_mode: str | None = None,
+    field: dict[str, float] | None = None,
+    as_of: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    records = store.player_records()
+    records = store.player_records(before=as_of) if as_of else store.player_records()
     strength = player_strength(records)
+
+    def games(deck: str):
+        return store.archetype_games(deck) if hasattr(store, "archetype_games") else None
+
     recommendations = {
-        deck: build_best60(deck, store.archetype_lists(deck), strength, records, list_mode) if deck in weights else {"status": "unknown archetype"}
+        deck: build_best60(deck, store.archetype_lists(deck), strength, records, list_mode, games=games(deck), field=field, as_of=as_of)
+        if deck in weights else {"status": "unknown archetype"}
         for deck in requested
     }
     try:

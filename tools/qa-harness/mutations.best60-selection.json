@@ -55,9 +55,9 @@
   },
   {
     "name": "player strength left out of the model",
-    "file": "src/ingestion/best60.py",
-    "find": "    return wins, games, skill - skill_mean",
-    "replace": "    return wins, games, 0.0 * skill"
+    "file": "src/ingestion/best60_games.py",
+    "find": "            gap.append(own)\n",
+    "replace": "            gap.append(0.0)\n"
   },
   {
     "name": "held-out folds split events",
@@ -172,5 +172,71 @@
     "file": "src/ingestion/best60.py",
     "find": "            same[card] += got == wanted",
     "replace": "            same[card] += got == before"
+  },
+  {
+    "name": "opponent strength left out of game rows",
+    "file": "src/ingestion/best60_games.py",
+    "find": "                gap.append(own - strength.get((game.event, game.opponent), 0.0))",
+    "replace": "                gap.append(own)"
+  },
+  {
+    "name": "recency weighting ignored",
+    "file": "src/ingestion/best60_games.py",
+    "find": "    return 0.5 ** (age / half_life)",
+    "replace": "    return 1.0"
+  },
+  {
+    "name": "field ignores opponent-specific effects",
+    "file": "src/ingestion/best60_games.py",
+    "find": "                transform[:, offset:offset + size] += share * np.eye(size)",
+    "replace": "                transform[:, offset:offset + size] += 0.0 * np.eye(size)"
+  },
+  {
+    "name": "field shares not normalised",
+    "file": "src/ingestion/best60_games.py",
+    "find": "    return {deck: share / whole for deck, share in sorted(positive.items())} if whole else {}",
+    "replace": "    return dict(sorted(positive.items()))"
+  },
+  {
+    "name": "observed field ignores recency",
+    "file": "src/ingestion/best60_games.py",
+    "find": "            totals[game.opponent_deck] = totals.get(game.opponent_deck, 0.0) + recency_weight(game.date, reference, half_life)",
+    "replace": "            totals[game.opponent_deck] = totals.get(game.opponent_deck, 0.0) + 1.0"
+  },
+  {
+    "name": "opponent-specific effects never kept",
+    "file": "src/ingestion/best60.py",
+    "find": "        if opponents[label] < priors[best]:",
+    "replace": "        if False:"
+  },
+  {
+    "name": "recency never applied",
+    "file": "src/ingestion/best60.py",
+    "find": "                if best_recency != \"no recency weighting\":",
+    "replace": "                if False:"
+  },
+  {
+    "name": "as-of keeps later lists",
+    "file": "src/ingestion/best60.py",
+    "find": "    rows = [row for row in rows if pinned is None or ((when := parse_date(str(row.get(\"date\") or \"\"))) is not None and when < pinned)]",
+    "replace": "    rows = list(rows)"
+  },
+  {
+    "name": "as-of keeps later games",
+    "file": "src/ingestion/best60.py",
+    "find": "    games = tuple(game for game in games or () if pinned is None or ((when := parse_date(game.date)) is not None and when < pinned)) or None",
+    "replace": "    games = tuple(games or ()) or None"
+  },
+  {
+    "name": "recent split trains on the recent days",
+    "file": "src/ingestion/best60.py",
+    "find": "    train = [lists[position] for position in early]",
+    "replace": "    train = [lists[position] for position in early + late]"
+  },
+  {
+    "name": "player records ignore the as-of date",
+    "file": "src/ingestion/store.py",
+    "find": "                    \"JOIN tournaments t ON t.id=s.tournament_id WHERE t.date < ?\",",
+    "replace": "                    \"JOIN tournaments t ON t.id=s.tournament_id WHERE t.date IS NOT NULL OR ? IS NOT NULL\","
   }
 ]

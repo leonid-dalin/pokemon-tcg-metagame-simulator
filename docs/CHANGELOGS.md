@@ -2,6 +2,12 @@
 
 ## October 2026
 
+### Best-60 against the field as it moves
+
+- Best-60 scores every game against the opponent's deck, with both players' strength, and gives card counts opponent-specific effects where the data supports them
+- Recent events can count more; the half-life is chosen on the latest three weeks, and none is allowed
+- `BDIF_BEST60_FIELD` optimises against a field you give; `BDIF_BEST60_AS_OF` builds the list as of a past date
+
 ### Best-60 stability
 
 - Each changed card reports how often resampled events recommend the same count and direction

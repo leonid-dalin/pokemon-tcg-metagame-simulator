@@ -171,3 +171,19 @@ def test_best60_view_shows_how_often_resamples_keep_each_change():
         },
     })
     assert [(row["Card"], row["Same count in resamples %"]) for row in view["cards"]] == [("Cyrano", 90.0), ("Transformation Tome", 100.0)]
+
+
+@pytest.mark.unit
+def test_best60_view_shows_the_field_model_settings_and_matchups():
+    view = bdif_view.best60_view({
+        "cards": [],
+        "model": {"prior_sd": 0.02, "opponent_sd": 0.05, "half_life_days": 42.0, "as_of": None, "field_source": "specified"},
+        "field": {"Dragapult": 0.5, "Dragapult Dusknoir": 0.25},
+        "card_matchups": {"Cyrano #3": {"Dragapult": [0.031, 0.0, 0.06], "Dragapult Dusknoir": [0.028, -0.01, 0.07]}},
+    })
+    assert view["model_settings"] == {
+        "Card-effect prior SD": 0.02, "Opponent-specific SD": 0.05, "Recency half-life (days)": 42.0,
+        "As of": "latest event", "Field": "specified",
+    }
+    assert view["field"] == [{"Deck": "Dragapult", "Share %": 50.0}, {"Deck": "Dragapult Dusknoir", "Share %": 25.0}]
+    assert view["matchups"] == [{"Card": "Cyrano #3", "vs Dragapult": 0.031, "vs Dragapult Dusknoir": 0.028}]

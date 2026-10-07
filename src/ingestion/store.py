@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from src.ingestion.mapping import load_archetype_map, resolve_archetype
+from src.ingestion.best60_games import Game
 from src.ingestion.model import PlayerObservation
 
 SCHEMA = """
@@ -383,12 +384,42 @@ class LimitlessStore:
         keys = ("event", "player", "deck_id", "placing", "wins", "losses", "decklist", "players", "date")
         return [dict(zip(keys, row)) for row in rows]
 
-    def player_records(self) -> dict[tuple[str, str], tuple[int, int]]:
-        """Wins and losses of every player at every event, for player strength."""
+    def player_records(self, before: str | None = None) -> dict[tuple[str, str], tuple[int, int]]:
+        """Wins and losses of every player at every event, for player strength; with `before`, only
+        events dated before it (ISO date), so a pinned Best-60 never learns from later results."""
         self.prepare_for_read()
         with self.connect() as conn:
-            rows = conn.execute("SELECT tournament_id, player_id, wins, losses FROM standings").fetchall()
+            if before is None:
+                rows = conn.execute("SELECT tournament_id, player_id, wins, losses FROM standings").fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT s.tournament_id, s.player_id, s.wins, s.losses FROM standings s "
+                    "JOIN tournaments t ON t.id=s.tournament_id WHERE t.date < ?",
+                    (before,),
+                ).fetchall()
         return {(str(event), str(player)): (int(wins or 0), int(losses or 0)) for event, player, wins, losses in rows}
+
+    def archetype_games(self, archetype: str) -> list[Game]:
+        """Every decided game an archetype's player played, with the opponent's deck, for Best-60."""
+        self.prepare_for_read()
+        query = """
+        SELECT p.tournament_id, p.player1, p.player2, p.winner, s1.deck_name, s2.deck_name, t.date
+        FROM pairings p
+        JOIN standings s1 ON s1.tournament_id=p.tournament_id AND s1.player_id=p.player1
+        JOIN standings s2 ON s2.tournament_id=p.tournament_id AND s2.player_id=p.player2
+        LEFT JOIN tournaments t ON t.id=p.tournament_id
+        WHERE p.player1 != '' AND p.player2 != '' AND p.winner NOT IN ('0', '-1', '')
+          AND (s1.deck_name=? OR s2.deck_name=?)
+        ORDER BY p.tournament_id, p.round, p.player1, p.player2
+        """
+        with self.connect() as conn:
+            rows = conn.execute(query, (archetype, archetype)).fetchall()
+        games = []
+        for event, player1, player2, winner, deck1, deck2, date in rows:
+            for player, opponent, deck, opponent_deck in ((player1, player2, deck1, deck2), (player2, player1, deck2, deck1)):
+                if deck == archetype and opponent_deck and str(winner) in (str(player1), str(player2)):
+                    games.append(Game(str(event), str(player), str(opponent), str(opponent_deck), int(str(winner) == str(player)), str(date or "")))
+        return games
 
     def deck_weights(self, archetypes: Iterable[str] | None = None) -> dict[str, float]:
         self.prepare_for_read()

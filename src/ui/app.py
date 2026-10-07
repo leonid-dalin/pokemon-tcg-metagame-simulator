@@ -293,6 +293,18 @@ def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
                 st.caption(f"{view['total_copies']} cards")
             if any(row["Same count in resamples %"] is not None for row in view["cards"]):
                 st.caption("Same count in resamples: share of event resamples that recommend exactly this count.")
+            settings = view["model_settings"]
+            if settings["Card-effect prior SD"] is not None:
+                st.caption(
+                    f"Scored per game against {settings['Field'].lower()} field; opponent-specific SD {settings['Opponent-specific SD']}, "
+                    f"recency half-life {settings['Recency half-life (days)'] or 'none'} days, as of {settings['As of']}."
+                )
+            if view["field"]:
+                with st.expander("Field the list is optimised against"):
+                    st.dataframe(pd.DataFrame(view["field"]), width="stretch", hide_index=True)
+            if view["matchups"]:
+                with st.expander("Changed cards against each deck (log-odds)"):
+                    st.dataframe(pd.DataFrame(view["matchups"]), width="stretch", hide_index=True)
             if view["joint_probability"] is not None:
                 st.caption(f"Chance the whole list beats the consensus: {view['joint_probability']}% ({view['list_mode']} mode)")
             if view["support"]:

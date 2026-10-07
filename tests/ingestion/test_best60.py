@@ -113,6 +113,42 @@ def test_held_out_folds_never_split_an_event():
 
 
 @pytest.mark.unit
+def test_held_out_gain_starts_each_fold_from_its_training_consensus(monkeypatch):
+    rows = []
+    for event, tech in [("e0", "Tech Z"), ("e1", "Tech Z"), ("e2", "Tech Z"), ("e3", "Tech A"), ("e4", "Tech A")]:
+        for index in range(4):
+            rows.append(_row(event, f"{event}-{index}", _base(), date="2026-09-01T00:00:00Z"))
+            rows[-1]["decklist"]["trainer"].append({"name": tech, "count": 1})
+            rows[-1]["decklist"]["energy"][0]["count"] -= 1
+    lists = [parse_list(row) for row in rows]
+    folds = event_folds(lists)
+    full_consensus = consensus_sixty(lists)
+    captured = []
+
+    class Model:
+        slots = []
+        beta = []
+
+    def fake_fit(*args, **kwargs):
+        return Model()
+
+    def fake_improve(consensus, *args, **kwargs):
+        captured.append(Counter(consensus))
+        return Counter(consensus), [], []
+
+    monkeypatch.setattr(best60, "fit_slot_model", fake_fit)
+    monkeypatch.setattr(best60, "improve", fake_improve)
+    best60.held_out_gain(lists, {}, 0.5, full_consensus, {}, list_mode="novel")
+
+    expected = [
+        consensus_sixty([entry for entry, fold_id in zip(lists, folds) if fold_id != fold])
+        for fold in range(best60.FOLDS)
+    ]
+    assert captured == expected
+    assert any(consensus != full_consensus for consensus in captured)
+
+
+@pytest.mark.unit
 def test_a_planted_second_copy_effect_is_applied_and_holds_up_on_held_out_events():
     rows, records = _synthetic(effect_a=0.8)
     result = build_best60("X", rows, player_strength(records), records)

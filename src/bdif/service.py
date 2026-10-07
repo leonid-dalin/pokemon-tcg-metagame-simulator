@@ -118,6 +118,7 @@ def _build_report_addons(
         cache_path,
         store,
         settings.best60_list_mode,
+        **{name: value for name, value in (("field", settings.best60_field), ("as_of", settings.best60_as_of)) if value},
     )
     if not isinstance(recommendations, dict):
         recommendations = {deck: {"status": "complete"} for deck in top}

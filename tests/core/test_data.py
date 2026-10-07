@@ -1,5 +1,8 @@
+import warnings
+
 import numpy as np
 import pytest
+from sklearn.exceptions import ConvergenceWarning
 
 from src.core import data as data_module
 from src.core.data import cluster_decks_by_matchup_profile, load_matchup_data, safe_normalize
@@ -135,9 +138,11 @@ def test_identical_rows_collapse_to_a_single_reported_cluster():
     names = ["a", "b", "c", "d"]
     win_matrix = np.tile(np.array([0.5, 0.5, 0.5, 0.5], dtype=float), (4, 1))
 
-    result = cluster_decks_by_matchup_profile(
-        win_matrix, names, method="kmeans", n_clusters="auto"
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", ConvergenceWarning)
+        result = cluster_decks_by_matchup_profile(
+            win_matrix, names, method="kmeans", n_clusters="auto"
+        )
 
     assert result["n_clusters"] == len(set(result["labels"]))
 

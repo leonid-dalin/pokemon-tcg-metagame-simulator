@@ -11,32 +11,38 @@ from __future__ import annotations
 import json
 import math
 from collections import Counter
-from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
-from scipy.optimize import minimize
 from scipy.stats import norm
 
 from src.core.config import (
     BDIF_BEST60_APPLY_PROBABILITY,
+    BDIF_BEST60_HALF_LIFE_GRID,
     BDIF_BEST60_HELD_OUT_SE,
     BDIF_BEST60_LEAN_PROBABILITY,
     BDIF_BEST60_LEVEL_SHARE,
     BDIF_BEST60_LIST_MODE,
     BDIF_BEST60_MAX_SWAPS,
     BDIF_BEST60_MIN_MODEL_LISTS,
+    BDIF_BEST60_MIN_RECENT_GAMES,
+    BDIF_BEST60_OPPONENT_GRID,
     BDIF_BEST60_MIN_SLOT_LISTS,
     BDIF_BEST60_PREREQUISITE_SHARE,
     BDIF_BEST60_PRIOR_GRID,
+    BDIF_BEST60_RECENT_DAYS,
     BDIF_BEST60_STABILITY_DRAWS,
     BDIF_BEST60_STRENGTH_PRIOR_GAMES,
     BDIF_BEST60_SUPPORT_CHANGES,
     BDIF_BEST60_SUPPORT_LISTS,
     BDIF_BEST60_TREND_DAYS,
     BDIF_BEST60_TREND_POINTS,
+    BDIF_BEST60_WORKERS,
 )
+from src.ingestion.best60_games import Game, GameModel, ModelSpec, fit_game_model, normalise_field, observed_field, parse_date, recent_split
 from src.ingestion.model import ACE_SPEC_CARDS, BASIC_ENERGY_NAMES, validate_recommendation
 
 GROUP_ORDER = ("pokemon", "trainer", "energy")
@@ -72,6 +78,7 @@ class SlotModel:
     strength_beta: float = 0.0
     slot_means: np.ndarray | None = None
     strength_mean: float = 0.0
+    game: GameModel | None = None
 
 
 def parse_list(row: Mapping[str, Any]) -> ArchetypeList | None:
@@ -168,65 +175,6 @@ def _slot_matrix(lists: Sequence[ArchetypeList], slots: Sequence[Slot]) -> np.nd
     return np.array([[entry.counts.get(card, 0) >= copy for card, copy in slots] for entry in lists], dtype=float)
 
 
-def _fit(design: np.ndarray, wins: np.ndarray, games: np.ndarray, penalty: np.ndarray) -> np.ndarray:
-    def objective(coef: np.ndarray) -> tuple[float, np.ndarray]:
-        eta = design @ coef
-        probability = 1.0 / (1.0 + np.exp(-eta))
-        loss = -(wins * eta - games * np.logaddexp(0.0, eta)).sum() + 0.5 * (penalty * coef * coef).sum()
-        return loss, -(design.T @ (wins - games * probability)) + penalty * coef
-
-    result = minimize(objective, np.zeros(design.shape[1]), jac=True, method="L-BFGS-B", options={"maxiter": 5_000, "gtol": 1e-8})
-    return result.x
-
-
-def _fit_strength_model(
-    lists: Sequence[ArchetypeList],
-    strength: Mapping[tuple[str, str], float],
-) -> SlotModel:
-    strength_values = _strength_values(lists, strength)
-    strength_mean = float(strength_values.mean()) if len(strength_values) else 0.0
-    wins, games, skill = _outcomes(lists, strength, strength_mean)
-    design = np.column_stack([np.ones(len(skill)), skill])
-    coef = _fit(design, wins, games, np.full(2, 1e-4))
-    return SlotModel(
-        slots=[],
-        beta=np.zeros(0),
-        covariance=np.zeros((0, 0)),
-        prior_sd=0.0,
-        intercept=float(coef[0]),
-        strength_beta=float(coef[1]),
-        slot_means=np.zeros(0),
-        strength_mean=strength_mean,
-    )
-
-
-def _strength_values(lists: Sequence[ArchetypeList], strength: Mapping[tuple[str, str], float]) -> np.ndarray:
-    return np.array([strength.get((entry.event, entry.player), 0.0) for entry in lists], dtype=float)
-
-
-def _outcomes(
-    lists: Sequence[ArchetypeList],
-    strength: Mapping[tuple[str, str], float],
-    skill_mean: float | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    wins = np.array([entry.wins for entry in lists], dtype=float)
-    games = np.array([entry.wins + entry.losses for entry in lists], dtype=float)
-    skill = _strength_values(lists, strength)
-    if skill_mean is None:
-        skill_mean = float(skill.mean()) if len(skill) else 0.0
-    return wins, games, skill - skill_mean
-
-
-def _design(slot_matrix: np.ndarray, skill: np.ndarray, with_slots: bool) -> np.ndarray:
-    base = np.column_stack([np.ones(len(skill)), skill])
-    return np.hstack([base, slot_matrix - slot_matrix.mean(axis=0)]) if with_slots else base
-
-
-def _penalty(slot_count: int, prior_sd: float | None) -> np.ndarray:
-    slots = np.full(slot_count, 1.0 / prior_sd**2) if prior_sd else np.zeros(0)
-    return np.r_[np.full(2, 1e-4), slots]
-
-
 def event_folds(lists: Sequence[ArchetypeList]) -> np.ndarray:
     """Assign whole events to folds, so a held-out fold never shares an event with its training data."""
     events = sorted({entry.event for entry in lists})
@@ -255,73 +203,131 @@ def _fold_strength(
     return strength
 
 
-def _model_design(
+def _spec(prior_sd: float | ModelSpec) -> ModelSpec:
+    return prior_sd if isinstance(prior_sd, ModelSpec) else ModelSpec(prior_sd=float(prior_sd))
+
+
+def fit_game(
     lists: Sequence[ArchetypeList],
     strength: Mapping[tuple[str, str], float],
-    model: SlotModel,
-) -> np.ndarray:
-    matrix = _slot_matrix(lists, model.slots)
-    slot_means = model.slot_means if model.slot_means is not None else np.zeros(len(model.slots))
-    skill = _strength_values(lists, strength) - model.strength_mean
-    return np.hstack([np.ones((len(lists), 1)), skill[:, None], matrix - slot_means])
+    prior_sd: float | ModelSpec,
+    slots: Sequence[Slot] | None = None,
+    with_covariance: bool = True,
+) -> GameModel:
+    """The game-level model on these lists (see best60_games); `slots` defaults to the modelled ones."""
+    return fit_game_model(lists, strength, _modelled_slots(lists) if slots is None else slots, _spec(prior_sd), with_covariance)
 
 
-def _model_loss(design: np.ndarray, wins: np.ndarray, games: np.ndarray, model: SlotModel) -> float:
-    coefficient = np.r_[model.intercept, model.strength_beta, model.beta]
-    eta = design @ coefficient
-    return float(-(wins * eta - games * np.logaddexp(0.0, eta)).sum())
+def fit_slot_model(lists: Sequence[ArchetypeList], strength: Mapping[tuple[str, str], float], prior_sd: float | ModelSpec) -> SlotModel:
+    """Each card-count slot's effect against the spec's field (the recent observed field by default)."""
+    spec = _spec(prior_sd)
+    game = fit_game(lists, strength, spec)
+    field = spec.field if spec.field is not None else observed_field(lists, spec.games, spec.as_of, spec.half_life)
+    beta, covariance = game.view(field)
+    return SlotModel(slots=game.slots, beta=beta, covariance=covariance, prior_sd=spec.prior_sd, slot_means=game.slot_means, game=game)
+
+
+def _cross_validated(
+    lists: Sequence[ArchetypeList],
+    strength: Mapping[tuple[str, str], float],
+    records: Mapping[tuple[str, str], tuple[int, int]] | None,
+    spec: ModelSpec,
+    with_slots: bool,
+) -> float:
+    """Held-out log loss per game over five event folds."""
+    folds = event_folds(lists)
+
+    def score(fold: int) -> tuple[float, float]:
+        train = [entry for entry, f in zip(lists, folds) if f != fold]
+        test = [entry for entry, f in zip(lists, folds) if f == fold]
+        fold_strength = _fold_strength(records, {entry.event for entry in train}, {entry.event for entry in test}) if records is not None else strength
+        model = fit_game(train, fold_strength, spec, None if with_slots else [], with_covariance=False)
+        return model.loss(test, fold_strength)
+
+    with ThreadPoolExecutor(BDIF_BEST60_WORKERS) as pool:
+        scored = list(pool.map(score, range(FOLDS)))
+    return sum(loss for loss, _ in scored) / max(1.0, sum(count for _, count in scored))
 
 
 def held_out_losses(
     lists: Sequence[ArchetypeList],
     strength: Mapping[tuple[str, str], float],
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
+    games: Sequence[Game] | None = None,
 ) -> dict[str, float]:
-    """Log loss per game on held-out events: player strength alone, then with slots at each prior width."""
+    """Log loss per game on held-out events: player strength alone, card counts at each prior width,
+    then opponent-specific effects at each width with the best prior."""
     if len(set(entry.event for entry in lists)) < FOLDS:
         return {"strength only": 0.0}
-    folds = event_folds(lists)
-    games = np.array([entry.wins + entry.losses for entry in lists], dtype=float)
-    losses = {}
-    for label, prior_sd in [("strength only", None), *((f"prior sd {sd}", sd) for sd in BDIF_BEST60_PRIOR_GRID)]:
-        total = 0.0
-        for fold in range(FOLDS):
-            train, test = folds != fold, folds == fold
-            train_events = {entry.event for entry, selected in zip(lists, train) if selected}
-            test_events = {entry.event for entry, selected in zip(lists, test) if selected}
-            fold_strength = _fold_strength(records, train_events, test_events) if records is not None else strength
-            train_lists = [entry for entry, selected in zip(lists, train) if selected]
-            test_lists = [entry for entry, selected in zip(lists, test) if selected]
-            model = _fit_strength_model(train_lists, fold_strength) if prior_sd is None else fit_slot_model(train_lists, fold_strength, prior_sd)
-            test_wins = np.array([entry.wins for entry in test_lists], dtype=float)
-            test_games = games[test]
-            total += _model_loss(_model_design(test_lists, fold_strength, model), test_wins, test_games, model)
-        losses[label] = total / max(1.0, float(games.sum()))
+    games = tuple(games) if games else None
+    losses = {"strength only": _cross_validated(lists, strength, records, ModelSpec(prior_sd=1.0, games=games), False)}
+    for sd in BDIF_BEST60_PRIOR_GRID:
+        losses[f"prior sd {sd}"] = _cross_validated(lists, strength, records, ModelSpec(prior_sd=sd, games=games), True)
+    best = min(losses, key=lambda label: (losses[label], label))
+    if best == "strength only" or not games:
+        return losses
+    prior = float(best.removeprefix("prior sd "))
+    for sd in BDIF_BEST60_OPPONENT_GRID:
+        losses[f"opponent sd {sd}"] = _cross_validated(lists, strength, records, ModelSpec(prior_sd=prior, opponent_sd=sd, games=games), True)
     return losses
 
 
-def fit_slot_model(lists: Sequence[ArchetypeList], strength: Mapping[tuple[str, str], float], prior_sd: float) -> SlotModel:
-    slots = _modelled_slots(lists)
-    matrix = _slot_matrix(lists, slots)
-    strength_values = _strength_values(lists, strength)
-    strength_mean = float(strength_values.mean()) if len(strength_values) else 0.0
-    wins, games, skill = _outcomes(lists, strength, strength_mean)
-    design = _design(matrix, skill, True)
-    penalty = _penalty(len(slots), prior_sd)
-    coef = _fit(design, wins, games, penalty)
-    probability = 1.0 / (1.0 + np.exp(-(design @ coef)))
-    information = design.T @ (design * (games * probability * (1.0 - probability))[:, None]) + np.diag(penalty)
-    covariance = np.linalg.inv(information)
-    return SlotModel(
-        slots=slots,
-        beta=coef[2:],
-        covariance=covariance[2:, 2:],
-        prior_sd=prior_sd,
-        intercept=float(coef[0]),
-        strength_beta=float(coef[1]),
-        slot_means=matrix.mean(axis=0) if len(matrix) else np.zeros(len(slots)),
-        strength_mean=strength_mean,
-    )
+def tuned_spec(losses: Mapping[str, float], games: Sequence[Game] | None) -> ModelSpec | None:
+    """The prior width and opponent-specific width with the lowest held-out loss, or None for strength only."""
+    priors = {label: value for label, value in losses.items() if label.startswith("prior sd ") or label == "strength only"}
+    best = min(priors, key=lambda label: (priors[label], label))
+    if best == "strength only":
+        return None
+    prior = float(best.removeprefix("prior sd "))
+    opponents = {label: value for label, value in losses.items() if label.startswith("opponent sd ")}
+    opponent = 0.0
+    if opponents:
+        label = min(opponents, key=lambda name: (opponents[name], name))
+        if opponents[label] < priors[best]:
+            opponent = float(label.removeprefix("opponent sd "))
+    return ModelSpec(prior_sd=prior, opponent_sd=opponent, games=tuple(games) if games else None)
+
+
+def recency_losses(
+    lists: Sequence[ArchetypeList],
+    strength: Mapping[tuple[str, str], float],
+    records: Mapping[tuple[str, str], tuple[int, int]] | None,
+    spec: ModelSpec,
+) -> dict[str, float]:
+    """Log loss per game on the last BDIF_BEST60_RECENT_DAYS days, fitted on the days before, at each half-life."""
+    early, late = recent_split(lists, spec.as_of, BDIF_BEST60_RECENT_DAYS)
+    train = [lists[position] for position in early]
+    test = [lists[position] for position in late]
+    if not train or not test:
+        return {}
+    fold_strength = _fold_strength(records, {entry.event for entry in train}, {entry.event for entry in test}) if records is not None else strength
+    probe = fit_game(train, fold_strength, replace(spec, half_life=None), with_covariance=False)
+    if probe.loss(test, fold_strength)[1] < BDIF_BEST60_MIN_RECENT_GAMES:
+        return {}
+    losses = {}
+    for half_life in (None, *BDIF_BEST60_HALF_LIFE_GRID):
+        model = probe if half_life is None else fit_game(train, fold_strength, replace(spec, half_life=float(half_life)), with_covariance=False)
+        loss, count = model.loss(test, fold_strength)
+        losses["no recency weighting" if half_life is None else f"half-life {half_life} days"] = loss / count
+    return losses
+
+
+def card_matchups(model: SlotModel, slots: Sequence[Slot], field: Mapping[str, float]) -> dict[str, dict[str, list[float]]]:
+    """Effect and 95% interval of each slot against each opponent with its own effects, most played first."""
+    game = model.game
+    if game is None or not game.specific:
+        return {}
+    index = {slot: position for position, slot in enumerate(game.slots)}
+    decks = sorted(game.specific, key=lambda deck: (-field.get(deck, 0.0), deck))
+    found: dict[str, dict[str, list[float]]] = {}
+    for deck in decks:
+        beta, covariance = game.against(deck)
+        for slot in slots:
+            if slot in index:
+                position = index[slot]
+                error = math.sqrt(max(float(covariance[position, position]), 0.0))
+                found.setdefault(f"{slot[0]} #{slot[1]}", {})[deck] = [float(beta[position]), float(beta[position] - 1.96 * error), float(beta[position] + 1.96 * error)]
+    return found
 
 
 def prerequisites(lists: Sequence[ArchetypeList]) -> dict[str, set[str]]:
@@ -655,7 +661,7 @@ def trends(lists: Sequence[ArchetypeList], stats: Mapping[str, Mapping[str, Any]
 def held_out_gain(
     lists: Sequence[ArchetypeList],
     strength: Mapping[tuple[str, str], float],
-    prior_sd: float,
+    prior_sd: float | ModelSpec,
     consensus: Counter[str],
     groups: Mapping[str, str],
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
@@ -677,9 +683,11 @@ def held_out_gain(
         train_events = {entry.event for entry in train}
         test_events = {entry.event for entry in test}
         fold_strength = _fold_strength(records, train_events, test_events) if records is not None else strength
+        fold_consensus = consensus_sixty(train)
+        fold_groups = {card: group for entry in train for card, group in entry.groups.items()}
         _, applied, _ = improve(
-            consensus, fit_slot_model(train, fold_strength, prior_sd), groups, prerequisites(train),
-            count_levels(train, consensus), _support_check(train, list_mode),
+            fold_consensus, fit_slot_model(train, fold_strength, prior_sd), fold_groups, prerequisites(train),
+            count_levels(train, fold_consensus), _support_check(train, list_mode),
         )
         priced = fit_slot_model(test, fold_strength, prior_sd)
         beta = dict(zip(priced.slots, priced.beta))
@@ -693,7 +701,7 @@ def held_out_gain(
 def stability(
     lists: Sequence[ArchetypeList],
     strength: Mapping[tuple[str, str], float],
-    prior_sd: float,
+    prior_sd: float | ModelSpec,
     consensus: Counter[str],
     recommended: Mapping[str, int],
     groups: Mapping[str, str],
@@ -718,10 +726,19 @@ def stability(
     rng = np.random.default_rng(SEED)
     same = Counter()
     direction = Counter()
+    samples = []
     for _ in range(draws):
         sample = [entry for event in rng.choice(events, size=len(events), replace=True) for entry in by_event[event]]
+        samples.append(sample)
+
+    def rerun(sample: list[ArchetypeList]) -> Counter[str]:
         model = fit_slot_model(sample, strength, prior_sd)
         deck, _, _ = improve(consensus, model, groups, prerequisites(sample), count_levels(sample, consensus), _support_check(sample, list_mode))
+        return deck
+
+    with ThreadPoolExecutor(BDIF_BEST60_WORKERS) as pool:
+        decks = list(pool.map(rerun, samples))
+    for deck in decks:
         for card in changed:
             before, wanted, got = consensus.get(card, 0), recommended.get(card, 0), deck.get(card, 0)
             same[card] += got == wanted
@@ -752,13 +769,27 @@ def build_best60(
     strength: Mapping[tuple[str, str], float],
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
     list_mode: str | None = None,
+    *,
+    games: Sequence[Game] | None = None,
+    field: Mapping[str, float] | None = None,
+    as_of: str | None = None,
 ) -> dict[str, Any]:
     """The Best-60 report for one archetype from its stored lists.
+
+    `games` are the archetype's stored pairings (one per game, each with the opponent's deck); without
+    them every list enters as its match record. `field` is the opponent mix to optimise against; the
+    default is the recent observed field. `as_of` ignores every list and game on or after that date and
+    ages recency from it; callers pass `records` and `strength` from before it too.
 
     `list_mode` "novel" (the default) may recommend a list nobody has played; "observed" stops before
     the list has fewer than BDIF_BEST60_SUPPORT_LISTS observed lists within BDIF_BEST60_SUPPORT_CHANGES.
     """
     list_mode = list_mode or BDIF_BEST60_LIST_MODE
+    pinned = parse_date(as_of)
+    if as_of is not None and pinned is None:
+        raise ValueError(f"unreadable Best-60 as-of date: {as_of}")
+    rows = [row for row in rows if pinned is None or ((when := parse_date(str(row.get("date") or ""))) is not None and when < pinned)]
+    games = tuple(game for game in games or () if pinned is None or ((when := parse_date(game.date)) is not None and when < pinned)) or None
     lists = [entry for entry in (parse_list(row) for row in rows) if entry is not None]
     _support_check(lists, list_mode)
     records = records or {(entry.event, entry.player): (entry.wins, entry.losses) for entry in lists}
@@ -775,24 +806,40 @@ def build_best60(
         for card, group in entry.groups.items():
             groups.setdefault(card, group)
     deck, applied, proposed, leaning, model = Counter(consensus), [], [], [], None
-    model_report: dict[str, Any] = {"outcome": "match record at the event, player strength controlled", "prior_sd": None}
+    model_report: dict[str, Any] = {
+        "outcome": "each game against the opponent's deck, both players' strength controlled" if games else "match record at the event, player strength controlled",
+        "prior_sd": None, "opponent_sd": 0.0, "half_life_days": None,
+        "as_of": as_of, "field_source": "specified" if field else "observed",
+    }
+    used_field: dict[str, float] = normalise_field(field)
+    matchups: dict[str, dict[str, list[float]]] = {}
     if len(lists) < BDIF_BEST60_MIN_MODEL_LISTS:
         status = "consensus only: too few lists to score cards"
     else:
-        losses = held_out_losses(lists, strength, records)
-        best_label = min(losses, key=lambda label: (losses[label], label))
+        losses = held_out_losses(lists, strength, records, games)
         model_report["held_out_loss"] = losses
-        if best_label == "strength only":
+        spec = tuned_spec(losses, games)
+        if spec is None:
             status = "consensus only: card counts did not predict held-out results"
         else:
-            prior_sd = float(best_label.removeprefix("prior sd "))
+            spec = replace(spec, as_of=as_of)
+            recency = recency_losses(lists, strength, records, spec)
+            model_report["recency_loss"] = recency
+            if recency:
+                best_recency = min(recency, key=lambda label: (recency[label], label))
+                if best_recency != "no recency weighting":
+                    spec = replace(spec, half_life=float(best_recency.removeprefix("half-life ").removesuffix(" days")))
+            used_field = used_field or observed_field(lists, games, as_of, spec.half_life)
+            spec = replace(spec, field=used_field)
+            prior_sd = spec
             model = fit_slot_model(lists, strength, prior_sd)
             improved, proposed, leaning = improve(
                 consensus, model, groups, prerequisites(lists), count_levels(lists, consensus), _support_check(lists, list_mode),
             )
             gain_held_out, gain_se = held_out_gain(lists, strength, prior_sd, consensus, groups, records, list_mode)
             model_report.update({
-                "prior_sd": prior_sd, "slots": len(model.slots),
+                "prior_sd": spec.prior_sd, "opponent_sd": spec.opponent_sd, "half_life_days": spec.half_life,
+                "slots": len(model.slots), "opponents_with_own_effects": list(model.game.specific) if model.game else [],
                 "held_out_gain": gain_held_out, "held_out_gain_se": gain_se,
             })
             if gain_held_out - BDIF_BEST60_HELD_OUT_SE * gain_se > 0:
@@ -812,7 +859,10 @@ def build_best60(
     stats = card_stats(lists)
     gain = sum(swap["gain"] for swap in applied)
     support = ListSupport(lists)
-    stable = stability(lists, strength, model_report["prior_sd"], consensus, deck, groups, list_mode) if applied else {}
+    stable = stability(lists, strength, spec, consensus, deck, groups, list_mode) if applied else {}
+    if applied and model is not None:
+        touched = sorted({slot for move in applied for slot in (*move["removed"], *move["added"])})
+        matchups = card_matchups(model, touched, used_field)
     return {
         **report,
         "status": status,
@@ -828,6 +878,8 @@ def build_best60(
         "support": {"consensus": support.profile(consensus), "recommended": support.profile(deck)},
         "joint_probability": None if model is None or not applied else joint_probability(consensus, deck, model),
         "stability": stable,
+        "field": dict(sorted(used_field.items(), key=lambda item: (-item[1], item[0]))[:12]),
+        "card_matchups": matchups,
         "match_win_rate": {
             "archetype_average": _expected_rate(lists, 0.0),
             "with_swaps_in_sample": _expected_rate(lists, gain),
