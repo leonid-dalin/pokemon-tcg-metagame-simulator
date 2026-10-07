@@ -683,9 +683,11 @@ def held_out_gain(
         train_events = {entry.event for entry in train}
         test_events = {entry.event for entry in test}
         fold_strength = _fold_strength(records, train_events, test_events) if records is not None else strength
+        fold_consensus = consensus_sixty(train)
+        fold_groups = {card: group for entry in train for card, group in entry.groups.items()}
         _, applied, _ = improve(
-            consensus, fit_slot_model(train, fold_strength, prior_sd), groups, prerequisites(train),
-            count_levels(train, consensus), _support_check(train, list_mode),
+            fold_consensus, fit_slot_model(train, fold_strength, prior_sd), fold_groups, prerequisites(train),
+            count_levels(train, fold_consensus), _support_check(train, list_mode),
         )
         priced = fit_slot_model(test, fold_strength, prior_sd)
         beta = dict(zip(priced.slots, priced.beta))
