@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+# src.worker.queue connects to Redis on import; Windows takes 4 s to refuse.
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/?db=0&socket_connect_timeout=0.05")
 
 
 SHIPPED_DATA = (Path(__file__).resolve().parent.parent / "data" / "input").glob("limitless_model_fit*")

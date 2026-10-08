@@ -2,6 +2,13 @@
 
 ## October 2026
 
+### Faster mutation sweeps
+
+- Mutation sweeps run rows in parallel worktrees, one worker per CPU up to 16, and never edit the checkout
+- Each row runs the tests that cover the mutated lines first and stops at its first failure; a survivor still runs the whole suite
+- A row that runs longer than 600 seconds counts as caught
+- Tests no longer wait 4 seconds for Redis on Windows
+
 ### Best-60 against the field as it moves
 
 - Best-60 scores every game against the opponent's deck, with both players' strength, and gives card counts opponent-specific effects where the data supports them

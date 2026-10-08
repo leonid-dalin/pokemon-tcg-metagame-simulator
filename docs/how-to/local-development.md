@@ -47,7 +47,7 @@ PYTHONPATH=. python tools/qa-harness/interval_sanity.py --spec tools/qa-harness/
 PYTHONPATH=. python tools/qa-harness/dead_symbol_scan.py --src src --tests tests
 ```
 
-Run mutation sweeps only from a committed clean tree:
+A mutation sweep tests the committed HEAD in temporary worktrees and stops if tracked files have uncommitted changes. It starts one worker per CPU, at most 16; set `MUTATION_SWEEP_WORKERS` to use fewer:
 
 ```bash
 PYTHONPATH=. python tools/qa-harness/mutation_sweep.py --repo . --mutations tools/qa-harness/mutations.minmatches.json --tests tests --pythonpath .
