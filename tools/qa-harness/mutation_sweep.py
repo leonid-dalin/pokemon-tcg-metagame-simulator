@@ -13,7 +13,8 @@ MUTATION_SWEEP_WORKERS or --workers overrides).
 """
 import argparse, json, os, re, shutil, subprocess, sys, tempfile, time
 from concurrent.futures import ThreadPoolExecutor
-from queue import Queue
+from queue import Empty, Queue
+from threading import Event
 
 from coverage import CoverageData
 
@@ -66,11 +67,14 @@ def run_suite(cwd, tests, env, extra=(), timeout=None):
     return failed, summary.strip("= ")
 
 
-def restore_worker(tree, idle):
+def restore_worker(tree, idle, failed, stopped):
     result = subprocess.run(["git", "checkout", "--", "."], cwd=tree, capture_output=True, text=True)
     if result.returncode:
-        raise RuntimeError(f"Failed to restore mutation worker {tree}: {result.stderr.strip()}")
-    idle.put(tree)
+        failed.append(f"Failed to restore mutation worker {tree}: {result.stderr.strip()}")
+        stopped.set()
+        return
+    if not stopped.is_set():
+        idle.put(tree)
 
 
 def main():
@@ -175,10 +179,19 @@ def main():
         idle = Queue()
         for tree in trees:
             idle.put(tree)
+        restore_failures = []
+        stopped = Event()
 
         def run_row(plan):
             index, m, _, first = plan
-            tree = idle.get()
+            while True:
+                if stopped.is_set():
+                    return restore_failures[:]
+                try:
+                    tree = idle.get(timeout=0.1)
+                except Empty:
+                    continue
+                break
             try:
                 path = os.path.join(tree, *m["file"].split("/"))
                 src = open(path, encoding="utf-8").read()
@@ -190,7 +203,7 @@ def main():
                                       ["-x", "-p", "sweep_order"], args.timeout)
                 return failed
             finally:
-                restore_worker(tree, idle)
+                restore_worker(tree, idle, restore_failures, stopped)
 
         runnable = sorted((p for p in plans if p[2] == 1), key=lambda p: bool(p[3]))
         with ThreadPoolExecutor(workers) as pool:
@@ -209,6 +222,10 @@ def main():
                 else:
                     survivors.append(m["name"])
                     print(f"{'*** SURVIVED ***':16} | {m['name']}")
+            if restore_failures:
+                for failure in restore_failures:
+                    print(f"RESTORE FAILED     | {failure}")
+                return 2
     finally:
         for tree in trees:
             subprocess.run(["git", "-C", repo, "worktree", "remove", "--force", tree], capture_output=True)

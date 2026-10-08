@@ -156,8 +156,11 @@ def test_restore_failure_does_not_reuse_worker(monkeypatch):
 
     monkeypatch.setattr(sweep.subprocess, "run", fail_restore)
     idle = sweep.Queue()
+    failed = []
+    stopped = sweep.Event()
 
-    with pytest.raises(RuntimeError, match="unable to unlink old"):
-        sweep.restore_worker("worker", idle)
+    sweep.restore_worker("worker", idle, failed, stopped)
 
     assert idle.empty()
+    assert stopped.is_set()
+    assert failed == ["Failed to restore mutation worker worker: error: unable to unlink old 'tracked.py': Invalid argument"]
