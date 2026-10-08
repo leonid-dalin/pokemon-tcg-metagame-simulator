@@ -16,6 +16,7 @@ from src.api import main
 def test_rate_limit_backend_defaults_to_shared_redis(monkeypatch):
     env = os.environ.copy()
     env.pop("RATE_LIMIT_STORAGE_URI", None)
+    env.pop("REDIS_URL", None)
     result = subprocess.run(
         [sys.executable, "-c", "import src.api.main as m; print(m.limiter._storage_uri)"],
         check=True,
