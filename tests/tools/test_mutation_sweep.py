@@ -148,3 +148,16 @@ def test_sweep_order_records_each_test_s_seconds(tmp_path):
     assert sorted(json.loads(record.read_text())) == [
         "test_order.py::test_a", "test_order.py::test_b", "test_order.py::test_c",
     ]
+
+
+def test_restore_failure_does_not_reuse_worker(monkeypatch):
+    def fail_restore(command, **kwargs):
+        return subprocess.CompletedProcess(command, 255, "", "error: unable to unlink old 'tracked.py': Invalid argument")
+
+    monkeypatch.setattr(sweep.subprocess, "run", fail_restore)
+    idle = sweep.Queue()
+
+    with pytest.raises(RuntimeError, match="unable to unlink old"):
+        sweep.restore_worker("worker", idle)
+
+    assert idle.empty()

@@ -66,6 +66,13 @@ def run_suite(cwd, tests, env, extra=(), timeout=None):
     return failed, summary.strip("= ")
 
 
+def restore_worker(tree, idle):
+    result = subprocess.run(["git", "checkout", "--", "."], cwd=tree, capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(f"Failed to restore mutation worker {tree}: {result.stderr.strip()}")
+    idle.put(tree)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", required=True)
@@ -183,8 +190,7 @@ def main():
                                       ["-x", "-p", "sweep_order"], args.timeout)
                 return failed
             finally:
-                subprocess.run(["git", "checkout", "--", "."], cwd=tree, capture_output=True)
-                idle.put(tree)
+                restore_worker(tree, idle)
 
         runnable = sorted((p for p in plans if p[2] == 1), key=lambda p: bool(p[3]))
         with ThreadPoolExecutor(workers) as pool:
