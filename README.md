@@ -6,83 +6,103 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-AGPL--3.0--or--later-blue" alt="AGPL-3.0-or-later licence"></a>
 </p>
 
-A Python and Rust toolkit for Pokemon TCG metagame analysis. It has a replicator model for long-run field changes and a Monte Carlo tournament model for event outcomes. Docker Compose runs the Streamlit dashboard, FastAPI, Huey worker, Redis, and Jaeger
+A Python and Rust simulator for Pokemon TCG metagame analysis. It provides two local workflows:
 
-## App showcase
+- Replicator dynamics for long-run metagame evolution
+- Monte Carlo tournament simulation for short-run event outcomes
 
-| Current dashboard before a run | Completed Best EV recommendations |
+The Docker Compose deployment runs a FastAPI gateway, a Huey worker, a Streamlit UI, Redis, Jaeger, and a shared data volume
+
+## 🖼️ App showcase
+
+| Main dashboard and controls | Head-to-head comparator |
 |:---:|:---:|
-| ![Current dashboard showing tournament settings and metagame constraints before a run](docs/img/main.png) | ![Completed recommendations view showing the Best EV cards and matchup table](docs/img/top-recommendations.png) |
-| Completed head-to-head comparator | Completed tournament results |
-| ![Completed head-to-head comparison of Dragapult and Alakazam Dudunsparce across the predicted field](docs/img/head-to-head.png) | ![Completed tournament dashboard with ranked deck results and score definitions](docs/img/simulation_complete.png) |
+| ![Main dashboard and controls before a run](docs/img/main.png) | ![Completed head-to-head field comparison of Goldengo Lunatone and Joltik Box](docs/img/head-to-head.png) |
+| **Top recommendations** | **Completed tournament simulation dashboard** |
+| ![Top Recommendations view with three Best EV cards and a Load more control](docs/img/top-recommendations.png) | ![Completed tournament simulation dashboard with ranked results and score definitions](docs/img/simulation_complete.png) |
 
-Best-60 card recommendations are available in the results tabs when `BDIF_USE_CARD_MODEL` is enabled and the configured Limitless snapshot contains usable decklists. The completed result captures use the checked-in four-archetype fixture with 8 players, BO1, and `1 - BULLET`. The screenshots above show the standard tournament dashboard and do not claim a populated Best-60 report
-
-## Quick start
+## 🚀 Quick start
 
 Requirements: Docker Desktop with Compose support
 
 ```bash
 git clone https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator.git
 cd pokemon-tcg-metagame-simulator
-git lfs pull
 docker compose up -d --build
 ```
 
-Open the dashboard at `http://localhost:8501` or the API reference at `http://localhost:8000/docs/`. The local Limitless snapshot is stored with Git LFS
+Open the dashboard at `http://localhost:8501` or the API documentation at `http://localhost:8000/docs/`
 
-Stop the services with:
+The Compose stack exposes:
+
+- `ui` on port `8501`
+- `api` on port `8000`
+- `redis` on port `6379`
+- `jaeger` on ports `16686`, `4317`, `4318`, `5778`, and `9411`
+- `worker` and `init-data` as internal services
+
+Stop the stack with:
 
 ```bash
 docker compose down
 ```
 
-## Run the CLI
+## 💻 Run the CLI
 
-Set up Python and the Rust extension with the [local development guide](docs/how-to/local-development.md), then run commands from the repository root
-
-Run replicator dynamics:
+Install the Python dependencies and build the Rust extension with the commands in [the local development guide](docs/how-to/local-development.md). Then run a simulation from the repository root:
 
 ```bash
-python -m src.ui.cli --input data/input/ea_input.json --mode replicator --gens 10000
+python -m src.ui.cli -i data/input/ea_input.json --mode replicator --gens 10000
 ```
 
-Run the static tournament predictor with the checked-in matchup example:
+Run the static tournament predictor with the checked-in four-archetype example:
 
 ```bash
 python -m src.ui.cli --input examples/predict_input.json --predict --players 512 --no-plot
 ```
 
-The CLI writes timestamped result folders below `output/`. The [CLI guide](docs/how-to/run-cli.md) covers tournament and batch runs
+The CLI writes timestamped directories under `output/` unless `--output` changes the destination. See [CLI reference](docs/reference/cli.md) for all supported arguments and [CLI guide](docs/how-to/run-cli.md) for complete examples
 
-## Runnable examples
-
-- `examples/library_prediction.py` calls the Python data loader and tournament solver
-- `examples/api_prediction.py` submits a request to FastAPI and reads the task event stream
-- `examples/snapshot_summary.py` checks the snapshot manifest hash and reports read-only database counts
-
-Run Python examples from the repository root. The API example uses `API_URL` if set, otherwise `http://127.0.0.1:8000/api/v1`
-
-## Documentation
+## 📚 Documentation
 
 | You need to | Read |
 | --- | --- |
-| Start the dashboard or run a prediction | [Quickstart tutorial](docs/tutorial/quickstart.md) |
-| Use CLI modes and batch input | [CLI how-to](docs/how-to/run-cli.md) |
-| Run Docker Compose | [Compose how-to](docs/how-to/run-compose.md) |
-| Use the HTTP API | [API reference](docs/reference/api.md) |
-| Enable Limitless ingestion and BDIF reports | [BDIF how-to](docs/how-to/enable-bdif.md) |
-| Understand the 60-card data and Best-60 rules | [Limitless ingestion reference](docs/limitless-ingestion.md) |
-| Find other guides and references | [Documentation index](docs/README.md) |
-| See historical changes | [Changelog](docs/CHANGELOGS.md) |
+| Learn the main workflow | [Quickstart tutorial](docs/tutorial/quickstart.md) |
+| Run the CLI | [CLI how-to](docs/how-to/run-cli.md) |
+| Run the Docker Compose stack | [Compose how-to](docs/how-to/run-compose.md) |
+| Run the Python examples | [Examples how-to](docs/how-to/run-examples.md) |
+| Enable Limitless and BDIF analytics | [BDIF how-to](docs/how-to/enable-bdif.md) |
+| Understand Limitless ingestion data and model rules | [Limitless ingestion reference](docs/limitless-ingestion.md) |
+| Set up local development | [Local development how-to](docs/how-to/local-development.md) |
+| Check CLI flags and defaults | [CLI reference](docs/reference/cli.md) |
+| Integrate with the API | [API reference](docs/reference/api.md) |
+| Check configuration values | [Configuration reference](docs/reference/configuration.md) |
+| Understand the service layout | [Architecture explanation](docs/explanation/architecture.md) |
+| Understand the models and evidence rules | [Analytics explanation](docs/explanation/analytics.md) |
+| Understand the system design | [System design](docs/EXPLANATION.md) |
+| Find source entry points | [Code reference](docs/REFERENCE.md) |
+| See what changed | [Changelog](docs/CHANGELOGS.md) |
+| Read acknowledgements for Limitless TCG and other contributors | [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md) |
 
-For contribution guidance, community standards, security reports, licence terms, and data notices, see [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), [SECURITY.md](SECURITY.md), [LICENSE](LICENSE), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+## 🧾 Project documents
 
-## Data and tests
+| You need to | Read |
+| --- | --- |
+| Contribute code or data | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Read community standards | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
+| Report a security issue | [SECURITY.md](SECURITY.md) |
+| Read the project licence | [LICENSE](LICENSE) |
+| Check dependency and data notices | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 
-The default simulation input is `data/input/ea_input.json`. It contains archetype names and a matchup matrix. Limitless tournament ingestion and card-model reports are disabled by default; see [Enable Limitless and BDIF analytics](docs/how-to/enable-bdif.md)
+## 🗃️ Data files
 
-Run the tests in the project environment:
+The CLI default input is `data/input/ea_input.json`. The file contains archetype names and a win-rate matrix. The loader enforces the configured minimum match count and supplies matchup details for posterior analytics when those details exist
+
+Limitless ingestion is disabled by default. It writes `data/limitless.db`, `data/input/limitless_input.json`, and, when enough observations exist, `data/input/limitless_model_input.json`. BDIF card-model reporting is also disabled by default. See [BDIF analytics](docs/how-to/enable-bdif.md)
+
+## 🧪 Tests
+
+Use the project environment and run:
 
 ```bash
 python -m pytest -q
@@ -90,8 +110,8 @@ python -m pytest -q
 
 The Docker build compiles `src/tournament/tcg_engine` with Maturin before installing the wheel
 
-## Licence
+## 📄 Licence
 
 Copyright (C) 2025 Leonid Dalin. This project is licensed under [GNU AGPL-3.0-or-later](LICENSE)
 
-The use of repository content for training any artificial intelligence (AI) model without explicit consent is prohibited
+The use of any content in this repository for training any artificial intelligence (AI) model without my explicit consent is strictly prohibited.

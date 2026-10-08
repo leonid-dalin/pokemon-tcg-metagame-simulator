@@ -1,37 +1,36 @@
 # Changelog
 
-
 ## October 2026
 
-### [Parallel mutation sweeps, 8 October](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/80db00cdfc35849ee30c0922d83e86eaf27ac707)
+### [Faster mutation sweeps, 8 October 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/80db00cdfc35849ee30c0922d83e86eaf27ac707)
 
 - Mutation sweeps run rows in parallel worktrees, one worker per CPU up to 16, and never edit the checkout
 - Each row runs the tests that cover the mutated lines first and stops at its first failure; a survivor still runs the whole suite
 - A row that runs longer than 600 seconds counts as caught
 - Tests no longer wait 4 seconds for Redis on Windows
 
-### [Best-60 against a moving field, 7 October](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/b5a2cc1636571ce8cc1e5a6b355a61573bf69050)
+### [Best-60 against the field as it moves, 7 October 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/b5a2cc1636571ce8cc1e5a6b355a61573bf69050)
 
 - Best-60 scores every game against the opponent's deck, with both players' strength, and gives card counts opponent-specific effects where the data supports them
 - Recent events can count more; the half-life is chosen on the latest three weeks, and none is allowed
 - `BDIF_BEST60_FIELD` optimises against a field you give; `BDIF_BEST60_AS_OF` builds the list as of a past date
 
-### [Best-60 change stability, 7 October](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/44caafce8b34da0e144a06ccab61af2b559b5a35)
+### [Best-60 stability, 7 October 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/44caafce8b34da0e144a06ccab61af2b559b5a35)
 
 - Each changed card reports how often resampled events recommend the same count and direction
 
-### [Whole-list Best-60 changes, 6 October](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/b56e35595a745ff42a7e02b9bbcc4287eea14068)
+### [Best-60 judges whole moves and lists, 6 October 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/b56e35595a745ff42a7e02b9bbcc4287eea14068)
 
 - Cards stay at counts the archetype plays; a card played at 0 or 4 moves in one priced step
 - The report gives the chance the whole list beats the consensus and how many played lists sit near it
 - `BDIF_BEST60_LIST_MODE` chooses `novel` lists (default) or lists near ones people played (`observed`)
 
-### [Held-out Best-60 gate, 6 October](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/1a334ce26a3591a896ecfa999d189fad125b6a39)
+### [Best-60 held-out gate, 6 October 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/1a334ce26a3591a896ecfa999d189fad125b6a39)
 
 - The held-out gate prices swaps chosen on four folds with coefficients fitted on the fifth again, keeps training-only player strength, and needs the gain to clear one standard error
 - A planted card effect is applied again; the gate merged in PR #42 rejected every swap, including planted ones
 
-### [Best-60 from tournament results, 6 October](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/cb38d53195c26a159829ddaad5a668c537a8721b)
+### [Best-60 from results, 6 October 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/cb38d53195c26a159829ddaad5a668c537a8721b)
 
 - Best-60 starts from each archetype's consensus list and applies card-count swaps only when they hold up on held-out events, with player strength controlled
 - The report adds finish-tier rates per card, rising and falling cards, and breakthrough cards
@@ -85,10 +84,11 @@ The September release cycle added live matchup discovery, stronger request and m
 - Added Docker build-context exclusions for Python caches, virtual environments, bytecode, and tool caches
 - Kept older entries below this current section as historical records
 
-### [Distributed resource locking and task-stream reliability, Jun 03, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/6f6dbe0956a8f071d8247d20c80cf0e7a5295095)
+## June 2026
 
-#### 🚀 Distributed resource locking, async telemetry streams, and cgroup fixes
-##### `feat(infra): implement distributed startup lock, async SSE streaming, and cgroup-aware core scaling`
+### [🚀 Distributed resource locking, async telemetry streams, and cgroup fixes, 3 June 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/6f6dbe0956a8f071d8247d20c80cf0e7a5295095)
+
+#### `feat(infra): implement distributed startup lock, async SSE streaming, and cgroup-aware core scaling`
 
 This release stops parallel container instances from running redundant startup scrapes, prevents SSE streams from starving the API thread pool, fixes host core limits leaking into Docker, and adds shared volumes for data persistence.
 
@@ -109,8 +109,9 @@ This release stops parallel container instances from running redundant startup s
 * **Perf:** Set `network: host` on the build context to work around network bottlenecks when building wheels inside the container. (Workaround for my Docker Linux + AdGuard Home setup)
 
 
-### [SSE resilience and production worker hardening, Apr 28, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/c73562cdc1005c907716d962059cd8099a9d8a5b)
-#### 🛡️ SSE Resilience, Telemetry Unification & Production Hardening
+## April 2026
+
+### [🛡️ SSE Resilience, Telemetry Unification & Production Hardening, 28 April 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/c73562cdc1005c907716d962059cd8099a9d8a5b)
 
 This update introduces highly resilient Server-Sent Events (SSE) for task streaming, upgrades the observability stack to Jaeger v2, and hardens the Docker orchestration to prevent resource exhaustion during heavy Rust-driven Monte Carlo simulations.
 
@@ -130,9 +131,7 @@ This update introduces highly resilient Server-Sent Events (SSE) for task stream
 * **(Fix) Session State Initialisation:** Initialised the `temp_input_mode` variable in the Streamlit session state dictionary at container startup. This prevents fatal `AttributeError` crashes upon initial user interaction.
 * **(Fix) UI Collapse Bug:** Decoupled the high-frequency progress bar updates from the `st.status` container, resolving a visual glitch where the execution expander would forcefully collapse itself multiple times per second.
 
-
-### [OpenTelemetry tracing and structured logging, Apr 21, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/53c06a481284cb8d21e60ea676409eba5c0b91c8)
-#### 🛰️ Observability Overhaul & Production Hardening
+### [🛰️ Observability Overhaul & Production Hardening, 21 April 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/53c06a481284cb8d21e60ea676409eba5c0b91c8)
 
 This update implements a unified telemetry pipeline and resolves critical runtime exceptions in the visualisation and simulation layers.
 
@@ -158,9 +157,7 @@ This update implements a unified telemetry pipeline and resolves critical runtim
 #### 🔡 `cli.py` 
 * **(Fix) Model Enforcement:** Refactored the CLI predictor to strictly instantiate the `PredictionRequest` Pydantic model instead of passing raw keywords.
 
-
-### [Metagame import and dashboard state fixes, Apr 21, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/576cee3d5918c1a12970f751c397fba6f04ca675)
-#### 🧪 UI/UX & Data Fidelity Improvement
+### [🧪 UI/UX & Data Fidelity Improvement, 21 April 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/576cee3d5918c1a12970f751c397fba6f04ca675)
 
 This update focuses on stabilising the Streamlit frontend state, improving the Limitless TCG scraper, and introducing a new high-level utility for metagame distribution modelling.
 
@@ -180,9 +177,7 @@ This update focuses on stabilising the Streamlit frontend state, improving the L
 * **(Perf) TTL Caching:** Added a `300s` Time-To-Live (TTL) to the matchup matrix and deck name loaders. This ensures the UI automatically invalidates stale data when the background worker updates the core JSON data.
 * **(Soft Warning) Redis Integration:** The Auto-Fill feature relies on the latest state in `ea_input.json`; users must ensure their local Redis instance is active to prevent skewed distributions from stale local files.
 
-
-### [API gateway protection and task linking, Apr 19, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/f2b7421049b368ca36ba1bedaf59f045860c04e4)
-#### 🛡️ Security & Reliability: Defensive Gateway Overhaul
+### [🛡️ Security & Reliability: Defensive Gateway Overhaul, 19 April 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/f2b7421049b368ca36ba1bedaf59f045860c04e4)
 
 This update transforms the FastAPI entry point from a transparent router into a defensive gateway, implementing strict resource protection and resolving ID-mapping issues between the API and background workers.
 
@@ -201,9 +196,7 @@ This update transforms the FastAPI entry point from a transparent router into a 
 #### 📊 `queue.py` (Background Worker)
 * **(Stability) Execution Context:** Verified that `huey.storage` correctly utilises the shared Redis instance for persistent progress peeking, allowing the SSE stream to survive API restarts.
 
-
-### [Redis task queues and SSE streaming, Apr 04, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/3eb4bc72b9f919a4e0b95e557ec35a900a1fbe5e)
-#### 🚀 Infrastructure & UX: Redis Migration and SSE Streaming
+### [🚀 Infrastructure & UX: Redis Migration and SSE Streaming, 4 April 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/3eb4bc72b9f919a4e0b95e557ec35a900a1fbe5e)
 
 This update finalises the architectural decoupling of the simulator, transitioning from synchronous polling to a reactive, event-driven communication model.
 
@@ -226,7 +219,6 @@ Or rather my assumption that `EmptyData` === `None` (Let me explain.)
 
 When Streamlit connected to the API to ask for progress, the background worker would sometimes be just a millisecond away from starting. In that tiny window, `huey.storage.peek_data()` doesn't return **None,** it returns its `EmptyData` object. Because I assumed it would be either bytes or None, my code was trying to run `.decode('utf-8')` on a Python class object (`EmptyData`). And yeah, it caused an unhandled exception that instantly severed the HTTP connection. So bothersome and frustrating. Anyway. I'll leave you with the Patch Notes as per usual.
 
-
 #### **📡 Server-Sent Events (SSE) Implementation**
 * **Persistent Connections:** Replaced the former polling loop in the UI with a single, persistent HTTP stream (`/api/v1/tasks/{task_id}/stream`).
 * **Real-Time Progress:** The UI now receives granular updates directly from the Huey worker, allowing for accurate ETA calculations and a smooth progress bar.
@@ -242,9 +234,7 @@ When Streamlit connected to the API to ask for progress, the background worker w
 * **Deferred Engine Initialisation:** Moved the Rayon thread-pool initialisation inside the worker task to prevent deadlocks caused by Linux `fork()` mechanics.
 * **Granular Chunking:** Inverted the chunking logic to ensure regular progress updates (every 10k iterations) regardless of the total simulation size.
 
-
-### [Rust Monte Carlo tournament engine, Apr 02, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/7aff00ff4dde35db3f1ee7dd0d227040db5917d5)
-#### 🚀 major: Rust integration for high-speed Monte Carlo simulations
+### [🚀 major: Rust integration for high-speed Monte Carlo simulations, 2 April 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/7aff00ff4dde35db3f1ee7dd0d227040db5917d5)
 
 This update replaces the Python/NumPy tournament bracket engine with a fully compiled, multithreaded Rust extension (`tcg_engine`). Faster execution times! 🥳
 
@@ -257,8 +247,9 @@ This update replaces the Python/NumPy tournament bracket engine with a fully com
 * Updated the deployment architecture to utilize `maturin`, seamlessly compiling `.whl` binaries directly inside the Linux Docker container during build time.
 
 
-### [Live Limitless matchup ingestion, Mar 31, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/39d482d598faa41a89d4f616ec0fbbfc8de83c69)
-#### 🚀 feat(pipeline): implement autonomous Limitless TCG live scraper, Pydantic matrix validation, and Huey cron scheduling
+## March 2026
+
+### [🚀 feat(pipeline): implement autonomous Limitless TCG live scraper, Pydantic matrix validation, and Huey cron scheduling, 31 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/39d482d598faa41a89d4f616ec0fbbfc8de83c69)
 
 This update completely eliminates the need for manual HTML file downloads from Limitless. The simulator is now able to fetch, normalise, validate, and ingest live Limitless TCG data automatically, as long as it knows the URLs.
 
@@ -274,9 +265,8 @@ This update completely eliminates the need for manual HTML file downloads from L
 * **Huey Cron Scheduler:** Built a native `@huey.periodic_task` that wakes up at 2:00 AM every day. It executes the web scraper, runs the Pydantic validation, and updates the `ea_input.json` matrix asynchronously.
 * **Zero UI Interruption:** Because this runs entirely within the decoupled Huey background worker (`tcg_tasks.db`), the daily data refresh happens invisibly and does not block or freeze the Streamlit dashboard for end-users.
 
+### [🚀 major: Decoupled Asynchronous Architecture & Containerization, 30 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/088e98fbf80c4610187452025c6df00311393071)
 
-### [FastAPI, worker, and dashboard services, Mar 30, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/088e98fbf80c4610187452025c6df00311393071)
-#### 🚀 major: Decoupled Asynchronous Architecture & Containerization
 This update transitions the project from a synchronous, locally-bound Streamlit application to a production-ready, three-tier distributed system. 
 At least conceptually. 
 
@@ -290,9 +280,8 @@ At least conceptually.
 * **Docker Compose:** Containerized the entire suite into three isolated microservices (`api`, `worker`, and `ui`). The system can now be booted on any OS with a single `docker compose up -d` command, ensuring perfect environment parity between Linux and Windows development machines.
 * **Thin Client UI:** Streamlit has been refactored into a "dumb" thin client. It now dispatches HTTP `POST` requests to the API and runs a non-blocking polling loop until the background worker completes the tournament bracket calculations.
 
+### [🚀 major: transition to high-fidelity Evolutionary Game Theory (EGT) solver, 24 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/5b74ae3131df303b3df2c06896e249819d586f91)
 
-### [Evolutionary game-theory solver, Mar 24, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/5b74ae3131df303b3df2c06896e249819d586f91)
-#### 🚀 major: transition to high-fidelity Evolutionary Game Theory (EGT) solver
 This massive architectural update transitions the project from a heuristic simulation to a rigorous Quantal Response Equilibrium (QRE) solver, achieving point-wise convergence to a true Evolutionary Stable State (ESS).
 
 #### **🧬 Core Engine & Mathematics**
@@ -312,9 +301,7 @@ This massive architectural update transitions the project from a heuristic simul
 * **Safe Attribute Ingestion:** Modified `main.py` to use `getattr()` when extracting CLI arguments like `min_games`, providing a safe fallback to `config.py` constants and preventing `AttributeError` crashes.
 * **Hyperparameter Sync:** Re-tuned `SELECTION_PRESSURE` to `1.0`, leveraging OMWU’s stability to achieve blazing-fast descent without gradient explosion.
 
-
-### [Interactive analytics and dashboard safeguards, Mar 24, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/b4b8c5312d692b28d4ab3a03f1d89ab948245d05)
-#### feat: interactive Plotly analytics, error boundaries, and UI/UX refinements
+### [feat: interactive Plotly analytics, error boundaries, and UI/UX refinements, 24 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/b4b8c5312d692b28d4ab3a03f1d89ab948245d05)
 
 This update drastically enhances the visual storytelling of the dashboard using Plotly and patches several silent failure states in the data ingestion pipeline.
 
@@ -332,9 +319,7 @@ This update drastically enhances the visual storytelling of the dashboard using 
 * **Deprecation Maintenance:** Replaced all instances of the deprecated `use_container_width=True` argument in `st.dataframe` and `st.plotly_chart` with the desired `width="stretch"` standard.
 * **Radar Coordinate Bounding:** Enforced a visual `0.0` rendering floor on the Radar chart to prevent negative Power Scores from inverting the geometry of the polygon, while keeping the true negative text mapped to the user tooltips.
 
-
-### [Tournament EV logic and UI stability, Mar 24, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/5f7c7f191e1031ec9dd4ab48338df3c1deb1e0d0)
-#### refactor: formalise tournament EV logic, stabilise UI state, and fix mathematical clipping
+### [refactor: formalise tournament EV logic, stabilise UI state, and fix mathematical clipping, 24 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/5f7c7f191e1031ec9dd4ab48338df3c1deb1e0d0)
 
 This update represents a fundamental shift in the recommendation engine, while resolving several critical stability bugs and mathematical floor errors. Updated the current `INPUT_DATA` to the Limitless TCG's stats of Mar 24, 2026 of ASC format.
 
@@ -357,9 +342,7 @@ This update represents a fundamental shift in the recommendation engine, while r
 #### **🔬 Architectural Diagnostics**
 * **Multiprocessing:** Documenting the root cause of the `No runtime found` cache warning. Windows `multiprocessing.Pool` spawns child processes that re-evaluate `app.py`, triggering `@st.cache_data` decorators outside the main Streamlit thread. A problem for future I.
 
-
-### [Tournament scoring and dashboard redesign, Mar 20, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/64017133627ec407cd9777bab03b9cb1af15ac9b)
-#### refactor: implement vS Meta Score, overhaul Swiss bracket engine, and redesign the app dashboard to be more intelligent
+### [refactor: implement vS Meta Score, overhaul Swiss bracket engine, and redesign the app dashboard to be more intelligent, 20 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/64017133627ec407cd9777bab03b9cb1af15ac9b)
 
 This update fundamentally shifts how the static baseline is evaluated, moving away from fabricating Swiss tiebreakers (SoS/OMW) before the bracket runs, and instead adopting the rigorous data philosophies already pioneered by [Vicious Syndicate](https://www.vicioussyndicate.com/).
 
@@ -379,9 +362,7 @@ This update fundamentally shifts how the static baseline is evaluated, moving aw
 * **Threat Cross-Referencing:** Recommended decks now explicitly display a colour-coded matrix showing exactly how they fare against the Top 3 "Meta Dictator" threats.
 * **Day 2 Expected Win Rate:** The UI now calculates a completely isolated Expected Win Rate against the *condensed* Day 2 meta-share, identifying "Day 2 Predators" that farm the top tables.
 
-
-### [Dual engines and matrix validation, Mar 20, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/48203598bdb42b0bbd181fda60bfd15e533b7f33)
-#### refactor: domain-driven restructure, massive performance optimisation, and mathematical fidelity overhaul
+### [refactor: domain-driven restructure, massive performance optimisation, and mathematical fidelity overhaul, 20 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/48203598bdb42b0bbd181fda60bfd15e533b7f33)
 
 Another major update that introduces a new strict domain-driven directory structure to separate the evolutionary engine from the tournament solver engine, alongside critical bug fixes that drastically increase simulation speed and mathematical purity. At least on paper.
 
@@ -402,11 +383,9 @@ Another major update that introduces a new strict domain-driven directory struct
 * **Removed Data Falsification:** Deleted the `gaussian_filter1d` block at the end of the simulation loop, ensuring all post-analysis tools evaluate the raw, genuine stochastic output of the engine.
 * **Synchronized Tier Thresholds:** `generate_final_state_tier_list` now dynamically imports the global `TIER_*_THRESHOLD` variables, preventing conflicting tier assignments between the final state and all-time lists. Forgot about this hardcode.
 
+### [refactor(core): fix Ultimate Score math, vectorise engine, optimise clustering, and overhaul UI POV, 19 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/04a47ba418c0a56fbdf40195d292d08fe3a96dc8)
 
-### [Dual-engine documentation refresh, Mar 19, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/04a47ba418c0a56fbdf40195d292d08fe3a96dc8)
-#### refactor(core): fix Ultimate Score math, vectorise engine, optimise clustering, and overhaul UI POV
-
-##### **Mathematical & Logic Fixes**
+#### **Mathematical & Logic Fixes**
 * **`app.py`:** 
     * **Fixed Ultimate Score:** Replaced the flawed "Double Min-Max" scoring system with a rigorous **Z-Score Standardization** model mapped to a sigmoid curve (`np.tanh`).
     * **Dual-Scoring Architecture:** The engine now simultaneously calculates both `score_player` (Individual EV) and `score_archetype` (Macro Metagame Impact). Decks with massive format presence (like Gholdengo) are appropriately rewarded in the Archetype view, while high-converting rogue decks shine in the Player view.
@@ -427,11 +406,9 @@ Another major update that introduces a new strict domain-driven directory struct
     * **Tooltips Added:** The Streamlit interactive dataframe now utilizes `st.column_config` `help` parameters, injecting native hover-tooltips for all table headers (e.g., explaining SoS, OMW, and composite scores).
     * **Layout & State Fixes:** Widened the custom constraint columns to prevent the delete button from clipping. Added defensive dictionary key initialisation (`score_player`, `score_archetype`) to prevent Streamlit caching `KeyError`s during hot-reloads.
 
+### [feat(sim): implement tournament equity engine with parabolic tie convergence, 19 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/61005408067c230abcf3a1f994502676b2894534)
 
-### [Monte Carlo tournament equity, Mar 19, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/61005408067c230abcf3a1f994502676b2894534)
-#### feat(sim): implement tournament equity engine with parabolic tie convergence
-
-##### **Core Logic & Engine Updates**
+#### **Core Logic & Engine Updates**
 * **`monte_carlo.py` (New File):** * Created a high-performance, parallelised bracket engine.
     * Implemented **Parabolic Tie Convergence (BETA)** which simulates match-point decay in Swiss rounds based on matchup closeness ($P_{tie} = T_{global} \times 4P(1-P)$).
     * Added **True Bracket Seeding**; Top Cut now pairs 1v8, 2v7, etc., rather than arbitrary pairings.
@@ -462,49 +439,43 @@ Another major update that introduces a new strict domain-driven directory struct
 * **Dynamic Recommendation Badges:** Recommendations now include specific paragraph-style tags (e.g., `🏆 Best to Win Event`, `🛡️ Safest Day 2`).
 * **Limitless HTML Ingestion:** Added a native parser to extract metagame shares directly from Limitless Labs HTML exports.
 
------
-
-### [Scraper precision and naming, Mar 18, 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/2ee8ade4ee52a59288710dde31236fcc3845a4f6)
-#### refactor(scraper): overhaul data extraction pipeline, enforce precision, and improve hygiene
+### [refactor(scraper): overhaul data extraction pipeline, enforce precision, and improve hygiene, 18 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/2ee8ade4ee52a59288710dde31236fcc3845a4f6)
 
 Another overhaul to the `scraper.py` utility to ensure the data fed into the simulation engine is highly accurate, properly formatted, and strictly typed. 
 
-### 🚀 Feature & Performance Improvements
+#### 🚀 Feature & Performance Improvements
 - **Strict Naming Conventions:** The scraper now uses _slightly faster_ string splitting to extract metadata directly from the `Archetype - Standard - Website` file naming format.
 - **Enhanced Mathematical Precision:** Win rates exported to `ea_input.json` and CSVs are now locked to a 4-decimal precision (`.4f`) from (`.2f`). 
 
-### 🐛 Bug Fixes & Data Hygiene
+#### 🐛 Bug Fixes & Data Hygiene
 - **HTML Fallback Fix:** If a file is misnamed, the scraper now successfully falls back to extracting both the deck name and the exact format directly from Limitless's HTML info-box tags.
 - **Rogue Data Exclusion:** Hard-banned the generic **"Other"** archetype from being processed. This prevents aggregated, non-cohesive rogue decks from artificially skewing the K-Means clustering and Rock-Paper-Scissors cycle detection.
 - **Architectural Alignment:** Removed premature data filtering from the scraper. The responsibility of filtering out decks with low match counts is now correctly delegated to the central `data.py` pipeline.
 
------
 
-### [Tier-list analysis configuration, Nov 12, 2025](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/48fa2c34811409f185516a4c4a6c6b028aa65660)
-#### feat(analysis, config, docs): Vectorise tier list, centralise constants, and perform repository clean-up
+## November 2025
+
+### [feat(analysis, config, docs): Vectorise tier list, centralise constants, and perform repository clean-up, 12 November 2025](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/48fa2c34811409f185516a4c4a6c6b028aa65660)
 
 Improves the metagame analysis pipeline by optimising performance, ensuring full configuration transparency, and performing necessary repository maintenance.
 
-### 🚀 Feature & Performance Improvements
+#### 🚀 Feature & Performance Improvements
 - **Performance:** Implemented a full **vectorisation** of the deck **consistency** calculation in `analysis.py`. This significantly speeds up tier list generation by moving from slow Python loops to efficient NumPy operations.
 - **Centralised Configuration:** All numerical tuning parameters for the tier list are now centralised in `config.py`:
     - **Composite Weights:** Added `COMPOSITE_SCORE_WR_WEIGHT`, `_PRESENCE_WEIGHT`, and `_CONSISTENCY_WEIGHT`.
     - **Tier Thresholds:** Added `TIER_S_THRESHOLD`, `_A_THRESHOLD`, `_B_THRESHOLD`, and `_C_THRESHOLD`.
 - **Tier List Tuning:** Updated default tier thresholds (e.g., S-Tier from 0.75 to 0.90) to enforce a stricter, more competitively realistic performance distribution.
 
-### 🐛 Bug Fixes & Refactoring
+#### 🐛 Bug Fixes & Refactoring
 - **Code Quality:** Eliminated the "referenced before assignment" linter warning in `analysis.py` by replacing a complex list comprehension with an explicit `for` loop.
 - **Numerical Stability:** Formalized the hardcoded epsilon values (`1e-6`, `1e-9`) into explicit constants (`CONSISTENCY_MEAN_EPSILON`, `CONSISTENCY_STD_EPSILON`) in `config.py`.
 - **Code Hygiene:** Removed the unused local variable `num_gens` from `analysis.py`.
 
-### 🧹 Chore & Maintenance
+#### 🧹 Chore & Maintenance
 - **I/O Clean-up:** Updated `.gitignore` or build scripts to manage and exclude excessive `/output/` directories and artefacts created during new simulation runs.
 - **Documentation Hygiene:** Sanitized and refined `CHANGELOG.md` to ensure clarity and remove redundant or conversational language.
 
------
-
-### [Analysis stability constants, Nov 12, 2025](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/458ded8f1153725139af13c9d5050d386e016db1)
-#### refactor(config, analysis): Formalise consistency epsilons and resolve linter warnings
+### [refactor(config, analysis): Formalise consistency epsilons and resolve linter warnings, 12 November 2025](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/458ded8f1153725139af13c9d5050d386e016db1)
 
 Refactors the tier list generation logic to improve code quality, resolve linter warnings, and formalise ""magic numbers"" into explicit constants.
 
@@ -516,10 +487,7 @@ Key Changes in `analysis.py`:
 Key Changes in `config.py`:
 - **Added constants:** Introduced `CONSISTENCY_MEAN_EPSILON` (1e-6) and `CONSISTENCY_STD_EPSILON` (1e-9) to promote clarity and centralise configuration for the consistency metric calculation.
 
------
-
-### [Core diagnostics and serialisation fixes, Nov 12, 2025](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/8e978979d4f13fe9c9c774f14cb10132868e1ab2)
-#### fix(analysis, cli, plotting): Resolve stability issues, serialization errors, and improve core logic
+### [fix(analysis, cli, plotting): Resolve stability issues, serialization errors, and improve core logic, 12 November 2025](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/8e978979d4f13fe9c9c774f14cb10132868e1ab2)
 
 This commit implements a series of fixes across the core simulation files to address static analysis warnings, a runtime serialization error, and a critical issue (kinda) in how strategic deck similarity is calculated.
 
@@ -529,18 +497,14 @@ Fixes:
 - Resolves naming convention and shadowing warnings in plotting.py.
 - Improves the robustness of deck similarity by ensuring the comparison is based on the deck's full strategic profile.
 
-
-
-### 1\. `src/main.py`
+#### 1\. `src/main.py`
 
 | Category                    | Line            | Change Description                                                                                                                                                                        |
 |:----------------------------|:----------------|:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Bug Fix (Serialization)** | (Lines 230-240) | **Fixed `TypeError: Object of type ndarray is not JSON serializable`** by calling `.tolist()` on the `similarity` variable before passing it to `json.dump`.                              |
 | **Code Hygiene**            | (Lines 230-240) | **Resolved unused variable warning** by adding explicit code to save the calculated `cycles` and `similarity` variables to `matchup_cycles.json` and `deck_similarity.json` respectively. |
 
-
-
-### 2\. `src/plotting.py`
+#### 2\. `src/plotting.py`
 
 | Category                     | Line                | Change Description                                                                                                                                                       |
 |:-----------------------------|:--------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -548,18 +512,13 @@ Fixes:
 | **Code Hygiene (Unused)**    | (Line 217)          | **Removed the unused local variable `deck_to_idx`** from `plot_matchup_network`.                                                                                         |
 | **Code Hygiene (Shadowing)** | (Line 54, various)  | **Renamed local variable `annotations` to `annotations_list`** within `plot_metagame_evolution_interactive` to avoid shadowing the imported name `go.layout.Annotation`. |
 
-
-
-### 3\. `src/analysis.py`
+#### 3\. `src/analysis.py`
 
 | Category              | Line              | Change Description                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 |:----------------------|:------------------|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Logic Improvement** | (Around Line 290) | **Corrected `compute_deck_similarity` logic.** Changed the comparison profiles from the **reduced submatrix** of active decks (`win_matrix[np.ix_(active_indices, active_indices)]`) to the **full win-rate profiles** against the entire metagame (`win_matrix[active_indices, :]`). This ensures strategic similarity is measured based on a deck's complete profile (all $N$ matchups), not just the matchups against other currently active decks. |
 
------
-
-### [Simulation architecture and predictor options, Nov 11, 2025](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/a7273126b43708f98648d1d3bdcbed638276204c)
-#### refactor(core): Full-stack optimisation, caching, and architectural streamlining
+### [refactor(core): Full-stack optimisation, caching, and architectural streamlining, 11 November 2025](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/a7273126b43708f98648d1d3bdcbed638276204c)
 
 This is a major squashed commit that introduces significant performance
 enhancements, architectural simplifications, and bug fixes across the
@@ -587,8 +546,7 @@ The primary goals of this refactor were:
     - Updated the Streamlit UI to display these new metrics, especially focusing on a user's
       deck's chance to go undefeated, aligning recommendations with the goal of consistent winners.
 
-
-### Component-Level Changes
+#### Component-Level Changes
 
 #### 🚀 `app.py` (Streamlit Front-end)
 

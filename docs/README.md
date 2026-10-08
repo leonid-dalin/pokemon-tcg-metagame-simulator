@@ -5,6 +5,7 @@ Start with the [quickstart tutorial](tutorial/quickstart.md) for a local predict
 ## How-to guides
 
 - [Run the CLI](how-to/run-cli.md), including replicator, tournament, prediction and batch modes
+- [Run Python library, snapshot, and API examples](how-to/run-examples.md)
 - [Run with Docker Compose](how-to/run-compose.md)
 - [Set up local development](how-to/local-development.md)
 - [Enable Limitless ingestion and BDIF reports](how-to/enable-bdif.md)
