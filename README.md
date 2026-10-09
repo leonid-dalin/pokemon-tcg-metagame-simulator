@@ -17,7 +17,7 @@ The Docker Compose deployment runs a FastAPI gateway, a Huey worker, a Streamlit
 
 | Main dashboard and controls | Head-to-head comparator |
 |:---:|:---:|
-| ![Main dashboard and controls before a run](docs/img/main.png) | ![Completed head-to-head field comparison of Goldengo Lunatone and Joltik Box](docs/img/head-to-head.png) |
+| ![Main dashboard and controls before a run](docs/img/main.png) | ![Completed head-to-head field comparison of Gholdengo Lunatone and Joltik Box](docs/img/head-to-head.png) |
 | **Top recommendations** | **Completed tournament simulation dashboard** |
 | ![Top Recommendations view with three Best EV cards and a Load more control](docs/img/top-recommendations.png) | ![Completed tournament simulation dashboard with ranked results and score definitions](docs/img/simulation_complete.png) |
 
