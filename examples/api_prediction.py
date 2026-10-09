@@ -17,18 +17,20 @@ from src.bdif.settings import simulation_input_path
 from src.core.config import MIN_GAMES
 from src.core.data import load_matchup_data
 
-
 API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000/api/v1").rstrip("/")
 
 
-def request_json(url: str, payload: dict | None = None) -> dict:
+def build_request(url: str, payload: dict | None = None) -> urllib.request.Request:
     body = None if payload is None else json.dumps(payload).encode("utf-8")
     headers = {"Content-Type": "application/json"} if body else {}
     token = os.environ.get("API_TOKEN")
     if token:
         headers["X-API-Token"] = token
-    request = urllib.request.Request(url, data=body, headers=headers)
-    with urllib.request.urlopen(request, timeout=30) as response:
+    return urllib.request.Request(url, data=body, headers=headers)
+
+
+def request_json(url: str, payload: dict | None = None) -> dict:
+    with urllib.request.urlopen(build_request(url, payload), timeout=30) as response:
         return json.load(response)
 
 
@@ -51,7 +53,7 @@ def main() -> None:
     stream_url = f"{API_URL}/tasks/{task_id}/stream?job_id={urllib.parse.quote(job_id)}"
     deadline = time.monotonic() + 900
 
-    with urllib.request.urlopen(stream_url, timeout=900) as response:
+    with urllib.request.urlopen(build_request(stream_url), timeout=900) as response:
         while time.monotonic() < deadline:
             line = response.readline()
             if not line:
@@ -61,7 +63,11 @@ def main() -> None:
             result = json.loads(line[5:].strip())
             if result.get("status") == "complete":
                 solver = result["data"]["solver_results"]
-                print(json.dumps({"task_id": queued["task_id"], "recommendations": solver["recommendations"][:5]}, indent=2))
+                print(
+                    json.dumps(
+                        {"task_id": queued["task_id"], "recommendations": solver["recommendations"][:5]}, indent=2
+                    )
+                )
                 return
             if result.get("status") == "failed":
                 raise RuntimeError(result.get("error", "Simulation failed"))
