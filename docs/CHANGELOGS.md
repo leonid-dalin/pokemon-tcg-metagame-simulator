@@ -40,7 +40,7 @@
 
 The September release cycle added live matchup discovery, stronger request and matrix validation, Redis-backed SSE reliability, reproducible simulation seeds, the data-backed BDIF card model, posterior field analytics, the BDIF command line, and the dashboard views that expose those results
 
-#### BDIF contract fixes
+### BDIF contract fixes
 
 - `python -m src.bdif status` and `GET /api/v1/bdif/status` read the database without migrating it and report switches, model artefact, and schema state
 - `refit` reports a missing database instead of creating one, and `report --output` writes `bdif_report.json`
@@ -53,7 +53,7 @@ The September release cycle added live matchup discovery, stronger request and m
 - Compose passes the same BDIF settings to the `api`, `worker`, and `ui` services
 - The legacy `--bdif-status`, `--bdif-ingest`, and `--bdif-refit` flags of `python -m src.ui.cli` were removed
 
-#### BDIF statistics and CLI
+### BDIF statistics and CLI
 
 - Replaced the earlier aggregate card-analysis path with a per-player, reference-coded card model with no intercept, identifiability guards, and observational reporting
 - Added posterior matchup intervals with a 200-draw report budget, 100 minimum tournament iterations per draw, a 50-draw interval threshold, and an explicit Monte Carlo standard-error fallback when intervals are unavailable
@@ -61,7 +61,7 @@ The September release cycle added live matchup discovery, stronger request and m
 - Added `python -m src.bdif` commands for `status`, `ingest`, `refit`, and `report`, including `report --panel` for an explicit panel of up to 10 known decks
 - Added configuration for card-model evidence thresholds, panel selection, posterior budgets, `BDIF_USE_CARD_MODEL`, `LIMITLESS_INGESTION_ENABLED`, and `BDIF_DB_PATH`
 
-#### BDIF UI integration
+### BDIF UI integration
 
 - Added the BDIF status endpoint and request-level panel selection while preserving token protection and rate limits
 - Added thin-evidence labelling, posterior interval columns, tier-threshold help text, and a field-posterior view to the dashboard
@@ -69,7 +69,7 @@ The September release cycle added live matchup discovery, stronger request and m
 - Added card evidence q-values and verdicts, H1 interval and odds-ratio rows, provenance display, and full-report JSON download
 - Added `API_TOKEN` forwarding from the UI to prediction, task-stream, and BDIF status requests; Compose deployments must set the same token on `api` and `ui`
 
-#### API, deployment, and data pipeline
+### API, deployment, and data pipeline
 
 - Added live PBL matchup URL discovery and removed the manual URL list
 - Rejected duplicate, asymmetric, and invalid matchup data before it reaches the stored matrix
@@ -78,11 +78,10 @@ The September release cycle added live matchup discovery, stronger request and m
 - Preserved structured SSE failure events, reported failed task status, bounded streams, and centralised Redis Pub/Sub handling
 - Added cgroup-aware CPU limits, unprivileged Compose setup, volume ownership ordering, and the Python and Rust CI workflow
 
-#### Verification and repository hygiene
+### Verification and repository hygiene
 
 - Added the contract probe, flag matrix, interval sanity check, dead-symbol scan, and mutation sweeps to the QA harness
 - Added Docker build-context exclusions for Python caches, virtual environments, bytecode, and tool caches
-- Kept older entries below this current section as historical records
 
 ## June 2026
 
@@ -383,7 +382,7 @@ Another major update that introduces a new strict domain-driven directory struct
 * **Removed Data Falsification:** Deleted the `gaussian_filter1d` block at the end of the simulation loop, ensuring all post-analysis tools evaluate the raw, genuine stochastic output of the engine.
 * **Synchronized Tier Thresholds:** `generate_final_state_tier_list` now dynamically imports the global `TIER_*_THRESHOLD` variables, preventing conflicting tier assignments between the final state and all-time lists. Forgot about this hardcode.
 
-### [refactor(core): fix Ultimate Score math, vectorise engine, optimise clustering, and overhaul UI POV, 19 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/04a47ba418c0a56fbdf40195d292d08fe3a96dc8)
+### [refactor(core): fix Ultimate Score math, vectorise engine, optimise clustering, and overhaul UI POV, 19 March 2026](https://github.com/leonid-dalin/pokemon-tcg-metagame-simulator/commit/23b5c07ca9bfb86e816c25e77aa541e749a55723)
 
 #### **Mathematical & Logic Fixes**
 * **`app.py`:** 
