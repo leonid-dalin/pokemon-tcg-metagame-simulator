@@ -3,9 +3,9 @@ import json
 import sqlite3
 from pathlib import Path
 
-
-DATABASE = Path("data/limitless.db")
-MANIFEST = Path("data/snapshot/manifest.json")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DATABASE = PROJECT_ROOT / "data" / "limitless.db"
+MANIFEST = PROJECT_ROOT / "data" / "snapshot" / "manifest.json"
 
 
 def main() -> None:

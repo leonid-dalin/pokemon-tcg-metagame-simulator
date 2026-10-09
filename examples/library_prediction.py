@@ -12,7 +12,7 @@ from src.tournament.solver import predict_best_decks
 
 
 def main() -> None:
-    deck_names, matrix, _ = load_matchup_data("data/input/ea_input.json", MIN_GAMES)
+    deck_names, matrix, _ = load_matchup_data(str(PROJECT_ROOT / "data" / "input" / "ea_input.json"), MIN_GAMES)
     request = PredictionRequest(
         job_id="library-example",
         deck_names=deck_names,
@@ -22,7 +22,10 @@ def main() -> None:
     )
     result = predict_best_decks(request)
     for rank, recommendation in enumerate(result["recommendations"][:5], start=1):
-        print(f"{rank}. {recommendation['deck']}: {recommendation['expected_win_rate']:.2%}")
+        print(
+            f"{rank}. {recommendation['deck']}: meta score {recommendation['base_meta_score']:.1f}, "
+            f"expected win rate {recommendation['expected_win_rate']:.2%}"
+        )
 
 
 if __name__ == "__main__":
