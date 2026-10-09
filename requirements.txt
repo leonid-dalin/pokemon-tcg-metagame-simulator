@@ -25,6 +25,7 @@ urllib3<2.0,>=1.26.5
 # --- Frontend & UI ---
 # Streamlit thin client and visualization
 streamlit~=1.56.0
+pyarrow<26
 plotly>=6.7.0
 beautifulsoup4>=4.14.3
 requests>=2.33.1
