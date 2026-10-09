@@ -17,9 +17,9 @@ The Docker Compose deployment runs a FastAPI gateway, a Huey worker, a Streamlit
 
 | Main dashboard and controls | Head-to-head comparator |
 |:---:|:---:|
-| ![Main dashboard](docs/img/main.png) | ![Head-to-head comparator](docs/img/head-to-head.png) |
-| **Top recommendations** | **Simulation diagnostics** |
-| ![Top recommendations](docs/img/top-recommendations.png) | ![Simulation complete](docs/img/simulation_complete.png) |
+| ![Main dashboard and controls before a run](docs/img/main.png) | ![Completed head-to-head field comparison of Gholdengo Lunatone and Joltik Box](docs/img/head-to-head.png) |
+| **Top recommendations** | **Completed tournament simulation dashboard** |
+| ![Top Recommendations view with three Best EV cards and a Load more control](docs/img/top-recommendations.png) | ![Completed tournament simulation dashboard with ranked results and score definitions](docs/img/simulation_complete.png) |
 
 ## 🚀 Quick start
 
@@ -70,6 +70,7 @@ The CLI writes timestamped directories under `output/` unless `--output` changes
 | Learn the main workflow | [Quickstart tutorial](docs/tutorial/quickstart.md) |
 | Run the CLI | [CLI how-to](docs/how-to/run-cli.md) |
 | Run the Docker Compose stack | [Compose how-to](docs/how-to/run-compose.md) |
+| Run the Python examples | [Examples how-to](docs/how-to/run-examples.md) |
 | Enable Limitless and BDIF analytics | [BDIF how-to](docs/how-to/enable-bdif.md) |
 | Understand Limitless ingestion data and model rules | [Limitless ingestion reference](docs/limitless-ingestion.md) |
 | Set up local development | [Local development how-to](docs/how-to/local-development.md) |
