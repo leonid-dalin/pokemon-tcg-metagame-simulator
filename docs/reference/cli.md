@@ -78,7 +78,7 @@ A single run writes a timestamped directory containing `simulation_trace.jsonl`,
 | Report flag | Default | Meaning |
 | --- | --- | --- |
 | `-i`, `--input` | configured simulation input | JSON matchup matrix |
-| `-o`, `--output` | `output/` | Directory that receives `bdif_report.json` |
+| `-o`, `--output` | `output/` | Directory that receives `bdif_report.json` and `bdif_report.html` |
 | `--seed` | `1312` | Random seed |
 | `-P`, `--players` | `256` | Field size from 4 to 8192 |
 | `--tournament-style` | `pure_swiss` | `pure_swiss` or `championship_series` |

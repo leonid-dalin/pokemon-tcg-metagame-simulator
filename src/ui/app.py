@@ -31,7 +31,7 @@ from src.core.config import NASH_EQUILIBRIUM, MIN_GAMES, WIN_THRESHOLD, aggressi
     TIER_2_THRESHOLD
 from src.bdif.settings import simulation_input_path
 from src.ui.meta_rows import locked_exact_spec, locked_share, minimum_share
-from src.ui import bdif_view
+from src.ui import bdif_html, bdif_view
 from src.tournament.solver import swiss_rounds_from_players, get_variant_5_structure, \
     calculate_empirical_baseline, resolve_meta_constraints
 from src.evolution.plotting import plot_metagame_scatter, plot_head_to_head_radar
@@ -339,6 +339,12 @@ def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
             data=json.dumps(mc_res, indent=2, default=str),
             file_name="bdif_report.json",
             mime="application/json",
+        )
+        st.download_button(
+            "Download the full report (HTML)",
+            data=bdif_html.render_report_html(mc_res),
+            file_name="bdif_report.html",
+            mime="text/html",
         )
 
 

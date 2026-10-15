@@ -63,7 +63,9 @@ Verified: the offline probe ran this command with scratch output and confirmed t
 python -m src.bdif report --output output/bdif
 ```
 
-The report writes one JSON result to stdout and to `bdif_report.json` in the output directory. `--panel` accepts up to 10 unique deck names from the selected input matrix
+The report writes one JSON result to stdout and to `bdif_report.json` and `bdif_report.html` in the output directory. The HTML file is a single self-contained document with no external assets, laid out for a phone. `--panel` accepts up to 10 unique deck names from the selected input matrix
+
+Verified: the report command was run with scratch output and wrote both files, and the HTML rendered the recommended 60 and the applied swaps from the same result
 
 Verified: the offline probe ran this command with scratch output and returned both panel rows with no unmatched decks
 
