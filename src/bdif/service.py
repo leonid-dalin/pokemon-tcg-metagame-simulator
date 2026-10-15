@@ -9,6 +9,7 @@ from src.bdif.settings import BdifSettings, simulation_input_path
 from src.core import config
 from src.core.logger import logger
 from src.core.data import load_matchup_data
+from src.core.files import relative_path
 from src.core.scraper import normalize_archetype
 from src.ingestion.model import PlayerObservation, select_panel_decks
 from src.tournament.monte_carlo import run_monte_carlo_analytics
@@ -180,8 +181,8 @@ def refit_card_model(settings: BdifSettings | None = None) -> dict:
     write_json_atomic(model_artifact(fitted), settings.model_input_path)
     return {
         "status": "complete",
-        "path": settings.model_input_path,
-        "model_cache_path": settings.model_cache_path,
+        "path": relative_path(settings.model_input_path),
+        "model_cache_path": relative_path(settings.model_cache_path),
         "database_sha256": database_sha256,
         "model_cache_reused": reused,
         "model_max_iter": 10_000,
@@ -304,7 +305,7 @@ def run_prediction(request: PredictionRequest, progress_callback=None, settings:
         progress_callback=progress_callback, matchup_details=details, panel_decks=panels,
     )
     provenance = {
-        "input_path": source,
+        "input_path": relative_path(source),
         "input_sha256": input_sha256,
         "seed": run_seed,
         "iterations": iterations,
