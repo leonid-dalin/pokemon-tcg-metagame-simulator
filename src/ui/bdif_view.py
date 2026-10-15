@@ -133,8 +133,8 @@ def best60_view(recommendation: Mapping[str, Any]) -> dict[str, Any]:
         },
         "prior_sd": model.get("prior_sd"),
         "model_settings": {
-            "Card-effect prior SD": model.get("prior_sd"),
-            "Opponent-specific SD": model.get("opponent_sd", 0.0),
+            "Card-effect prior standard deviation": model.get("prior_sd"),
+            "Opponent-specific standard deviation": model.get("opponent_sd", 0.0),
             "Recency half-life (days)": model.get("half_life_days"),
             "As of": model.get("as_of") or "latest event",
             "Field": model.get("field_source", "observed"),

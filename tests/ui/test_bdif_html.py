@@ -157,8 +157,8 @@ def test_report_keeps_the_card_columns_that_show_a_swapped_count():
 
     document = render_report_html(report)
 
-    assert "<th>Consensus</th>" in document
-    assert "<th>Source</th>" in document
+    assert "Consensus</abbr>" in document
+    assert "Source</abbr>" in document
 
 
 @pytest.mark.unit
@@ -172,6 +172,47 @@ def test_report_drops_a_column_that_is_empty_in_every_row():
 
     assert "<th>Card</th>" in document
     assert "<th>Same count in resamples %</th>" not in document
+
+
+@pytest.mark.unit
+def test_report_explains_the_h1_check():
+    report = _report(h1_report={
+        "hypothesis": "H1", "card": "Mist Energy", "target": "Alakazam Dudunsparce",
+        "without_variant": {"beta": -0.3366, "interval": [-0.4260, -0.2471]},
+        "with_variant": {"beta": -0.3383, "interval": [-0.4286, -0.2479]},
+        "status": "rejected", "interpretation": "observational association, not a causal effect",
+    })
+
+    document = render_report_html(report)
+
+    assert "<h2>H1 check</h2>" in document
+    assert "Mist Energy in Alakazam Dudunsparce decks" in document
+    assert "control for the Hammer build" in document
+
+
+@pytest.mark.unit
+def test_report_glosses_the_terms_it_abbreviates():
+    document = render_report_html(_report())
+
+    assert '<abbr title="novel lets the builder propose a list nobody has played' in document
+    assert '<abbr title="Share of the archetype&#x27;s lists that run the card.">Play rate %</abbr>' in document
+
+
+@pytest.mark.unit
+def test_report_says_why_the_consensus_and_recommended_rows_match():
+    document = render_report_html(_report())
+
+    assert "the recommended list is the consensus list" in document
+
+
+@pytest.mark.unit
+def test_report_leaves_out_the_consensus_note_when_a_swap_was_applied():
+    report = _report(best60_recommendations={"Dragapult": _recommendation(swaps=[{
+        "remove": "Darkness Energy", "remove_copy": 2, "add": "Team Rocket's Watchtower", "add_copy": 1,
+        "gain": 0.0542, "probability": 0.803,
+    }])})
+
+    assert "the recommended list is the consensus list" not in render_report_html(report)
 
 
 @pytest.mark.unit

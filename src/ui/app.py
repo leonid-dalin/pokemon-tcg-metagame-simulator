@@ -294,9 +294,9 @@ def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
             if any(row["Same count in resamples %"] is not None for row in view["cards"]):
                 st.caption("Same count in resamples: share of event resamples that recommend exactly this count.")
             settings = view["model_settings"]
-            if settings["Card-effect prior SD"] is not None:
+            if settings["Card-effect prior standard deviation"] is not None:
                 st.caption(
-                    f"Scored per game against {settings['Field'].lower()} field; opponent-specific SD {settings['Opponent-specific SD']}, "
+                    f"Scored per game against {settings['Field'].lower()} field; opponent-specific standard deviation {settings['Opponent-specific standard deviation']}, "
                     f"recency half-life {settings['Recency half-life (days)'] or 'none'} days, as of {settings['As of']}."
                 )
             if view["field"]:

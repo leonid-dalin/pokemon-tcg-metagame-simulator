@@ -6,6 +6,21 @@ from typing import Any, Mapping, Sequence
 
 from src.ui import bdif_view
 
+GLOSSARY = {
+    "H1 check": "Mist Energy in Alakazam Dudunsparce decks. The match result is fitted on the card twice, once with a control for the Hammer build, and the hypothesis holds when the coefficient stays positive both ways.",
+    "List mode": "novel lets the builder propose a list nobody has played; observed stops at combinations already seen in the data.",
+    "Legal lists": "Stored lists of this archetype that pass deck legality.",
+    "Joint probability %": "Chance the whole recommended list beats the consensus list.",
+    "Consensus": "Copies the archetype plays most often.",
+    "Source": "swap when the builder changed this count away from the consensus; consensus otherwise.",
+    "Play rate %": "Share of the archetype's lists that run the card.",
+    "Top 25% rate %": "Share of the lists running the card that finished in the top quarter.",
+    "Same count in resamples %": "Share of event resamples that recommend exactly this count.",
+    "Effect": "Fitted change in the log-odds of winning, per opponent.",
+    "95% low": "Lower end of the 95% interval.",
+    "95% high": "Upper end of the 95% interval.",
+}
+
 STYLE = """
 :root {
   color-scheme: light dark;
@@ -28,6 +43,8 @@ h4 { font-size: .95rem; margin: 14px 0 4px; color: var(--muted); }
 p { margin: 0 0 10px; }
 p.meta { color: var(--muted); font-size: .9rem; }
 p.note { color: var(--flag); font-size: .9rem; }
+p.hint { color: var(--muted); font-size: .9rem; margin: -4px 0 10px; }
+abbr { text-decoration: none; }
 .scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 0 12px; }
 table { border-collapse: collapse; width: 100%; font-size: .9rem; }
 th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -43,6 +60,12 @@ footer { color: var(--muted); font-size: .85rem; margin-top: 28px; border-top: 1
 
 def _escaped(value: Any) -> str:
     return html.escape("" if value is None else str(value))
+
+
+def _label(name: Any) -> str:
+    text = _escaped(name)
+    note = GLOSSARY.get(str(name))
+    return f'<abbr title="{_escaped(note)}">{text}</abbr>' if note else text
 
 
 def _percent(value: Any) -> float:
@@ -67,18 +90,21 @@ def _table(rows: Sequence[Mapping[str, Any]], columns: Sequence[str] | None = No
         return ""
     names = list(columns) if columns else list(rows[0])
     names = [name for name in names if any(row.get(name, "") not in (None, "") for row in rows)] or names
-    head = "".join(f"<th>{_escaped(name)}</th>" for name in names)
+    head = "".join(f"<th>{_label(name)}</th>" for name in names)
     body = "".join("<tr>" + "".join(_cell(row.get(name, "")) for name in names) + "</tr>" for row in rows)
     return f'<div class="scroll"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
 def _details(pairs: Sequence[tuple[str, Any]]) -> str:
-    items = "".join(f"<dt>{_escaped(label)}</dt><dd>{_escaped(value)}</dd>" for label, value in pairs if value not in (None, "", []))
+    items = "".join(f"<dt>{_label(label)}</dt><dd>{_escaped(value)}</dd>" for label, value in pairs if value not in (None, "", []))
     return f"<dl>{items}</dl>" if items else ""
 
 
-def _section(title: str, body: str, level: int = 2) -> str:
-    return f"<h{level}>{_escaped(title)}</h{level}>{body}" if body else ""
+def _section(title: str, body: str, level: int = 2, hint: str = "") -> str:
+    if not body:
+        return ""
+    lead = f'<p class="hint">{_escaped(hint)}</p>' if hint else ""
+    return f"<h{level}>{_escaped(title)}</h{level}>{lead}{body}"
 
 
 def _swap_block(label: str, rows: Sequence[Mapping[str, Any]]) -> str:
@@ -147,6 +173,8 @@ def _best60(name: str, recommendation: Mapping[str, Any]) -> str:
         parts.append("<h4>Breakthrough cards</h4><ul>" + "".join(f"<li>{_escaped(card)}</li>" for card in view["breakthrough"]) + "</ul>")
     if view["field"]:
         parts.append("<h4>Field</h4>" + _table(view["field"]))
+    if not view["swaps"]:
+        parts.append('<p class="hint">No swap cleared the held-out gate, so the recommended list is the consensus list and the two support rows match by construction.</p>')
     return "".join(part for part in parts if part)
 
 
@@ -201,7 +229,7 @@ def render_report_html(report: Any, title: str | None = None) -> str:
         ),
         _section("Ranked decks", _table(_ranked_rows(sections))),
         _section("Matchup panel", _table(bdif_view.panel_rows(_mapping(sections.get("matchup_panel"))))),
-        _section("H1 check", _table(bdif_view.h1_rows(_mapping(sections.get("h1_report"))))),
+        _section("H1 check", _table(bdif_view.h1_rows(_mapping(sections.get("h1_report")))), hint=GLOSSARY["H1 check"]),
         _section("Provenance", _table(bdif_view.provenance_rows(_mapping(sections.get("provenance"))))),
     ]
     status = report.get("status") or sections.get("status") or "unknown"
