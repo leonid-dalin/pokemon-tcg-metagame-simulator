@@ -2,49 +2,412 @@
   "source": {
     "game": "PTCG",
     "format": "STANDARD",
-    "start": "2026-07-17T00:00:00.000Z",
-    "end": "2026-10-04T00:00:00.000Z",
-    "catalogue_events": 3
+    "start": "2026-10-15",
+    "end": "2026-10-21",
+    "catalogue_events": 61
   },
   "added_online_events": [
     {
-      "id": "6a66289f52c24ac2da64cafd",
-      "name": "Monday Afternoon Showdown #3",
-      "standings": 25,
+      "id": "6accac388a8383117e3ea166",
+      "name": "SEASAC League Challenge #5 (SEASON 6) [50 CODES]",
+      "standings": 104,
+      "pairings": 286,
+      "decklists": 104
+    },
+    {
+      "id": "6ac926d4115c12b73a59fd2d",
+      "name": "🏆Moujii's Dojo🏆 (Late Registration Available!)",
+      "standings": 193,
+      "pairings": 566,
+      "decklists": 193
+    },
+    {
+      "id": "6acd93e28a8383117e3eac3e",
+      "name": "Amyverse Bulk Box Battles #3 🧡 Cash Prize!",
+      "standings": 17,
+      "pairings": 30,
+      "decklists": 17
+    },
+    {
+      "id": "6ad07746115c12b73a5a463c",
+      "name": "⚗️PokéKhemistry TURBO Thursday",
+      "standings": 16,
+      "pairings": 40,
+      "decklists": 16
+    },
+    {
+      "id": "6ac5488285920e4d253657e8",
+      "name": "TWISTER TEAM | ROAD TO CHAMPIONS! #1",
+      "standings": 4,
+      "pairings": 6,
+      "decklists": 4
+    },
+    {
+      "id": "6ace6c4a115c12b73a5a30fa",
+      "name": "⚡ Surge's TCG Vault Winner Takes All - 100 Codes",
+      "standings": 75,
+      "pairings": 189,
+      "decklists": 75
+    },
+    {
+      "id": "6ac7d9ac85920e4d25366e02",
+      "name": "13° Torneo del circuito CarroTCG/Prof. Fili",
+      "standings": 32,
+      "pairings": 68,
+      "decklists": 32
+    },
+    {
+      "id": "6ad1287d8a8383117e3ec88a",
+      "name": "LUDUSP - Pokémon - Liga semanal #3",
+      "standings": 0,
+      "pairings": 14,
+      "decklists": 0
+    },
+    {
+      "id": "6ad0fbee8a8383117e3ec5c6",
+      "name": "🟢Jolly Good Weekly #9 | Top Cut!",
+      "standings": 53,
+      "pairings": 109,
+      "decklists": 53
+    },
+    {
+      "id": "6aca5f028a8383117e3e8cfb",
+      "name": "🇧🇷 Hit Challenge #42 | TCG Live",
+      "standings": 27,
+      "pairings": 71,
+      "decklists": 27
+    },
+    {
+      "id": "6acfb41f8a8383117e3ebb8e",
+      "name": "TCG FIRE AGREGADOS PARA TREINO",
+      "standings": 8,
+      "pairings": 16,
+      "decklists": 8
+    },
+    {
+      "id": "6acd936a8a8383117e3eac3c",
+      "name": "Heart of the Games Online Series - S105",
+      "standings": 6,
+      "pairings": 9,
+      "decklists": 6
+    },
+    {
+      "id": "6ace82e5115c12b73a5a339b",
+      "name": "Rare Candy Club Blitz #4 (30TH LEGAL)",
+      "standings": 104,
+      "pairings": 206,
+      "decklists": 104
+    },
+    {
+      "id": "6ad048c6115c12b73a5a45c4",
+      "name": "🏆 Jarvis Tcg League.",
+      "standings": 4,
+      "pairings": 9,
+      "decklists": 4
+    },
+    {
+      "id": "6ac8336a85920e4d253672fe",
+      "name": "Le Tournois Du DresseurPokeCharbie #132",
+      "standings": 0,
+      "pairings": 11,
+      "decklists": 0
+    },
+    {
+      "id": "6ad13e558a8383117e3ec932",
+      "name": "🎁Liga Shiny $3.000🏆BO1🏆 Formato estandar",
+      "standings": 12,
+      "pairings": 21,
+      "decklists": 12
+    },
+    {
+      "id": "6ac0873d85920e4d2536288a",
+      "name": "Oceania Open! | Season 4 - Week 2",
+      "standings": 71,
+      "pairings": 168,
+      "decklists": 71
+    },
+    {
+      "id": "6acffa558a8383117e3ebea7",
+      "name": "TheDipidis Rapid Rounds TEF-30C #2",
+      "standings": 11,
+      "pairings": 24,
+      "decklists": 11
+    },
+    {
+      "id": "6ad1f5728a8383117e3ecdd7",
+      "name": "SEASAC League Cup #1 (SEASON 6) [150 CODES]",
+      "standings": 72,
+      "pairings": 175,
+      "decklists": 72
+    },
+    {
+      "id": "6ad147a38a8383117e3ec981",
+      "name": "Team Corna Weekly October's #4",
+      "standings": 76,
+      "pairings": 215,
+      "decklists": 76
+    },
+    {
+      "id": "6a95d119629039f77d8a6af7",
+      "name": "Turtwig Den Revival Series Season 2 Challenge 5",
+      "standings": 15,
+      "pairings": 30,
+      "decklists": 15
+    },
+    {
+      "id": "6aa2d234a4272c53be64cfe5",
+      "name": "Nightshades Friday Challenge 2 (25 Codes)",
+      "standings": 24,
       "pairings": 50,
+      "decklists": 24
+    },
+    {
+      "id": "6ace6c698a8383117e3eb1a5",
+      "name": "⚡ Surge's TCG Vault Winner Takes All Live BO3 #27",
+      "standings": 102,
+      "pairings": 212,
+      "decklists": 102
+    },
+    {
+      "id": "6ad211378a8383117e3ece86",
+      "name": "TheDipidis Rapid Rounds TEF-30C #3",
+      "standings": 30,
+      "pairings": 67,
+      "decklists": 30
+    },
+    {
+      "id": "6ac0523f85920e4d25362589",
+      "name": "Amyverse Webcam Wonders #30 💙 Cash Prize!",
+      "standings": 12,
+      "pairings": 16,
+      "decklists": 12
+    },
+    {
+      "id": "6acc563f8a8383117e3ea0a1",
+      "name": "La Techgece Cup #6 [BO3] (30C Legal!)",
+      "standings": 28,
+      "pairings": 46,
+      "decklists": 28
+    },
+    {
+      "id": "6aad66cde905c1db6874444f",
+      "name": "Elite Four Fridays",
+      "standings": 30,
+      "pairings": 54,
+      "decklists": 30
+    },
+    {
+      "id": "6aca8936115c12b73a5a0d16",
+      "name": "🇧🇷 Hit Challenge #43 | TCG Live",
+      "standings": 26,
+      "pairings": 66,
+      "decklists": 26
+    },
+    {
+      "id": "6ad2b5f38a8383117e3ed6e6",
+      "name": "Friday night practice",
+      "standings": 11,
+      "pairings": 22,
+      "decklists": 11
+    },
+    {
+      "id": "6aa5d406f1243e65f97ff818",
+      "name": "TOURNAMENT OF DOOM! DINNER?",
+      "standings": 358,
+      "pairings": 860,
+      "decklists": 358
+    },
+    {
+      "id": "6ad2d4478a8383117e3ed88a",
+      "name": "🇧🇷 Hit Battle • Corujão #10 | TCG Live",
+      "standings": 23,
+      "pairings": 31,
+      "decklists": 23
+    },
+    {
+      "id": "6acd25e9115c12b73a5a24f7",
+      "name": "YHT Pokémon TCG League",
+      "standings": 0,
+      "pairings": 4,
       "decklists": 0
     },
     {
-      "id": "6a713634cdc0391d7fa5bf84",
-      "name": "Hyper Training Cup_Online #1",
-      "standings": 21,
-      "pairings": 27,
-      "decklists": 0
+      "id": "6ad32f70115c12b73a5a5e8e",
+      "name": "SEASAC League Challenge #6 (SEASON 6) [50 CODES]",
+      "standings": 60,
+      "pairings": 153,
+      "decklists": 60
     },
     {
-      "id": "6a7f9da578baaa6d1c21f783",
-      "name": "Trimestral - CardsHall - 1.5k+ de Premia\u00e7\u00e3o",
+      "id": "6aca8ac7115c12b73a5a0d28",
+      "name": "🇧🇷 Hit Challenge #44 | TCG Live",
+      "standings": 9,
+      "pairings": 23,
+      "decklists": 9
+    },
+    {
+      "id": "6ad212d78a8383117e3ece92",
+      "name": "TheDipidis Rapid Rounds TEF-30C #4",
+      "standings": 47,
+      "pairings": 92,
+      "decklists": 47
+    },
+    {
+      "id": "6ad3b12b115c12b73a5a651a",
+      "name": "REDACTED POP UP!  DRAGAPULT BANNED!",
+      "standings": 58,
+      "pairings": 164,
+      "decklists": 58
+    },
+    {
+      "id": "6acb2b2a115c12b73a5a1197",
+      "name": "Vault Of Games #7🏆| REGIONAL FORMAT|WEEKLY",
+      "standings": 203,
+      "pairings": 556,
+      "decklists": 203
+    },
+    {
+      "id": "6ad2c2a9115c12b73a5a5abc",
+      "name": "🎁TORNEO 30 ANIVERSARIO🏆BO1🏆 Formato estandar",
+      "standings": 10,
+      "pairings": 19,
+      "decklists": 10
+    },
+    {
+      "id": "6ad47a1d115c12b73a5a6e4e",
+      "name": "SEASAC League Challenge #7 (SEASON 6) [50 CODES]",
+      "standings": 88,
+      "pairings": 239,
+      "decklists": 88
+    },
+    {
+      "id": "6ad02ed4115c12b73a5a44d7",
+      "name": "Carnelian Cave Invitational Qualifier #1",
+      "standings": 44,
+      "pairings": 99,
+      "decklists": 44
+    },
+    {
+      "id": "6ad4e393115c12b73a5a719d",
+      "name": "Domingou #11",
+      "standings": 4,
+      "pairings": 6,
+      "decklists": 4
+    },
+    {
+      "id": "6ad49b59115c12b73a5a6f13",
+      "name": "Redraftowa Liga Pokemon TCG - 18.10.2026",
+      "standings": 8,
+      "pairings": 16,
+      "decklists": 8
+    },
+    {
+      "id": "6ad4eca3115c12b73a5a7200",
+      "name": "Pipe's Sunday Cup #2",
+      "standings": 30,
+      "pairings": 72,
+      "decklists": 30
+    },
+    {
+      "id": "6acc57928a8383117e3ea0a5",
+      "name": "La Techgece Cup #7 [BO3] (30C Legal!)",
       "standings": 29,
-      "pairings": 78,
-      "decklists": 0
+      "pairings": 53,
+      "decklists": 29
+    },
+    {
+      "id": "6ad246f68a8383117e3ed0a1",
+      "name": "Rare Candy Club Showdown #49 (30TH LEGAL)",
+      "standings": 179,
+      "pairings": 446,
+      "decklists": 179
+    },
+    {
+      "id": "6ad56277115c12b73a5a7572",
+      "name": "Vault Of Games | 🌙 NOT SO Midnight Madness #17",
+      "standings": 64,
+      "pairings": 127,
+      "decklists": 64
+    },
+    {
+      "id": "6ad47a5f8a8383117e3ee7cf",
+      "name": "SEASAC League Challenge #8 (SEASON 6) [50 CODES]",
+      "standings": 115,
+      "pairings": 306,
+      "decklists": 115
+    },
+    {
+      "id": "6ace21698a8383117e3eaf39",
+      "name": "🏆Moujii's Dojo🏆 (Late Registration Available!)",
+      "standings": 203,
+      "pairings": 558,
+      "decklists": 203
+    },
+    {
+      "id": "6ad4e8fe8a8383117e3eeae5",
+      "name": "Pumpkaweekly",
+      "standings": 128,
+      "pairings": 266,
+      "decklists": 128
+    },
+    {
+      "id": "6abe1b7a783097f8dcb74e64",
+      "name": "🏆 LING TV ARENA 🏆",
+      "standings": 17,
+      "pairings": 42,
+      "decklists": 17
     }
   ],
-  "skipped_non_online": 0,
+  "skipped_non_online": 11,
   "failed_events": [],
   "database": {
     "path": "data\\limitless.db",
-    "sha256": "07d13225de776e7fb31bda7f71af2b36364f47c97ea254af04ec456bb1eabebf",
+    "sha256": "170afff7528e6a38c77100c0d20212b601e0f845d57c9236abc50edde7e5cd59",
     "schema": "current",
-    "decks": 141,
-    "pairings": 172628,
-    "decklists": 65572
+    "decks": 144,
+    "pairings": 226775,
+    "decklists": 83579
   },
   "artefacts": {
     "input": "data\\input\\limitless_input.json",
     "model": "data\\input\\limitless_model_input.json",
+    "model_cache": "data\\input\\limitless_model_fit.json",
     "model_status": {
-      "status": "not identifiable"
+      "status": "complete",
+      "database_sha256": "cb960b7f35e6b424e727e137227986f77855c5350ddbed48e1419d9d1059edcc",
+      "model_cache_reused": false,
+      "model_max_iter": 10000,
+      "card_packages": [
+        "Applin + Dipplin",
+        "Barbaracle + Binacle",
+        "Bunnelby + Diggersby",
+        "Chewtle + Drednaw",
+        "Crustle + Dwebble",
+        "Eelektrik + Tynamo",
+        "Erika's Gloom + Erika's Oddish",
+        "Ethan's Cyndaquil + Ethan's Quilava + Ethan's Typhlosion",
+        "Feebas + Milotic ex",
+        "Garganacl + Nacli",
+        "Hariyama + Makuhita",
+        "Hoothoot + Noctowl",
+        "Hop's Phantump + Hop's Trevenant",
+        "Iono's Kilowattrel + Iono's Wattrel",
+        "Larvesta + Volcarona",
+        "Luxio + Luxray ex",
+        "Magmar + Magmortar",
+        "Magnemite + Magneton",
+        "Misdreavus + Mismagius ex",
+        "Ninetales + Vulpix",
+        "Sneasel + Weavile",
+        "Team Rocket's Arbok + Team Rocket's Ekans",
+        "Team Rocket's Crobat ex + Team Rocket's Zubat",
+        "Team Rocket's Dottler + Team Rocket's Orbeetle",
+        "Team Rocket's Spidops + Team Rocket's Tarountula"
+      ],
+      "not_identified": [
+        "Skrelp"
+      ]
     }
   },
-  "refreshed_at": "2026-10-03T15:27:47.829710+00:00"
+  "refreshed_at": "2026-10-20T00:49:11.755483+00:00"
 }

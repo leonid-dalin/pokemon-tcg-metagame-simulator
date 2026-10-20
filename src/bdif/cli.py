@@ -13,8 +13,10 @@ from src.core.config import OUTPUT_DIR, RNG_SEED
 from src.core.files import write_text_atomic
 from src.core.logger import setup_structured_logging, logger
 from src.core.telemetry import setup_telemetry
+from src.ui.bdif_html import render_report_html
 
 REPORT_FILENAME = "bdif_report.json"
+HTML_REPORT_FILENAME = "bdif_report.html"
 EVIDENCE_UNAVAILABLE = {
     "ingest": {"disabled", "failed", "partial"},
     "refit": {"missing", "insufficient observations", "not identifiable"},
@@ -108,6 +110,7 @@ def main() -> int:
         print(text)
         if args.command == "report":
             write_text_atomic(text, os.path.join(args.output, REPORT_FILENAME))
+            write_text_atomic(render_report_html(result), os.path.join(args.output, HTML_REPORT_FILENAME))
         return _exit_code(args.command, result)
     except SystemExit:
         raise
