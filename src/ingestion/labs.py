@@ -26,6 +26,10 @@ REQUEST_ATTEMPTS = 4
 _DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
+def canonical_date(date: str) -> str:
+    return f"{date.split('T', 1)[0]}T00:00:00.000Z"
+
+
 @dataclass(frozen=True)
 class LabsEvent:
     labs_id: str
@@ -49,7 +53,7 @@ class LabsEvent:
         labs_id, public_id, city, date = parts
         if not _DATE_RE.match(date):
             raise ValueError(f"event date must be ISO-8601, got {date!r}")
-        return cls(labs_id=labs_id, public_id=public_id, city=city, date=date)
+        return cls(labs_id=labs_id, public_id=public_id, city=city, date=canonical_date(date))
 
 
 @dataclass

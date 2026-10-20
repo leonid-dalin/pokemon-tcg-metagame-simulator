@@ -69,6 +69,15 @@ def test_event_spec_parses_a_valid_spec():
 
 
 @pytest.mark.unit
+def test_event_spec_stores_a_bare_date_in_the_form_the_online_path_writes():
+    bare = LabsEvent.parse("0077:582:Nice:2026-10-17")
+    full = LabsEvent.parse("0077:582:Nice:2026-10-17T00:00:00.000Z")
+
+    assert bare.date == "2026-10-17T00:00:00.000Z"
+    assert bare.date == full.date
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize("spec", ["0075:580:Recife", "0075:580::2026-10-03T00:00:00.000Z", "", "a:b:c:d:e"])
 def test_event_spec_rejects_a_malformed_spec(spec):
     with pytest.raises(ValueError):
