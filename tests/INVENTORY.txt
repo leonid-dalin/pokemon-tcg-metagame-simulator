@@ -329,6 +329,7 @@ tests/ingestion/test_labs.py::test_event_spec_rejects_a_malformed_spec[0075:580:
 tests/ingestion/test_labs.py::test_event_spec_rejects_a_malformed_spec[0075:580:Recife]
 tests/ingestion/test_labs.py::test_event_spec_rejects_a_malformed_spec[]
 tests/ingestion/test_labs.py::test_event_spec_rejects_a_malformed_spec[a:b:c:d:e]
+tests/ingestion/test_labs.py::test_event_spec_stores_a_bare_date_in_the_form_the_online_path_writes
 tests/ingestion/test_labs.py::test_import_bundles_maps_pairing_winners_to_stable_player_ids
 tests/ingestion/test_labs.py::test_import_bundles_records_labs_provenance_and_resolves_deck_names
 tests/ingestion/test_labs.py::test_import_bundles_refuses_a_bundle_that_fails_validation
