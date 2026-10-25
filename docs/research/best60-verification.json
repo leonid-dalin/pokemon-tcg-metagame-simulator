@@ -1,0 +1,46 @@
+{
+  "full_suite": {
+    "passed": 679,
+    "seconds": 44.85,
+    "revision": "9bbc9c120a37e679fd7da698cb814cf89198e8a4"
+  },
+  "mutation_matrices": {
+    "card-model-statistics": {
+      "caught": 11,
+      "survived": 0,
+      "bad_anchors": 0
+    },
+    "best60-selection": {
+      "caught": 40,
+      "survived": 0,
+      "bad_anchors": 0
+    },
+    "minmatches": {
+      "caught": 1,
+      "survived": 0,
+      "bad_anchors": 0
+    },
+    "report-contracts": {
+      "caught": 51,
+      "survived": 0,
+      "bad_anchors": 0
+    }
+  },
+  "mutation_revision": "0b97e6d95b8fb9c2069ace7827f468d09d3c7de2",
+  "mutation_target_files_unchanged_after_eval_only_fix": true,
+  "mutation_target_file_count": 17,
+  "interval_card_draws": 300,
+  "interval_h1_draws": 400,
+  "interval_disagreements": 0,
+  "cluster_se_simulation": {
+    "fits": 200,
+    "coverage": 0.945,
+    "reported_to_true_se_ratio": 1.0
+  },
+  "flag_combinations_passed": 2,
+  "artifact_handoffs_failed": 0,
+  "dead_symbols": 0,
+  "test_only_production_symbols": 0,
+  "test_quality_blockers": 0,
+  "pre_existing_source_grep_warnings": 1
+}
