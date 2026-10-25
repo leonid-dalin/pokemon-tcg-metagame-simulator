@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "study": "best60-interaction-benchmark",
+  "status": "retrospective_locked_evaluation",
+  "time": {
+    "timezone": "UTC",
+    "split_fractions": {
+      "development": 0.6,
+      "validation": 0.2,
+      "test": 0.2
+    },
+    "date_blocks_atomic": true,
+    "primary_embargo_days": 7,
+    "embargo_sensitivity_days": 14,
+    "timestamp_proxy": "event_start_date_as_result_availability",
+    "actual_completion_timestamp_field": null
+  },
+  "outcomes": {
+    "target": "probability_of_winning_a_decided_pairing",
+    "include_ties": false,
+    "include_byes": false,
+    "exclude_after_drop": true,
+    "require_legal_focal_list": true,
+    "require_known_opponent_archetype": true,
+    "require_opponent_list": false,
+    "pairing_identity": [
+      "tournament_id",
+      "round",
+      "phase",
+      "match",
+      "player1",
+      "player2"
+    ],
+    "paired_orientation_weights_sum_to_one": true
+  },
+  "features": {
+    "slot_minimum_lists": 30,
+    "slot_minimum_non_support_lists": 30,
+    "strength_prior_games": 10,
+    "skill_history_embargo_days": 7,
+    "unseen_player_strength": 0.0,
+    "unknown_category_level": "unknown",
+    "focal_benchmarks": [
+      "kangaskhan-bouffalant",
+      "pooled"
+    ],
+    "opponent_card_features": false,
+    "matchup_effects": true,
+    "source_and_mode_controls": true
+  },
+  "estimators": {
+    "primary_reference_selection": "stronger_additive_variant_by_validation_log_loss",
+    "validation_metric": "weighted_natural_log_loss",
+    "development_folds": {
+      "count": 3,
+      "type": "rolling_chronological",
+      "selection_uses_only_development_and_validation": true,
+      "freeze_choice_before_test": true
+    },
+    "rolling_folds": 3,
+    "complexity_tie_break": "lower_complexity",
+    "challengers": [
+      "nuisance",
+      "per_archetype_additive",
+      "pooled_additive",
+      "regularised_selected_pairs",
+      "pooled_factorisation_machine"
+    ],
+    "fm_ranks": [
+      2
+    ],
+    "fm_seeds": [
+      1312
+    ],
+    "interaction_penalties": [
+      0.01
+    ],
+    "max_iterations": 5000,
+    "max_iterations_by_model": {
+      "nuisance": 5000,
+      "per_archetype_additive": 5000,
+      "pooled_additive": 5000,
+      "regularised_selected_pairs": 5000,
+      "pooled_factorisation_machine": 5000
+    },
+    "candidate_fit_seconds": 90
+  },
+  "selection": {
+    "selector_comparison": [
+      "vote",
+      "exact_observed_catalogue"
+    ],
+    "field_source": "pre_cutoff_training_data_or_explicit_field_file",
+    "recommendation_skill_gap": 0.0,
+    "score_scale": "mean_probability_over_field",
+    "validation_requires_existing_format_metadata": true
+  },
+  "h1": {
+    "metric": "paired_natural_log_loss_gain_over_additive",
+    "minimum_gain_nats_per_pairing": 0.0001,
+    "minimum_independent_event_clusters": 20,
+    "cluster_decision_rule": "fewer_than_20_is_inconclusive",
+    "ranking_minimum_decided_results_per_list": 5,
+    "ranking_minimum_cluster_count": 20,
+    "null_hypothesis_fixture_must_not_be_weakened": true
+  },
+  "h3": {
+    "minimum_event_clusters": 50,
+    "minimum_importance_weight_ess": 200,
+    "below_threshold_status": "not_identified",
+    "minimum_target_propensity": 0.01,
+    "primary_weights_unclipped": true,
+    "weight_clip_sensitivity": 20,
+    "positive_lower_confidence_bound_required": true,
+    "deployment_lower_bound_points": 1.0
+  },
+  "h4": {
+    "interval_scope": "model_conditional_fixed_list_mean",
+    "bootstrap_unit": "atomic_utc_date_block",
+    "block_sensitivity_days": 7,
+    "predictive_coverage_reported_separately": true,
+    "undercoverage_tolerance": 0.05,
+    "mean_interval_width_target": 0.1,
+    "bootstrap_draws": 200
+  },
+  "inference": {
+    "primary_resampling_unit": "atomic_utc_date_block",
+    "player_aware_sensitivity": "two_way_event_player_cluster_sensitivity",
+    "mirrored_rows_are_not_independent": true,
+    "h1_bootstrap_draws": 2000,
+    "confidence_level": 0.95
+  },
+  "simulation": {
+    "quick_replicates_per_effect": 0,
+    "quick_rank": 2,
+    "quick_seed": 1312,
+    "quick_penalty": 0.01,
+    "quick_pilot_only": true,
+    "full_replicates_per_effect": 500,
+    "full_rank_grid": [
+      2
+    ],
+    "full_seed_grid": [
+      1312
+    ],
+    "full_interaction_penalty_grid": [
+      0.01
+    ],
+    "full_grid_requires_measured_fit_budget_before_lock": true,
+    "per_replicate_checkpoint": true,
+    "effects_log_odds": [
+      0.0,
+      0.08,
+      0.2,
+      0.4
+    ],
+    "primary_useful_effect_log_odds": 0.2,
+    "power_target": 0.8,
+    "full_wall_clock_seconds": 86400,
+    "checkpoint_each_replicate": true
+  },
+  "run": {
+    "allow_test_access_before_lock": false,
+    "allow_protocol_change_after_lock": false,
+    "resume_requires_matching_source_split_and_config_hashes": true,
+    "atomic_outputs": true,
+    "run_directory_must_be_new": true
+  },
+  "execution_profile": {
+    "name": "bounded-cpu-feasibility",
+    "chosen_before_locked_test_access": true,
+    "full_estimator_grid_exhausted": false,
+    "rationale": [
+      "This bounded CPU feasibility profile uses one FM rank, seed and interaction penalty with a 90-second candidate budget. The full proposed search remains in best60-protocol.json.",
+      "Pre-lock review corrected explicit-zero expansion in sparse group matrices and inconsistent FM weight normalization. Earlier FM runtime and nonconvergence measurements are excluded from scientific evidence.",
+      "The corrected pipeline measures runtime and convergence again during development validation. No acceptance threshold changes.",
+      "The simulation stage performs its prespecified design preflight; a structurally inconclusive design reports zero executed replicates without a measured power claim."
+    ],
+    "limitations": [
+      "This profile is a bounded feasibility study, not an exhaustive comparison of richer models.",
+      "Conditional intervals do not establish predictive or counterfactual calibration."
+    ]
+  }
+}
