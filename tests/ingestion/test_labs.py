@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from src.ingestion.labs import DECK_SIZE, LabsEvent, _RateLimiter, decklist_size, import_bundles, validate_bundle
+from src.ingestion.labs import DECK_SIZE, LabsEvent, _RateLimiter, collect_event, decklist_size, import_bundles, validate_bundle
 
 MAPPING = {"dragapult-ex": "Dragapult"}
 
@@ -51,7 +51,7 @@ def _bundle(*, labs_id: str = "0075", public_id: str = "580", city: str = "Recif
         "public_id": public_id,
         "city": city,
         "date": "2026-10-03T00:00:00.000Z",
-        "metadata": {"players": 1074, "round": 17, "city": city, "type": "regional"},
+        "metadata": {"players": 1074, "round": 3, "city": city, "type": "regional"},
         "standings": standings,
         "pairings": pairings,
         "decklists": {"100": _decklist(list_size), "200": _decklist(list_size)},
@@ -126,6 +126,72 @@ def test_validate_bundle_flags_a_duplicate_pairing_identity():
 
     assert report["ok"] is False
     assert any("duplicate pairing identities" in problem for problem in report["problems"])
+
+
+@pytest.mark.unit
+def test_validate_bundle_fails_when_pairings_do_not_cover_every_round():
+    bundle = _bundle()
+    bundle["metadata"] = {**bundle["metadata"], "round": 4}
+
+    report = validate_bundle(bundle)
+
+    assert report["ok"] is False
+    assert any("missing rounds" in problem and "[4]" in problem for problem in report["problems"])
+
+
+@pytest.mark.unit
+def test_collect_event_resumes_by_fetching_only_the_missing_rounds(tmp_path):
+    directory = tmp_path / "0099"
+    directory.mkdir()
+    metadata = {"players": 4, "round": 4, "city": "Testville", "type": "regional"}
+    (directory / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    standings = [
+        {
+            "player_id": 1,
+            "tp_id": 1,
+            "placement": 1,
+            "wins": 2,
+            "losses": 0,
+            "ties": 0,
+            "drop_round": None,
+            "decklist": 0,
+            "deck_id": "x",
+            "deck_name": "X",
+        }
+    ]
+    (directory / "standings.json").write_text(json.dumps(standings), encoding="utf-8")
+    existing_pairings = [
+        {"round": 1, "phase": 1, "p1_id": 1, "p2_id": None, "winner": 0},
+        {"round": 2, "phase": 1, "p1_id": 1, "p2_id": None, "winner": 0},
+    ]
+    (directory / "pairings.json").write_text(json.dumps(existing_pairings), encoding="utf-8")
+
+    class _FakeClient:
+        workers = 1
+
+        def __init__(self):
+            self.pairing_calls = []
+
+        def tournament(self, labs_id):
+            raise AssertionError("metadata is already on disk")
+
+        def standings(self, labs_id):
+            raise AssertionError("standings are already on disk")
+
+        def pairings(self, labs_id, round_number):
+            self.pairing_calls.append(round_number)
+            return [{"p1_id": 1, "p2_id": None, "winner": 0}]
+
+        def decklist(self, labs_id, tp_id):
+            return None
+
+    client = _FakeClient()
+    event = LabsEvent(labs_id="0099", public_id="900", city="Testville", date="2026-10-03T00:00:00.000Z")
+
+    bundle = collect_event(client, event, directory)
+
+    assert client.pairing_calls == [3, 4]
+    assert {row["round"] for row in bundle["pairings"]} == {1, 2, 3, 4}
 
 
 @pytest.mark.unit

@@ -150,13 +150,17 @@ def collect_event(client: LabsClient, event: LabsEvent, directory: Path) -> dict
     logger.info("labs_standings_collected", labs_id=event.labs_id, rows=len(standings))
 
     pairings = _read_json(pairings_path, [])
-    if not pairings or not all("round" in row and "phase" in row for row in pairings):
+    if not all("round" in row and "phase" in row for row in pairings):
         pairings = []
-        for round_number in range(1, int(metadata["round"]) + 1):
-            rows = client.pairings(event.labs_id, round_number)
-            pairings.extend({"round": round_number, "phase": 1, **row} for row in rows)
-            _write_json(pairings_path, pairings)
-            logger.info("labs_pairings_collected", labs_id=event.labs_id, round=round_number, total=len(pairings))
+    total_rounds = int(metadata["round"])
+    collected_rounds = {row["round"] for row in pairings}
+    for round_number in range(1, total_rounds + 1):
+        if round_number in collected_rounds:
+            continue
+        rows = client.pairings(event.labs_id, round_number)
+        pairings.extend({"round": round_number, "phase": 1, **row} for row in rows)
+        _write_json(pairings_path, pairings)
+        logger.info("labs_pairings_collected", labs_id=event.labs_id, round=round_number, total=len(pairings))
 
     decklists = _read_json(decklists_path, {})
     pending = [row for row in standings if str(row["player_id"]) not in decklists]
@@ -246,6 +250,13 @@ def validate_bundle(bundle: Mapping[str, Any]) -> dict[str, Any]:
         problems.append(f"pairing participants absent from standings: {len(bad_participants)} {bad_participants[:5]}")
     if duplicates:
         problems.append(f"duplicate pairing identities: {duplicates}")
+
+    total_rounds = (bundle.get("metadata") or {}).get("round")
+    if total_rounds is not None:
+        pairing_rounds = {row.get("round") for row in pairings}
+        missing_rounds = [round_number for round_number in range(1, int(total_rounds) + 1) if round_number not in pairing_rounds]
+        if missing_rounds:
+            problems.append(f"pairings missing rounds: {missing_rounds}")
 
     return {
         "labs_id": bundle.get("labs_id"),
