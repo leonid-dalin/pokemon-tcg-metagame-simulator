@@ -14,9 +14,12 @@ def write_text_atomic(text: str, path: str) -> None:
 def relative_path(path: str) -> str:
     """The path as a report should record it, so a shared report carries no local prefix."""
     try:
-        return os.path.relpath(path)
+        candidate = os.path.relpath(path)
     except ValueError:
-        return str(path)
+        candidate = None
+    if candidate is not None and candidate.split(os.sep, 1)[0] != os.pardir:
+        return candidate
+    return os.path.basename(os.path.normpath(str(path)))
 
 
 def _write_atomic(path: str, write: Callable[[TextIO], object]) -> None:
