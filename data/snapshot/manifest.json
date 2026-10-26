@@ -374,7 +374,7 @@
     "model_cache": "data\\input\\limitless_model_fit.json",
     "model_status": {
       "status": "complete",
-      "database_sha256": "cb960b7f35e6b424e727e137227986f77855c5350ddbed48e1419d9d1059edcc",
+      "database_sha256": "170afff7528e6a38c77100c0d20212b601e0f845d57c9236abc50edde7e5cd59",
       "model_cache_reused": false,
       "model_max_iter": 10000,
       "card_packages": [
