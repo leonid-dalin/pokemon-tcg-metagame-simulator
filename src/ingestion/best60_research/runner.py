@@ -130,28 +130,16 @@ def _output_is_ignored(repo: Path, output: Path) -> bool:
     return result.returncode == 0
 
 
-def _recorded_path(recorded: str) -> Path:
-    candidate = Path(recorded)
-    if candidate.is_absolute() or candidate.is_file():
-        return candidate
-    anchored = Path(__file__).resolve().parents[3] / candidate
-    return anchored if anchored.is_file() else candidate
-
-
-def _run_relative(run: Path, path: str | Path) -> str:
-    """A path relative to the run directory, so a resume finds it from any working directory."""
-    try:
-        return Path(os.path.relpath(str(path), str(run))).as_posix()
-    except ValueError:
-        return Path(path).name
-
-
-def _recorded_field_path(run: Path, recorded: str) -> Path:
+def _recorded_field_path(run: Path, recorded: str) -> Path | None:
+    """Find a field file recorded by name, so no local path is written into the manifest."""
     candidate = Path(recorded)
     if candidate.is_absolute():
-        return candidate
-    anchored = run / candidate
-    return anchored if anchored.is_file() else _recorded_path(recorded)
+        return candidate if candidate.is_file() else None
+    for base in (Path.cwd(), Path(__file__).resolve().parents[3], run):
+        anchored = base / candidate
+        if anchored.is_file():
+            return anchored
+    return None
 
 
 def _validate_paths(database: Path, output: Path, config: Path) -> None:
@@ -320,7 +308,7 @@ def run_stage(args: Any) -> dict[str, Any]:
                     "protocol": protocol, "split_sha256": split_hash, "splits": split_payload,
                     "included_event_ids": included, "code": _code_fingerprint(),
                     "archetype_id": args.archetype_id or "kangaskhan-bouffalant",
-                    "field_file": _run_relative(run, args.field_file) if args.field_file else None,
+                    "field_file": Path(args.field_file).name if args.field_file else None,
                     "field_file_sha256": field_hash, "field_values": field_values,
                     "as_of": as_of}
         _atomic_json(run / "manifest.json", manifest)
@@ -346,10 +334,16 @@ def run_stage(args: Any) -> dict[str, Any]:
     manifest = _manifest(run, source_hash, source_metadata["audit"].get("snapshot_fingerprint"), config_hash)
     if args.archetype_id and args.archetype_id != manifest.get("archetype_id"):
         raise RunnerError(2, "archetype ID differs from the audited run")
-    if args.field_file and field_hash != manifest.get("field_file_sha256"):
-        raise RunnerError(2, "field file differs from the audited run")
-    if not args.field_file and manifest.get("field_file"):
-        saved_values, saved_hash = _read_field(str(_recorded_field_path(run, manifest["field_file"])))
+    if args.field_file:
+        if field_hash != manifest.get("field_file_sha256"):
+            raise RunnerError(2, "field file differs from the audited run")
+    elif manifest.get("field_file"):
+        saved_path = _recorded_field_path(run, manifest["field_file"])
+        if saved_path is None:
+            raise RunnerError(2, "resume needs --field-file: the saved field file "
+                                 f"{manifest['field_file']!r} is not in the working directory, "
+                                 "the repository or the run directory")
+        saved_values, saved_hash = _read_field(str(saved_path))
         if saved_hash != manifest.get("field_file_sha256") or saved_values != manifest.get("field_values"):
             raise RunnerError(2, "saved field file has changed since audit")
     state = _read_json(run / "state.json")

@@ -378,25 +378,70 @@ def test_output_directory_is_ignored_before_it_is_created(tmp_path):
     assert _output_is_ignored(repo, repo / "src") is False
 
 
-def test_resume_reads_the_saved_field_file_from_another_working_directory(tmp_path, monkeypatch):
+def _validate_ready(monkeypatch):
     from src.ingestion.best60_research import experiment, runner
-
-    database = _database(tmp_path / "source.db")
-    config = _protocol(tmp_path)
-    field = tmp_path / "field.json"
-    field.write_text(json.dumps({"kangaskhan-bouffalant": 1.0}), encoding="utf-8")
-    output = tmp_path / "runs"
-
-    audited = run_stage(_args(database, output, config, "audit", field_file=str(field)))
-    manifest = json.loads((output / audited["run_id"] / "manifest.json").read_text(encoding="utf-8"))
-    assert not Path(manifest["field_file"]).is_absolute()
 
     monkeypatch.setattr(runner, "build_context", lambda *_args, **_kwargs: {"cutoff": "unused"})
     monkeypatch.setattr(experiment, "validate_experiment",
                         lambda *_args, **_kwargs: {"status": "complete", "benchmarks": {}})
+
+
+def _audit_with_field(tmp_path):
+    field = tmp_path / "field-tree" / "field.json"
+    field.parent.mkdir()
+    field.write_text(json.dumps({"kangaskhan-bouffalant": 1.0}), encoding="utf-8")
+    database = _database(tmp_path / "source.db")
+    config = _protocol(tmp_path)
+    output = tmp_path / "runs"
+    audited = run_stage(_args(database, output, config, "audit", field_file=str(field)))
+    return field, database, config, output, audited
+
+
+def test_audit_records_the_field_file_by_name_only(tmp_path):
+    field, _database_path, _config_path, output, audited = _audit_with_field(tmp_path)
+
+    manifest = json.loads((output / audited["run_id"] / "manifest.json").read_text(encoding="utf-8"))
+    recorded = manifest["field_file"]
+
+    assert recorded == "field.json"
+    assert ".." not in recorded
+    assert ":" not in recorded
+    assert Path(recorded).name == recorded
+    assert manifest["field_values"] == {"kangaskhan-bouffalant": 1.0}
+
+
+def test_resume_finds_the_saved_field_file_by_its_recorded_name(tmp_path, monkeypatch):
+    field, database, config, output, audited = _audit_with_field(tmp_path)
+    _validate_ready(monkeypatch)
+    monkeypatch.chdir(field.parent)
+
+    validated = run_stage(_args(database, output, config, "validate", audited["run_id"]))
+
+    assert validated["status"] == "complete"
+
+
+def test_resume_without_field_file_asks_for_it_when_the_name_does_not_resolve(tmp_path, monkeypatch):
+    _field, database, config, output, audited = _audit_with_field(tmp_path)
+    _validate_ready(monkeypatch)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     monkeypatch.chdir(elsewhere)
 
-    validated = run_stage(_args(database, output, config, "validate", audited["run_id"]))
+    with pytest.raises(RunnerError) as error:
+        run_stage(_args(database, output, config, "validate", audited["run_id"]))
+
+    assert error.value.code == 2
+    assert "--field-file" in str(error.value)
+
+
+def test_resume_checks_a_repassed_field_file_against_the_recorded_hash(tmp_path, monkeypatch):
+    field, database, config, output, audited = _audit_with_field(tmp_path)
+    _validate_ready(monkeypatch)
+    changed = tmp_path / "changed.json"
+    changed.write_text(json.dumps({"kangaskhan-bouffalant": 0.5}), encoding="utf-8")
+
+    with pytest.raises(RunnerError, match="field file differs from the audited run"):
+        run_stage(_args(database, output, config, "validate", audited["run_id"], field_file=str(changed)))
+
+    validated = run_stage(_args(database, output, config, "validate", audited["run_id"], field_file=str(field)))
     assert validated["status"] == "complete"
