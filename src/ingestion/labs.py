@@ -154,8 +154,12 @@ def collect_event(client: LabsClient, event: LabsEvent, directory: Path) -> dict
     if not all("round" in row and "phase" in row for row in pairings):
         pairings = []
     total_rounds = int(metadata["round"])
-    fetched_rounds = {int(value) for value in _read_json(rounds_path, [])}
-    fetched_rounds |= {int(row["round"]) for row in pairings}
+    if pairings:
+        fetched_rounds = {int(value) for value in _read_json(rounds_path, [])}
+        fetched_rounds |= {int(row["round"]) for row in pairings}
+    else:
+        # A deleted or reset pairings file cannot vouch for any round, so fetch them all again.
+        fetched_rounds = set()
     for round_number in range(1, total_rounds + 1):
         if round_number in fetched_rounds:
             continue
@@ -265,6 +269,8 @@ def validate_bundle(bundle: Mapping[str, Any]) -> dict[str, Any]:
     total_rounds = (bundle.get("metadata") or {}).get("round")
     empty_rounds: list[str] = []
     if total_rounds is not None:
+        if int(total_rounds) > 0 and not pairings:
+            problems.append(f"bundle has no pairings for {int(total_rounds)} rounds")
         pairing_rounds = {int(row["round"]) for row in pairings if row.get("round") is not None}
         fetched_rounds = {int(value) for value in bundle.get("rounds_fetched") or []} | pairing_rounds
         missing_rounds = [n for n in range(1, int(total_rounds) + 1) if n not in fetched_rounds]

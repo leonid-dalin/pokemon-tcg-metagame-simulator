@@ -304,6 +304,90 @@ def test_validate_bundle_separates_a_never_fetched_round_from_an_empty_one():
 
 
 @pytest.mark.unit
+def test_collect_event_refetches_every_round_when_pairings_are_deleted(tmp_path):
+    directory = tmp_path / "0102"
+    _write_event_files(
+        directory,
+        {"players": 1, "round": 2, "city": "Testville", "type": "regional"},
+        [_standing(decklist=0)],
+        [],
+    )
+
+    class _RoundClient:
+        workers = 1
+
+        def __init__(self):
+            self.rounds = []
+
+        def pairings(self, labs_id, round_number):
+            self.rounds.append(round_number)
+            return [{"p1_id": 1, "p2_id": None, "winner": 0}]
+
+        def decklist(self, labs_id, tp_id):
+            return None
+
+    client = _RoundClient()
+    event = LabsEvent(labs_id="0102", public_id="903", city="Testville", date="2026-10-03T00:00:00.000Z")
+
+    collect_event(client, event, directory)
+    assert client.rounds == [1, 2]
+
+    (directory / "pairings.json").unlink()
+    bundle = collect_event(client, event, directory)
+
+    assert client.rounds == [1, 2, 1, 2]
+    assert {row["round"] for row in bundle["pairings"]} == {1, 2}
+
+
+@pytest.mark.unit
+def test_collect_event_refetches_every_round_when_pairings_are_in_the_old_format(tmp_path):
+    directory = tmp_path / "0103"
+    _write_event_files(
+        directory,
+        {"players": 1, "round": 2, "city": "Testville", "type": "regional"},
+        [_standing(decklist=0)],
+        [
+            {"round": 1, "p1_id": 1, "p2_id": None, "winner": 0},
+            {"round": 2, "p1_id": 1, "p2_id": None, "winner": 0},
+        ],
+    )
+    (directory / "rounds.json").write_text(json.dumps([1, 2]), encoding="utf-8")
+
+    class _RoundClient:
+        workers = 1
+
+        def __init__(self):
+            self.rounds = []
+
+        def pairings(self, labs_id, round_number):
+            self.rounds.append(round_number)
+            return [{"p1_id": 1, "p2_id": None, "winner": 0}]
+
+        def decklist(self, labs_id, tp_id):
+            return None
+
+    client = _RoundClient()
+    event = LabsEvent(labs_id="0103", public_id="904", city="Testville", date="2026-10-03T00:00:00.000Z")
+
+    bundle = collect_event(client, event, directory)
+
+    assert client.rounds == [1, 2]
+    assert {row["round"] for row in bundle["pairings"]} == {1, 2}
+
+
+@pytest.mark.unit
+def test_validate_bundle_fails_when_a_rounded_bundle_has_no_pairings():
+    bundle = _bundle()
+    bundle["pairings"] = []
+    bundle["rounds_fetched"] = [1, 2, 3]
+
+    report = validate_bundle(bundle)
+
+    assert report["ok"] is False
+    assert any("no pairings" in problem for problem in report["problems"])
+
+
+@pytest.mark.unit
 def test_import_bundles_records_labs_provenance_and_resolves_deck_names(tmp_path):
     database = tmp_path / "limitless.db"
 
