@@ -62,7 +62,7 @@
   {
     "name": "held-out folds split events",
     "file": "src/ingestion/best60.py",
-    "find": "    fold_of = dict(zip(events, order))\n    return np.array([fold_of[entry.event] for entry in lists])",
+    "find": "    return np.array([fold_of[entry.event] for entry in lists])",
     "replace": "    return np.arange(len(lists)) % FOLDS"
   },
   {
