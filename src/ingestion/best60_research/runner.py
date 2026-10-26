@@ -118,6 +118,18 @@ def _code_fingerprint() -> dict[str, Any]:
     return {"revision": revision, "files": files, "sha256": _sha({"revision": revision, "files": files})}
 
 
+def _output_is_ignored(repo: Path, output: Path) -> bool:
+    check_path = str(output)
+    if not output.exists():
+        check_path = check_path.rstrip("/\\") + os.sep
+    try:
+        result = subprocess.run(["git", "check-ignore", "--quiet", check_path], cwd=repo,
+                                timeout=10, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RunnerError(2, f"cannot verify that output is ignored: {exc}") from exc
+    return result.returncode == 0
+
+
 def _recorded_path(recorded: str) -> Path:
     candidate = Path(recorded)
     if candidate.is_absolute() or candidate.is_file():
@@ -155,12 +167,7 @@ def _validate_paths(database: Path, output: Path, config: Path) -> None:
         return
     except OSError:
         return
-    try:
-        result = subprocess.run(["git", "check-ignore", "--quiet", str(output_resolved)], cwd=repo,
-                                timeout=10, check=False)
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise RunnerError(2, f"cannot verify that output is ignored: {exc}") from exc
-    if result.returncode != 0:
+    if not _output_is_ignored(repo, output_resolved):
         raise RunnerError(2, "output inside the repository must be ignored by Git")
 
 

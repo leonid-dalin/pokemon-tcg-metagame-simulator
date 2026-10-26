@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import subprocess
 import time
 from argparse import Namespace
 from datetime import datetime, timedelta, timezone
@@ -8,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from src.ingestion.best60_research.runner import (
-    RunnerError, _evaluate_locked, _selection_validation_views, _simulate_locked, run_stage,
+    RunnerError, _evaluate_locked, _output_is_ignored, _selection_validation_views, _simulate_locked, run_stage,
 )
 from src.ingestion.best60_research.estimators import FitBudgetExceeded
 from src.ingestion.best60_research import __main__ as cli
@@ -363,6 +364,18 @@ def test_audit_records_provenance_relative_to_the_working_directory(tmp_path):
         assert not Path(recorded).is_absolute()
     assert not Path(result["run_directory"]).is_absolute()
     assert Path(result["run_directory"]).name == result["run_id"]
+
+
+def test_output_directory_is_ignored_before_it_is_created(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".gitignore").write_text("/output/card-value-research/\n", encoding="utf-8")
+    subprocess.run(["git", "init", "--quiet", str(repo)], check=True)
+
+    output = repo / "output" / "card-value-research"
+    assert not output.exists()
+    assert _output_is_ignored(repo, output) is True
+    assert _output_is_ignored(repo, repo / "src") is False
 
 
 def test_resume_reads_the_saved_field_file_from_another_working_directory(tmp_path, monkeypatch):
