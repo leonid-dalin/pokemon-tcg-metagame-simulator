@@ -42,7 +42,8 @@ from src.core.config import (
     BDIF_BEST60_TREND_POINTS,
     BDIF_BEST60_WORKERS,
 )
-from src.ingestion.best60_games import Game, GameModel, ModelSpec, fit_game_model, normalise_field, observed_field, parse_date, recent_split
+from src.ingestion.best60_games import UNKNOWN, Game, GameModel, ModelSpec, fit_game_model, normalise_field, observed_field, parse_date, recent_split
+from src.ingestion.best60_research.selection import field_scores
 from src.ingestion.model import ACE_SPEC_CARDS, BASIC_ENERGY_NAMES, validate_recommendation
 
 GROUP_ORDER = ("pokemon", "trainer", "energy")
@@ -147,6 +148,61 @@ def consensus_sixty(lists: Sequence[ArchetypeList]) -> Counter[str]:
             continue
         deck[card] = copy
     return deck
+
+
+def exact_lists(lists: Sequence[ArchetypeList]) -> list[tuple[Counter[str], int]]:
+    """Every distinct exact list with the number of players who played it, most played first."""
+    players: Counter[tuple[tuple[str, int], ...]] = Counter()
+    for entry in lists:
+        players[tuple(sorted(entry.counts.items()))] += 1
+    rows = [(Counter(dict(key)), count) for key, count in players.items()]
+    return sorted(rows, key=lambda row: (-row[1], sorted(row[0].items())))
+
+
+def _list_distance(one: Mapping[str, int], other: Mapping[str, int]) -> int:
+    cards = set(one) | set(other)
+    return sum(abs(one.get(card, 0) - other.get(card, 0)) for card in cards) // 2
+
+
+def most_played_list(lists: Sequence[ArchetypeList]) -> tuple[Counter[str], int]:
+    """The exact list the most players played; ties go to the one nearest the other lists."""
+    rows = exact_lists(lists)
+    if not rows:
+        return Counter(), 0
+    top = rows[0][1]
+    tied = [row for row in rows if row[1] == top]
+    if len(tied) == 1:
+        return tied[0]
+    return min(
+        tied,
+        key=lambda row: (
+            sum(_list_distance(row[0], other) * players for other, players in rows if other != row[0]),
+            sorted(row[0].items()),
+        ),
+    )
+
+
+def field_list_scores(model: GameModel, rows: Sequence[tuple[Counter[str], int]], field: Mapping[str, float]) -> list[float]:
+    """Each observed list's win probability averaged over the field, as a probability mixture."""
+    weights = normalise_field(field)
+    if not weights:
+        known = [deck for deck in model.opponents if deck != UNKNOWN]
+        weights = {deck: 1.0 / len(known) for deck in known} if known else {}
+    if not weights:
+        return [0.5 for _ in rows]
+    opponents = list(weights)
+    shares = [weights[deck] for deck in opponents]
+    return [float(field_scores(model.logits(deck, opponents), shares)) for deck, _ in rows]
+
+
+def best_field_list(lists: Sequence[ArchetypeList], model: GameModel, field: Mapping[str, float]) -> tuple[Counter[str], int, float]:
+    """The observed list with the highest field-weighted win probability."""
+    rows = exact_lists(lists)
+    if not rows:
+        return Counter(), 0, 0.0
+    scores = field_list_scores(model, rows, field)
+    position = max(range(len(rows)), key=lambda index: (scores[index], sorted(rows[index][0].items())))
+    return rows[position][0], rows[position][1], scores[position]
 
 
 def player_strength(records: Mapping[tuple[str, str], tuple[int, int]]) -> dict[tuple[str, str], float]:
@@ -847,26 +903,28 @@ def build_best60(
     if not lists:
         return {**report, "status": "no legal lists", "cards": [], "total_copies": 0}
     consensus = consensus_sixty(lists)
+    observed, observed_players = most_played_list(lists)
     groups: dict[str, str] = {}
     for entry in lists:
         for card, group in entry.groups.items():
             groups.setdefault(card, group)
-    deck, applied, proposed, leaning, model = Counter(consensus), [], [], [], None
+    deck, applied, proposed, leaning, model = Counter(observed), [], [], [], None
+    seed, seed_players = Counter(observed), observed_players
     model_report: dict[str, Any] = {
-        "outcome": "each game against the opponent's deck, both players' strength controlled" if games else "match record at the event, player strength controlled",
+        "outcome": "each decided match against the opponent's deck, both players' strength controlled" if games else "match record at the event, player strength controlled",
         "prior_sd": None, "opponent_sd": 0.0, "half_life_days": None,
         "as_of": as_of, "field_source": "specified" if field else "observed",
     }
     used_field: dict[str, float] = normalise_field(field)
     matchups: dict[str, dict[str, list[float]]] = {}
     if len(lists) < BDIF_BEST60_MIN_MODEL_LISTS:
-        status = "consensus only: too few lists to score cards"
+        status = "observed list kept: too few lists to score cards"
     else:
         losses = held_out_losses(lists, strength, records, games)
         model_report["held_out_loss"] = losses
         spec = tuned_spec(losses, games)
         if spec is None:
-            status = "consensus only: card counts did not predict held-out results"
+            status = "observed list kept: card counts did not predict held-out results"
         else:
             spec = replace(spec, as_of=as_of)
             recency = recency_losses(lists, strength, records, spec)
@@ -879,10 +937,12 @@ def build_best60(
             spec = replace(spec, field=used_field)
             prior_sd = spec
             model = fit_slot_model(lists, strength, prior_sd)
+            seed, seed_players, seed_score = best_field_list(lists, model.game, used_field)
+            model_report["seed_field_score"] = seed_score
             improved, proposed, leaning = improve(
-                consensus, model, groups, prerequisites(lists), count_levels(lists, consensus), _support_check(lists, list_mode),
+                seed, model, groups, prerequisites(lists), count_levels(lists, seed), _support_check(lists, list_mode),
             )
-            gain_held_out, gain_se = held_out_gain(lists, strength, prior_sd, consensus, groups, records, list_mode)
+            gain_held_out, gain_se = held_out_gain(lists, strength, prior_sd, seed, groups, records, list_mode)
             model_report.update({
                 "prior_sd": spec.prior_sd, "opponent_sd": spec.opponent_sd, "half_life_days": spec.half_life,
                 "slots": len(model.slots), "opponents_with_own_effects": list(model.game.specific) if model.game else [],
@@ -891,10 +951,11 @@ def build_best60(
             if gain_held_out - BDIF_BEST60_HELD_OUT_SE * gain_se > 0:
                 deck, applied, status = improved, proposed, "complete"
             else:
-                status = "consensus kept: swaps did not hold up on held-out events"
+                deck, status = seed, "observed list kept: swaps did not hold up on held-out events"
     cards = [
         {"card": card, "copies": copies, "consensus_copies": consensus.get(card, 0), "group": groups.get(card, "trainer"),
-         "source": "consensus" if consensus.get(card, 0) == copies else "swap"}
+         "source": "swap" if card in {slot[0] for move in applied for slot in (*move["removed"], *move["added"])}
+         else ("consensus" if consensus.get(card, 0) == copies else "observed")}
         for card, copies in sorted(deck.items(), key=lambda item: (GROUP_ORDER.index(groups.get(item[0], "trainer")) if groups.get(item[0], "trainer") in GROUP_ORDER else 1, -item[1], item[0]))
     ]
     removed = [
@@ -905,10 +966,11 @@ def build_best60(
     stats = card_stats(lists)
     gain = sum(swap["gain"] for swap in applied)
     support = ListSupport(lists)
-    stable = stability(lists, strength, spec, consensus, deck, groups, list_mode) if applied else {}
+    stable = stability(lists, strength, spec, seed, deck, groups, list_mode) if applied else {}
     if applied and model is not None:
         touched = sorted({slot for move in applied for slot in (*move["removed"], *move["added"])})
         matchups = card_matchups(model, touched, used_field)
+    shipped_players = next((players for row, players in exact_lists(lists) if row == deck), 0)
     return {
         **report,
         "status": status,
@@ -916,13 +978,19 @@ def build_best60(
         "removed_cards": removed,
         "total_copies": sum(deck.values()),
         "ace_spec_choice": next((card for card in deck if card in ACE_SPEC_CARDS), None),
+        "shipped_list": {
+            "source": "swaps" if applied else "observed",
+            "players": shipped_players,
+            "seed_players": seed_players,
+            "seed_field_score": model_report.get("seed_field_score"),
+        },
         "swaps": applied,
         "proposed_swaps": [] if applied else proposed,
         "leaning_swaps": leaning,
         "model": model_report,
         "list_mode": list_mode,
         "support": {"consensus": support.profile(consensus), "recommended": support.profile(deck)},
-        "joint_probability": None if model is None or not applied else joint_probability(consensus, deck, model),
+        "joint_probability": None if model is None or not applied else joint_probability(seed, deck, model),
         "stability": stable,
         "field": dict(sorted(used_field.items(), key=lambda item: (-item[1], item[0]))[:12]),
         "card_matchups": matchups,

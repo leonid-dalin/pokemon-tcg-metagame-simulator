@@ -170,13 +170,14 @@ def test_a_weaker_planted_effect_is_still_applied():
 
 
 @pytest.mark.unit
-def test_without_any_card_effect_the_consensus_is_kept():
+def test_without_any_card_effect_the_most_played_observed_list_is_kept():
     rows, records = _synthetic()
     result = build_best60("X", rows, player_strength(records))
 
-    consensus = consensus_sixty([parse_list(row) for row in rows])
-    assert result["status"].startswith("consensus")
-    assert {row["card"]: row["copies"] for row in result["cards"]} == dict(consensus)
+    played, players = best60.most_played_list([parse_list(row) for row in rows])
+    assert result["status"].startswith("observed list kept")
+    assert {row["card"]: row["copies"] for row in result["cards"]} == dict(played)
+    assert result["shipped_list"]["players"] == players
     assert result["swaps"] == []
 
 
@@ -221,7 +222,7 @@ def test_swaps_never_add_an_evolution_without_its_basic_or_drop_the_last_pokemon
 def test_too_few_lists_return_the_consensus_with_a_status():
     rows = [_row("e", f"p{i}", _base()) for i in range(5)]
     result = build_best60("X", rows, {})
-    assert result["status"] == "consensus only: too few lists to score cards"
+    assert result["status"] == "observed list kept: too few lists to score cards"
     assert result["total_copies"] == 60
     assert result["deck_ids"] == ["x"]
 
@@ -230,7 +231,7 @@ def test_too_few_lists_return_the_consensus_with_a_status():
 def test_one_event_lists_keep_consensus_without_cross_validation():
     rows = [_row("e", f"p{i}", _base()) for i in range(100)]
     result = build_best60("X", rows, {})
-    assert result["status"] == "consensus only: card counts did not predict held-out results"
+    assert result["status"] == "observed list kept: card counts did not predict held-out results"
     assert result["total_copies"] == 60
 
 
@@ -291,6 +292,94 @@ def test_best60_legality_matrix_returns_legal_sixty_or_status(copies, extra_ace_
 
 
 @pytest.mark.unit
+def test_a_failed_card_model_ships_the_most_played_observed_list():
+    base = [("Mon", 4, "pokemon"), ("Mon ex", 4, "pokemon"), ("Ultra Ball", 4, "trainer")]
+    rows = []
+    for index in range(40):
+        rows.append(_row("e", f"a{index}", base + [("Tech A", 2, "trainer"), ("Grass Energy", 46, "energy")]))
+    for index in range(35):
+        rows.append(_row("e", f"b{index}", base + [("Tech B", 2, "trainer"), ("Grass Energy", 46, "energy")]))
+    for index in range(25):
+        rows.append(_row("e", f"c{index}", base + [("Tech A", 1, "trainer"), ("Tech B", 1, "trainer"), ("Grass Energy", 46, "energy")]))
+    lists = [parse_list(row) for row in rows]
+    vote = consensus_sixty(lists)
+
+    result = build_best60("X", rows, {})
+
+    shipped = {row["card"]: row["copies"] for row in result["cards"]}
+    assert result["status"] == "observed list kept: card counts did not predict held-out results"
+    assert shipped["Tech A"] == 2 and shipped.get("Tech B", 0) == 0
+    assert shipped != dict(vote)
+    assert result["shipped_list"] == {"source": "observed", "players": 40, "seed_players": 40, "seed_field_score": None}
+
+
+@pytest.mark.unit
+def test_a_tied_most_played_list_goes_to_the_one_nearest_the_other_lists():
+    base = [("Mon", 4, "pokemon"), ("Mon ex", 4, "pokemon"), ("Ultra Ball", 4, "trainer")]
+    rows = []
+    for index in range(30):
+        rows.append(_row("e", f"a{index}", base + [("Tech A", 2, "trainer"), ("Grass Energy", 46, "energy")]))
+    for index in range(30):
+        rows.append(_row("e", f"b{index}", base + [("Tech B", 2, "trainer"), ("Grass Energy", 46, "energy")]))
+    for index in range(20):
+        rows.append(_row("e", f"c{index}", base + [("Tech A", 1, "trainer"), ("Grass Energy", 47, "energy")]))
+    lists = [parse_list(row) for row in rows]
+
+    deck, players = best60.most_played_list(lists)
+
+    assert players == 30
+    assert deck == Counter({**dict((card, count) for card, count, _ in base), "Tech A": 2, "Grass Energy": 46})
+
+
+@pytest.mark.unit
+def test_the_swap_search_starts_from_the_field_scored_observed_list(monkeypatch):
+    rows, records = _synthetic(effect_a=0.8)
+    chosen = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 2, "Grass Energy": 46})
+    seen = {}
+    monkeypatch.setattr(best60, "best_field_list", lambda *args: (chosen, 7, 0.51))
+
+    def capture(deck, *_args, **_kwargs):
+        seen["deck"] = Counter(deck)
+        return Counter(deck), [], []
+
+    monkeypatch.setattr(best60, "improve", capture)
+    monkeypatch.setattr(best60, "held_out_gain", lambda *args: (-0.01, 0.0))
+
+    result = build_best60("X", rows, player_strength(records), records)
+
+    assert seen["deck"] == chosen
+    assert result["shipped_list"]["source"] == "observed"
+    assert result["shipped_list"]["seed_players"] == 7
+    assert result["shipped_list"]["seed_field_score"] == 0.51
+    assert result["status"] == "observed list kept: swaps did not hold up on held-out events"
+
+
+@pytest.mark.unit
+def test_field_list_scores_averages_each_opponent_probability_not_its_logit():
+    from src.ingestion.best60_games import GameModel, ModelSpec
+    from src.ingestion.best60_research.selection import field_scores
+
+    model = GameModel(
+        slots=[("Tech A", 1)],
+        slot_means=np.array([0.5]),
+        opponents=["O1", "O2"],
+        specific=[],
+        theta=np.array([0.0, 0.5, 0.0, 1.0]),
+        covariance=np.eye(4),
+        spec=ModelSpec(prior_sd=1.0),
+    )
+    rows = [(Counter({"Tech A": 1}), 3), (Counter({"Tech A": 0}), 5)]
+    field = {"O1": 0.5, "O2": 0.5}
+
+    scores = best60.field_list_scores(model, rows, field)
+
+    logits = model.logits(Counter({"Tech A": 1}), ["O1", "O2"])
+    assert scores[0] == pytest.approx(float(field_scores(logits, [0.5, 0.5])))
+    assert scores[0] > scores[1]
+    assert logits == pytest.approx([0.5, 1.0])
+
+
+@pytest.mark.unit
 def test_finish_tiers_count_only_events_large_enough_to_earn_them():
     rows = [
         _row("big", "p1", _base(tech_a=1), placing=1, players=16),
@@ -341,14 +430,19 @@ def test_an_unlikely_swap_is_listed_as_leaning_not_applied():
 @pytest.mark.unit
 def test_swaps_that_do_not_hold_up_on_held_out_events_are_proposed_not_applied(monkeypatch):
     rows, records = _synthetic(effect_a=0.8)
+    chosen = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 1, "Grass Energy": 47})
+    monkeypatch.setattr(best60, "best_field_list", lambda *args: (chosen, 7, 0.51))
     monkeypatch.setattr(best60, "held_out_gain", lambda *args: (-0.01, 0.0))
 
     result = build_best60("X", rows, player_strength(records))
 
-    assert result["status"] == "consensus kept: swaps did not hold up on held-out events"
+    assert result["status"] == "observed list kept: swaps did not hold up on held-out events"
     assert result["swaps"] == []
     assert {(swap["add"], swap["add_copy"]) for swap in result["proposed_swaps"]} >= {("Tech A", 2)}
-    assert {row["card"]: row["copies"] for row in result["cards"]} == dict(consensus_sixty([parse_list(row) for row in rows]))
+    shipped = {row["card"]: row["copies"] for row in result["cards"]}
+    assert shipped == {card: copies for card, copies in chosen.items()}
+    assert result["shipped_list"]["source"] == "observed"
+    assert result["shipped_list"]["players"] > 0
 
 
 @pytest.mark.unit
@@ -360,7 +454,7 @@ def test_swaps_need_the_held_out_gain_to_clear_one_standard_error(monkeypatch, g
     result = build_best60("X", rows, player_strength(records), records)
 
     assert bool(result["swaps"]) is applied
-    assert result["status"] == ("complete" if applied else "consensus kept: swaps did not hold up on held-out events")
+    assert result["status"] == ("complete" if applied else "observed list kept: swaps did not hold up on held-out events")
     assert result["model"]["held_out_gain_se"] == se
 
 
@@ -402,8 +496,10 @@ def test_count_levels_keep_only_counts_enough_lists_play():
 
 
 @pytest.mark.unit
-def test_a_card_played_at_zero_or_four_leaves_in_one_move():
+def test_a_card_played_at_zero_or_four_leaves_in_one_move(monkeypatch):
     rows, records = _tome_synthetic()
+    seed = Counter({"Mon": 4, "Ultra Ball": 4, "Tome": 4, "Grass Energy": 48})
+    monkeypatch.setattr(best60, "best_field_list", lambda *args: (seed, 12, 0.5))
     result = build_best60("X", rows, player_strength(records), records)
 
     assert result["status"] == "complete"
@@ -455,6 +551,9 @@ def test_observed_mode_never_leaves_lists_people_played():
 @pytest.mark.unit
 def test_observed_mode_drops_moves_no_played_lists_support(monkeypatch):
     rows, records = _tome_synthetic()
+    lists = [parse_list(row) for row in rows]
+    seed = consensus_sixty(lists)
+    monkeypatch.setattr(best60, "best_field_list", lambda *args: (seed, 0, 0.5))
     monkeypatch.setattr(best60, "BDIF_BEST60_SUPPORT_LISTS", len(rows) + 1)
 
     novel = build_best60("X", rows, player_strength(records), records, "novel")

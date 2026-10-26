@@ -110,6 +110,11 @@ def best60_view(recommendation: Mapping[str, Any]) -> dict[str, Any]:
         "deck_ids": list(recommendation.get("deck_ids", [])),
         "legal_list_count": int(recommendation.get("legal_list_count", 0)),
         "ace_spec_choice": recommendation.get("ace_spec_choice"),
+        "shipped_list": {
+            "source": recommendation.get("shipped_list", {}).get("source", "observed"),
+            "players": int(recommendation.get("shipped_list", {}).get("players", 0)),
+            "seed_players": int(recommendation.get("shipped_list", {}).get("seed_players", 0)),
+        },
         "total_copies": int(recommendation.get("total_copies", sum(int(c["copies"]) for c in cards))),
         "cards": [
             {

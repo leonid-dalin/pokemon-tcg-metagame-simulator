@@ -202,7 +202,7 @@ def test_report_glosses_the_terms_it_abbreviates():
 def test_report_says_why_the_consensus_and_recommended_rows_match():
     document = render_report_html(_report())
 
-    assert "the recommended list is the consensus list" in document
+    assert "the recommended list is the observed list the builder started from" in document
 
 
 @pytest.mark.unit

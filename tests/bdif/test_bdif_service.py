@@ -201,7 +201,7 @@ def test_addons_still_build_best60_when_the_card_model_is_not_identifiable(monke
     recommendations, h1, provenance = service._build_report_addons(_ListStore(), settings(), requested_archetypes=["a", "b"])
 
     assert {deck: row["total_copies"] for deck, row in recommendations.items()} == {"a": 60, "b": 60}
-    assert recommendations["a"]["status"] == "consensus only: too few lists to score cards"
+    assert recommendations["a"]["status"] == "observed list kept: too few lists to score cards"
     assert provenance["model_status"] == "not identifiable"
     assert provenance["model_status_reason"] == "rank"
     assert h1 == {}

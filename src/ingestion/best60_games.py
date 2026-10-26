@@ -173,6 +173,23 @@ class GameModel:
         """Each slot's effect against one opponent deck (its shared effect if the deck has no block)."""
         return self.view({deck: 1.0})
 
+    def logits(self, counts: Mapping[str, int], opponents: Sequence[str]) -> np.ndarray:
+        """This exact list's win logit against each opponent, before any field averaging."""
+        start, end = self._blocks()
+        index = {deck: position for position, deck in enumerate(self.opponents)}
+        specific = {deck: position for position, deck in enumerate(self.specific)}
+        vector = np.array([counts.get(card, 0) >= copy for card, copy in self.slots], dtype=float) - self.slot_means
+        shared = float(vector @ self.theta[start:end])
+        values = []
+        for deck in opponents:
+            eta = float(self.theta[index[deck]]) if deck in index else 0.0
+            eta += shared
+            if deck in specific:
+                offset = end + specific[deck] * len(self.slots)
+                eta += float(vector @ self.theta[offset:offset + len(self.slots)])
+            values.append(eta)
+        return np.array(values, dtype=float)
+
     def design(self, lists: Sequence[Any], rows: Rows) -> sparse.csr_matrix:
         index = {deck: position for position, deck in enumerate(self.opponents)}
         specific = {deck: position for position, deck in enumerate(self.specific)}

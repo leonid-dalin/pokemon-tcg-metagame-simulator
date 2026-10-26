@@ -157,6 +157,8 @@ def _best60(name: str, recommendation: Mapping[str, Any]) -> str:
             ("List mode", view["list_mode"]),
             ("Total copies", view["total_copies"]),
             ("ACE SPEC", view["ace_spec_choice"]),
+            ("Shipped list", view["shipped_list"]["source"]),
+            ("Players who played it", view["shipped_list"]["players"]),
             ("Joint probability %", view["joint_probability"]),
         )),
         _table(view["cards"], _card_columns(view["cards"])),
@@ -174,7 +176,7 @@ def _best60(name: str, recommendation: Mapping[str, Any]) -> str:
     if view["field"]:
         parts.append("<h4>Field</h4>" + _table(view["field"]))
     if not view["swaps"]:
-        parts.append('<p class="hint">No swap cleared the held-out gate, so the recommended list is the consensus list and the two support rows match by construction.</p>')
+        parts.append('<p class="hint">No swap cleared the held-out gate, so the recommended list is the observed list the builder started from.</p>')
     return "".join(part for part in parts if part)
 
 
