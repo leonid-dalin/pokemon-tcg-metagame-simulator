@@ -10,6 +10,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any
 
+from src.core.files import relative_path
 from src.ingestion.best60 import parse_list
 from src.ingestion.mapping import load_archetype_map
 
@@ -244,7 +245,7 @@ def extract_corpus(path: str | Path, *, exclude_after_drop: bool = True,
     fingerprint = _fingerprint(source)
     return {"events": events, "lists": lists, "pairings": pairings, "pairing_views": views,
             "records": records, "audit": {
-                "source_path": str(source.resolve()), "source_sha256": fingerprint["sha256"],
+                "source_path": relative_path(str(source)), "source_sha256": fingerprint["sha256"],
                 "source_files": fingerprint["files"], "snapshot_fingerprint": fingerprint["snapshot_fingerprint"],
                 "queries": {"events": "SELECT id, date, game, format, name, players, details_json FROM tournaments ORDER BY id",
                             "standings": standings_sql, "pairings": pairing_sql.strip()},

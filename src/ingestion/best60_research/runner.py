@@ -15,6 +15,8 @@ from typing import Any
 
 import numpy as np
 
+from src.core.files import relative_path
+
 from .context import build_context
 from .corpus import extract_corpus
 from .protocol import ProtocolMismatch, lock_protocol, require_protocol
@@ -114,6 +116,30 @@ def _code_fingerprint() -> dict[str, Any]:
     except (OSError, subprocess.SubprocessError):
         pass
     return {"revision": revision, "files": files, "sha256": _sha({"revision": revision, "files": files})}
+
+
+def _recorded_path(recorded: str) -> Path:
+    candidate = Path(recorded)
+    if candidate.is_absolute() or candidate.is_file():
+        return candidate
+    anchored = Path(__file__).resolve().parents[3] / candidate
+    return anchored if anchored.is_file() else candidate
+
+
+def _run_relative(run: Path, path: str | Path) -> str:
+    """A path relative to the run directory, so a resume finds it from any working directory."""
+    try:
+        return Path(os.path.relpath(str(path), str(run))).as_posix()
+    except ValueError:
+        return Path(path).name
+
+
+def _recorded_field_path(run: Path, recorded: str) -> Path:
+    candidate = Path(recorded)
+    if candidate.is_absolute():
+        return candidate
+    anchored = run / candidate
+    return anchored if anchored.is_file() else _recorded_path(recorded)
 
 
 def _validate_paths(database: Path, output: Path, config: Path) -> None:
@@ -280,14 +306,14 @@ def run_stage(args: Any) -> dict[str, Any]:
         except FileExistsError as exc:
             raise RunnerError(2, f"run directory already exists: {run_id}") from exc
         manifest = {"schema_version": 1, "run_id": run_id, "created_utc": datetime.now(timezone.utc).isoformat(),
-                    "database": str(database.resolve()), "source_sha256": corpus["audit"]["source_sha256"],
+                    "database": relative_path(str(database)), "source_sha256": corpus["audit"]["source_sha256"],
                     "source_files": corpus["audit"].get("source_files", {}),
                     "snapshot_fingerprint": corpus["audit"].get("snapshot_fingerprint"),
-                    "config": str(config_path.resolve()), "config_sha256": config_hash,
+                    "config": relative_path(str(config_path)), "config_sha256": config_hash,
                     "protocol": protocol, "split_sha256": split_hash, "splits": split_payload,
                     "included_event_ids": included, "code": _code_fingerprint(),
                     "archetype_id": args.archetype_id or "kangaskhan-bouffalant",
-                    "field_file": str(Path(args.field_file).resolve()) if args.field_file else None,
+                    "field_file": _run_relative(run, args.field_file) if args.field_file else None,
                     "field_file_sha256": field_hash, "field_values": field_values,
                     "as_of": as_of}
         _atomic_json(run / "manifest.json", manifest)
@@ -299,7 +325,7 @@ def run_stage(args: Any) -> dict[str, Any]:
                     "test_outcomes_read": False, "test_event_count": len(splits["test"])})
         _atomic_json(run / "splits.json", split_payload)
         _atomic_json(run / "state.json", {"stage": "audited", "completed": ["audit"]})
-        return {"status": "complete", "stage": stage, "run_id": run_id, "run_directory": str(run)}
+        return {"status": "complete", "stage": stage, "run_id": run_id, "run_directory": relative_path(str(run))}
 
     if not args.resume:
         raise RunnerError(2, f"stage {stage} requires --resume RUN_ID")
@@ -316,7 +342,7 @@ def run_stage(args: Any) -> dict[str, Any]:
     if args.field_file and field_hash != manifest.get("field_file_sha256"):
         raise RunnerError(2, "field file differs from the audited run")
     if not args.field_file and manifest.get("field_file"):
-        saved_values, saved_hash = _read_field(manifest["field_file"])
+        saved_values, saved_hash = _read_field(str(_recorded_field_path(run, manifest["field_file"])))
         if saved_hash != manifest.get("field_file_sha256") or saved_values != manifest.get("field_values"):
             raise RunnerError(2, "saved field file has changed since audit")
     state = _read_json(run / "state.json")

@@ -3,6 +3,7 @@ import sqlite3
 import time
 from argparse import Namespace
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -42,9 +43,9 @@ def _database(path, count=60):
     return path
 
 
-def _args(database, output, config, stage, resume=None):
+def _args(database, output, config, stage, resume=None, field_file=None):
     return Namespace(database=str(database), output=str(output), config=str(config), stage=stage,
-                     as_of=None, field_file=None, archetype_id=None, resume=resume, max_seconds=30)
+                     as_of=None, field_file=field_file, archetype_id=None, resume=resume, max_seconds=30)
 
 
 def test_audit_does_not_extract_locked_test_outcomes(tmp_path):
@@ -338,3 +339,51 @@ def test_audit_validate_lock_binds_recomputed_selection_embargo(tmp_path, monkey
     state_path.write_text(json.dumps(state), encoding="utf-8")
     with pytest.raises(RunnerError, match="selection window"):
         run_stage(_args(database, output, config, "lock", audited["run_id"]))
+
+
+def _protocol(tmp_path):
+    config = tmp_path / "protocol.json"
+    config.write_text(json.dumps({"schema_version": 1, "time": {"primary_embargo_days": 7},
+                                  "features": {"slot_minimum_lists": 1},
+                                  "estimators": {"max_iterations": 5}}), encoding="utf-8")
+    return config
+
+
+def test_audit_records_provenance_relative_to_the_working_directory(tmp_path):
+    database = _database(tmp_path / "source.db")
+    config = _protocol(tmp_path)
+    output = tmp_path / "runs"
+
+    result = run_stage(_args(database, output, config, "audit"))
+
+    run = output / result["run_id"]
+    manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
+    audit = json.loads((run / "audit.json").read_text(encoding="utf-8"))
+    for recorded in (manifest["database"], manifest["config"], audit["source"]["source_path"]):
+        assert not Path(recorded).is_absolute()
+    assert not Path(result["run_directory"]).is_absolute()
+    assert Path(result["run_directory"]).name == result["run_id"]
+
+
+def test_resume_reads_the_saved_field_file_from_another_working_directory(tmp_path, monkeypatch):
+    from src.ingestion.best60_research import experiment, runner
+
+    database = _database(tmp_path / "source.db")
+    config = _protocol(tmp_path)
+    field = tmp_path / "field.json"
+    field.write_text(json.dumps({"kangaskhan-bouffalant": 1.0}), encoding="utf-8")
+    output = tmp_path / "runs"
+
+    audited = run_stage(_args(database, output, config, "audit", field_file=str(field)))
+    manifest = json.loads((output / audited["run_id"] / "manifest.json").read_text(encoding="utf-8"))
+    assert not Path(manifest["field_file"]).is_absolute()
+
+    monkeypatch.setattr(runner, "build_context", lambda *_args, **_kwargs: {"cutoff": "unused"})
+    monkeypatch.setattr(experiment, "validate_experiment",
+                        lambda *_args, **_kwargs: {"status": "complete", "benchmarks": {}})
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    validated = run_stage(_args(database, output, config, "validate", audited["run_id"]))
+    assert validated["status"] == "complete"
