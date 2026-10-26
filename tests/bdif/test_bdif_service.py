@@ -390,7 +390,7 @@ def test_prediction_reports_its_provenance(monkeypatch, tmp_path, input_bytes):
     provenance = service.run_prediction(request, settings=settings(use_card_model=False), seed=77, input_path=str(source))["mc_results"]
 
     assert provenance == {
-        "input_path": str(source),
+        "input_path": os.path.basename(source),
         "input_sha256": None if input_bytes is None else hashlib.sha256(input_bytes).hexdigest(),
         "seed": 77,
         "iterations": 1_000,

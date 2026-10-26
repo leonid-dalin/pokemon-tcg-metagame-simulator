@@ -12,6 +12,7 @@ from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 
 from src.core.config import BDIF_CARD_MAX_ABS_LOGIT, BDIF_CARD_PRIOR_SD
+from src.core.files import relative_path
 from src.ingestion.model import (
     CardModelNotIdentifiable,
     FittedCardModel,
@@ -181,14 +182,14 @@ def build_model_addons(
             "database_sha256": database_sha256,
             "model_status": "not identifiable",
             "model_status_reason": str(exc),
-            "model_cache_path": str(cache_path),
+            "model_cache_path": relative_path(str(cache_path)),
         }
     h1_rows = h1_observations(store.pairings_with_decklists("%alakazam%"))
     h1 = fit_h1_misty_variant(h1_rows) if h1_rows else {}
     provenance = {
         "database_sha256": database_sha256,
         "model_status": "complete",
-        "model_cache_path": str(cache_path),
+        "model_cache_path": relative_path(str(cache_path)),
         "model_cache_reused": reused,
         "model_max_iter": MODEL_MAX_ITER,
         "model_decks": len(getattr(model, "decks", ())),

@@ -115,7 +115,8 @@ def refresh(args: argparse.Namespace) -> dict[str, Any]:
     write_json_atomic(build_artifact(store), str(input_path))
     model_path = artifact_dir / "limitless_model_input.json"
     model_cache_path = artifact_dir / "limitless_model_fit.json"
-    model_status = _write_model(store, model_path, model_cache_path, _sha256(database))
+    database_sha256 = _sha256(database)
+    model_status = _write_model(store, model_path, model_cache_path, database_sha256)
     summary = store.summary()
     result = {
         "source": {
@@ -128,7 +129,7 @@ def refresh(args: argparse.Namespace) -> dict[str, Any]:
         "added_online_events": added,
         "skipped_non_online": skipped_non_online,
         "failed_events": failed,
-        "database": {"path": str(database), "sha256": _sha256(database), **summary},
+        "database": {"path": str(database), "sha256": database_sha256, **summary},
         "artefacts": {"input": str(input_path), "model": str(model_path), "model_cache": str(model_cache_path), "model_status": model_status},
         "refreshed_at": datetime.now(timezone.utc).isoformat(),
     }

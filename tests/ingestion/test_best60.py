@@ -208,7 +208,7 @@ def test_swaps_never_add_an_evolution_without_its_basic_or_drop_the_last_pokemon
 
     assert improved["Mon"] == 4
     assert [(swap["remove"], swap["add"]) for swap in applied] == [("Ultra Ball", "Mon ex")]
-    improved, applied, _ = improve(Counter({"Ultra Ball": 4, "Grass Energy": 56}), model, groups, {"Mon ex": {"Mon"}})
+    improved, applied, _ = improve(Counter({"Ultra Ball": 4, "Grass Energy": 56}), model, groups, {"Mon ex": {"Mon": 0}})
     assert all(swap["add"] != "Mon ex" for swap in applied)
 
     single = best60.SlotModel(slots=[("Mon", 1), ("Ultra Ball", 4)], beta=np.array([-1.0, 1.0]), covariance=np.eye(2) * 1e-4, prior_sd=0.1)

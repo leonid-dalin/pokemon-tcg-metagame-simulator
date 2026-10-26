@@ -80,7 +80,7 @@
   {
     "name": "evolution added without its basic",
     "file": "src/ingestion/best60.py",
-    "find": "            if copy == 1 and not needs.get(card, set()) <= present:\n                continue\n",
+    "find": "            if copy == 1 and not set(needs.get(card, {})) <= present:\n                continue\n",
     "replace": ""
   },
   {

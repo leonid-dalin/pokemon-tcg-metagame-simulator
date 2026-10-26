@@ -182,8 +182,8 @@ def test_best60_view_shows_the_field_model_settings_and_matchups():
         "card_matchups": {"Cyrano #3": {"Dragapult": [0.031, 0.0, 0.06], "Dragapult Dusknoir": [0.028, -0.01, 0.07]}},
     })
     assert view["model_settings"] == {
-        "Card-effect prior SD": 0.02, "Opponent-specific SD": 0.05, "Recency half-life (days)": 42.0,
-        "As of": "latest event", "Field": "specified",
+        "Card-effect prior standard deviation": 0.02, "Opponent-specific standard deviation": 0.05,
+        "Recency half-life (days)": 42.0, "As of": "latest event", "Field": "specified",
     }
     assert view["field"] == [{"Deck": "Dragapult", "Share %": 50.0}, {"Deck": "Dragapult Dusknoir", "Share %": 25.0}]
     assert view["matchups"] == [{"Card": "Cyrano #3", "vs Dragapult": 0.031, "vs Dragapult Dusknoir": 0.028}]

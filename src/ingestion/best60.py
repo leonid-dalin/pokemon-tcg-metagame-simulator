@@ -330,18 +330,47 @@ def card_matchups(model: SlotModel, slots: Sequence[Slot], field: Mapping[str, f
     return found
 
 
-def prerequisites(lists: Sequence[ArchetypeList]) -> dict[str, set[str]]:
-    """Cards that appear alongside a card in nearly every list that plays it (evolution lines, engines)."""
-    plays: dict[str, set[int]] = {}
-    for index, entry in enumerate(lists):
-        for card in entry.counts:
-            plays.setdefault(card, set()).add(index)
-    needs = {}
-    for card, mine in plays.items():
-        needs[card] = {
-            other for other, theirs in plays.items()
-            if other != card and len(mine & theirs) / len(mine) >= BDIF_BEST60_PREREQUISITE_SHARE
-        }
+def prerequisites(lists: Sequence[ArchetypeList]) -> dict[str, dict[str, int]]:
+    """Cards a card's lists nearly always play alongside it, and the copies each copy of it needs.
+
+    A companion is listed when at least BDIF_BEST60_PREREQUISITE_SHARE of the card's lists play it.
+    Its value is one when those lists hold at least as many copies of the companion as copies of the
+    card, so an ability that consumes a companion per copy keeps its fuel; otherwise the value is
+    zero and the companion only has to be present. A pair whose counts run both ways, as two
+    four-ofs do, stays at zero because it states no dependency. Counts are only read from a card
+    with at least BDIF_BEST60_MIN_SLOT_LISTS lists, so a rare card cannot invent one.
+    """
+    share = BDIF_BEST60_PREREQUISITE_SHARE
+    cards = sorted({card for entry in lists for card in entry.counts})
+    if not cards:
+        return {}
+    matrix = np.array([[entry.counts.get(card, 0) for entry in lists] for card in cards], dtype=float)
+    ratios = np.zeros((len(cards), len(cards)), dtype=int)
+    for row in range(len(cards)):
+        mine = matrix[row] >= 1
+        if int(mine.sum()) < BDIF_BEST60_MIN_SLOT_LISTS:
+            continue
+        card_counts = matrix[row][mine]
+        for column in range(len(cards)):
+            if column == row:
+                continue
+            companion_counts = matrix[column][mine]
+            if float((companion_counts >= 1).mean()) < share:
+                continue
+            per_copy = 1 if float((companion_counts >= card_counts).mean()) >= share else 0
+            ratios[row, column] = per_copy
+    needs: dict[str, dict[str, int]] = {}
+    for row, card in enumerate(cards):
+        mine = matrix[row] >= 1
+        if not int(mine.sum()):
+            continue
+        required: dict[str, int] = {}
+        for column in range(len(cards)):
+            if column == row or float((matrix[column][mine] >= 1).mean()) < share:
+                continue
+            required[cards[column]] = int(ratios[row, column]) if ratios[row, column] > ratios[column, row] else 0
+        if required:
+            needs[card] = required
     return needs
 
 
@@ -422,7 +451,17 @@ def _candidate_swaps(
 
     def keeps_last(card: str, state: Mapping[str, int]) -> bool:
         present = {other for other, copies in state.items() if copies > 0}
-        return groups.get(card) == "pokemon" or any(card in needs.get(other, set()) for other in present if other != card)
+        return groups.get(card) == "pokemon" or any(card in needs.get(other, {}) for other in present if other != card)
+
+    def keeps_companion_counts(state: Mapping[str, int]) -> bool:
+        """No card may sit below the copies its companions need in the list a move leads to."""
+        for card, copies in state.items():
+            if copies <= 0:
+                continue
+            for companion, per_copy in needs.get(card, {}).items():
+                if per_copy and state.get(companion, 0) < per_copy * copies:
+                    return False
+        return True
 
     def removals(state: Mapping[str, int]) -> list[Slot]:
         found = []
@@ -445,7 +484,7 @@ def _candidate_swaps(
                 continue
             if card in ACE_SPEC_CARDS and any(other in ACE_SPEC_CARDS for other in present if other != card):
                 continue
-            if copy == 1 and not needs.get(card, set()) <= present:
+            if copy == 1 and not set(needs.get(card, {})) <= present:
                 continue
             found.append((card, copy))
         return found
@@ -453,6 +492,13 @@ def _candidate_swaps(
     moves = {}
 
     def keep(move: dict[str, Any]) -> None:
+        state = Counter(deck)
+        for card, _ in move["removed"]:
+            state[card] -= 1
+        for card, _ in move["added"]:
+            state[card] += 1
+        if not keeps_companion_counts(state):
+            return
         moves[(tuple(sorted(move["removed"])), tuple(sorted(move["added"])))] = move
 
     for removed in removals(deck):
@@ -486,7 +532,7 @@ def _candidate_swaps(
             block = [(card, copy) for copy in range(current + 1, target + 1)]
             present = {other for other, copies in deck.items() if copies > 0}
             legal = (card in BASIC_ENERGY_NAMES or target <= 4) and not (
-                card in ACE_SPEC_CARDS) and (current > 0 or needs.get(card, set()) <= present)
+                card in ACE_SPEC_CARDS) and (current > 0 or set(needs.get(card, {})) <= present)
             if legal and all(slot in index for slot in block):
                 state = Counter(deck)
                 state[card] = target
