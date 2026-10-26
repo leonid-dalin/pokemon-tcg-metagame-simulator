@@ -238,14 +238,22 @@ def player_strength(
         by_event.setdefault(str(event), []).append((str(player), wins, losses))
     totals: dict[str, list[int]] = {}
     strength: dict[tuple[str, str], float] = {}
-    for event in sorted(order, key=lambda name: (order[name], name)):
-        for player, _, _ in by_event.get(event, []):
-            wins_before, losses_before = totals.get(player, [0, 0])
-            strength[(event, player)] = math.log((wins_before + prior) / (losses_before + prior))
-        for player, wins, losses in by_event.get(event, []):
-            total = totals.setdefault(player, [0, 0])
-            total[0] += wins
-            total[1] += losses
+    groups: dict[datetime, list[str]] = {}
+    for event, when in order.items():
+        groups.setdefault(when, []).append(event)
+    for when in sorted(groups):
+        events = sorted(groups[when])
+        # Every event at one timestamp is scored from the totals before that timestamp, so
+        # simultaneous events never inform each other.
+        for event in events:
+            for player, _, _ in by_event.get(event, []):
+                wins_before, losses_before = totals.get(player, [0, 0])
+                strength[(event, player)] = math.log((wins_before + prior) / (losses_before + prior))
+        for event in events:
+            for player, wins, losses in by_event.get(event, []):
+                total = totals.setdefault(player, [0, 0])
+                total[0] += wins
+                total[1] += losses
     # An event without a usable date cannot be ordered, so it is scored from every dated event.
     for event in sorted(set(by_event) - set(order)):
         for player, _, _ in by_event[event]:
@@ -917,7 +925,9 @@ def card_values(deck: Mapping[str, int], model: SlotModel | None, field: Mapping
     """Each card's value: the field-weighted win probability lost when one copy is removed.
 
     The marginal copy is the card's highest count, so that slot must be modelled; other cards are
-    reported as not estimable. The interval is the delta-method interval over the fitted covariance.
+    reported as not estimable. The interval is the delta method over the fitted covariance, with the
+    gradient of both probabilities taken through the full design row: the opponent intercept, the
+    centred slot vector and that opponent's specific block.
     """
     not_estimable = [
         {"card": card, "copies": copies, "value": None, "interval": None, "status": "not estimable"}
@@ -938,7 +948,23 @@ def card_values(deck: Mapping[str, int], model: SlotModel | None, field: Mapping
     base_logits = game.logits(deck, opponents)
     base = float(field_scores(base_logits, shares))
     base_probability = _logistic(base_logits)
+    size = len(model.slots)
     start, end = game._blocks()
+    opponent_index = {name: position for position, name in enumerate(game.opponents)}
+    specific_index = {name: position for position, name in enumerate(game.specific)}
+    means = game.slot_means
+
+    def design_row(counts: Mapping[str, int], opponent: str) -> np.ndarray:
+        row = np.zeros(len(game.theta))
+        vector = np.array([counts.get(card, 0) >= copy for card, copy in model.slots], dtype=float) - means
+        if opponent in opponent_index:
+            row[opponent_index[opponent]] = 1.0
+        row[start:end] = vector
+        if opponent in specific_index:
+            offset = end + specific_index[opponent] * size
+            row[offset:offset + size] = vector
+        return row
+
     rows = []
     for card, copies in sorted(deck.items()):
         slot = (card, copies)
@@ -954,16 +980,11 @@ def card_values(deck: Mapping[str, int], model: SlotModel | None, field: Mapping
         reduced_probability = _logistic(reduced_logits)
         gradient = np.zeros(len(game.theta))
         for position, opponent in enumerate(opponents):
-            factor = float(shares[position] * (
-                base_probability[position] * (1.0 - base_probability[position])
-                - reduced_probability[position] * (1.0 - reduced_probability[position])
-            ))
-            if not factor:
-                continue
-            gradient[index[slot]] += factor
-            if opponent in game.specific:
-                offset = end + game.specific.index(opponent) * len(game.slots)
-                gradient[offset + index[slot]] += factor
+            full_share = base_probability[position] * (1.0 - base_probability[position])
+            reduced_share = reduced_probability[position] * (1.0 - reduced_probability[position])
+            gradient += shares[position] * (
+                full_share * design_row(deck, opponent) - reduced_share * design_row(reduced, opponent)
+            )
         variance = float(gradient @ game.covariance @ gradient)
         half = float(norm.ppf(0.975)) * math.sqrt(max(variance, 0.0))
         rows.append({"card": card, "copies": copies, "value": value, "interval": [value - half, value + half], "status": "estimated"})

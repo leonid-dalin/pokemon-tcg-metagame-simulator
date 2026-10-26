@@ -205,6 +205,155 @@ def test_the_report_says_decided_match_not_game():
 
 
 @pytest.mark.unit
+def test_player_strength_scores_simultaneous_events_from_the_totals_before_them():
+    records = {("a", "p"): (9, 0), ("b", "p"): (0, 9)}
+    dates = {"a": "2026-07-01T00:00:00Z", "b": "2026-07-01T00:00:00Z"}
+
+    strength = player_strength(records, dates)
+
+    assert strength[("a", "p")] == pytest.approx(0.0)
+    assert strength[("b", "p")] == pytest.approx(0.0)
+
+
+@pytest.mark.unit
+def test_fold_strength_counts_only_earlier_training_events():
+    records = {("early", "p"): (3, 3), ("late", "p"): (9, 0)}
+    dates = {"early": "2026-07-01T00:00:00Z", "late": "2026-10-01T00:00:00Z"}
+
+    strength = best60._fold_strength(records, {"early", "late"}, {"validation"}, dates)
+
+    assert strength[("early", "p")] == pytest.approx(0.0)
+    assert strength[("late", "p")] == pytest.approx(0.0)
+
+
+@pytest.mark.unit
+def test_cross_validation_trains_only_on_earlier_folds(monkeypatch):
+    rows = []
+    for index in range(10):
+        for player in range(3):
+            rows.append(_row(f"e{index}", f"p{index}-{player}", _base(), date=f"2026-09-{index + 1:02d}T00:00:00Z"))
+    lists = [parse_list(row) for row in rows]
+    folds = event_folds(lists)
+    captured = []
+    real = best60.fit_game
+
+    def capture(train, strength, spec, *args, **kwargs):
+        captured.append(frozenset(entry.event for entry in train))
+        return real(train, strength, spec, *args, **kwargs)
+
+    monkeypatch.setattr(best60, "fit_game", capture)
+    best60._cross_validated(lists, {}, None, best60.ModelSpec(prior_sd=0.5), False)
+
+    expected = {
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold < block)
+        for block in range(1, best60.FOLDS)
+    }
+    assert set(captured) == expected
+
+
+@pytest.mark.unit
+def test_held_out_gain_trains_only_on_earlier_folds(monkeypatch):
+    rows = []
+    for index in range(10):
+        for player in range(3):
+            rows.append(_row(f"e{index}", f"p{index}-{player}", _base(), date=f"2026-09-{index + 1:02d}T00:00:00Z"))
+    lists = [parse_list(row) for row in rows]
+    folds = event_folds(lists)
+    captured = []
+    trivial = best60.SlotModel(slots=[], beta=np.array([]), covariance=np.zeros((0, 0)), prior_sd=0.5)
+
+    def capture(train, *_args, **_kwargs):
+        captured.append(frozenset(entry.event for entry in train))
+        return trivial
+
+    monkeypatch.setattr(best60, "fit_slot_model", capture)
+    best60.held_out_gain(lists, {}, 0.5, consensus_sixty(lists), {}, list_mode="novel")
+
+    expected = [
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold < block)
+        for block in range(1, best60.FOLDS)
+    ]
+    assert captured[0::2] == expected
+
+
+@pytest.mark.unit
+def test_build_model_addons_reads_the_store_event_dates(monkeypatch, tmp_path):
+    from src.ingestion import model_cache
+    from src.ingestion.model import CardModelNotIdentifiable
+
+    class Store:
+        def __init__(self):
+            self.read_dates = False
+
+        def player_records(self):
+            return {("e1", "p"): (3, 2)}
+
+        def event_dates(self):
+            self.read_dates = True
+            return {"e1": "2026-09-01T00:00:00Z"}
+
+        def deck_weights(self):
+            return {"a": 1.0}
+
+        def archetype_lists(self, deck):
+            return []
+
+        def pairings_with_decklists(self, pattern):
+            return []
+
+    store = Store()
+    monkeypatch.setattr(model_cache, "load_or_fit_card_model",
+                        lambda *args: (_ for _ in ()).throw(CardModelNotIdentifiable("rank")))
+
+    model_cache.build_model_addons([], {"a": 1.0}, ["a"], "sha", tmp_path / "cache.json", store)
+
+    assert store.read_dates is True
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("slot_mean", "specific"),
+    [(0.0, []), (0.5, []), (0.0, ["O1"])],
+)
+def test_card_value_interval_matches_a_finite_difference_delta_method(slot_mean, specific):
+    from dataclasses import replace
+
+    from scipy.stats import norm as scipy_norm
+
+    from src.ingestion.best60_games import GameModel, ModelSpec
+
+    slots = [("Tech A", 1)]
+    theta = np.array([0.0, 0.0, 0.5] + ([0.5] if specific else []))
+    covariance = np.eye(len(theta)) * 0.01
+    game = GameModel(
+        slots=slots,
+        slot_means=np.array([slot_mean]),
+        opponents=["O1"],
+        specific=list(specific),
+        theta=theta,
+        covariance=covariance,
+        spec=ModelSpec(prior_sd=0.1),
+    )
+    model = best60.SlotModel(slots=slots, beta=np.array([0.5]), covariance=np.eye(1) * 0.01, prior_sd=0.1, game=game)
+    deck = {"Tech A": 1, "Grass Energy": 59}
+
+    def value_at(perturbed):
+        perturbed_model = replace(model, game=replace(game, theta=perturbed))
+        return next(row["value"] for row in best60.card_values(deck, perturbed_model, {"O1": 1.0}) if row["card"] == "Tech A")
+
+    row = next(item for item in best60.card_values(deck, model, {"O1": 1.0}) if item["card"] == "Tech A")
+    half_width = (row["interval"][1] - row["interval"][0]) / 2
+    step = 1e-6
+    gradient = np.array([
+        (value_at(theta + step * unit) - value_at(theta - step * unit)) / (2 * step)
+        for unit in np.eye(len(theta))
+    ])
+    expected = float(scipy_norm.ppf(0.975)) * np.sqrt(float(gradient @ covariance @ gradient))
+
+    assert half_width == pytest.approx(expected, rel=0.01)
+
+
+@pytest.mark.unit
 def test_held_out_gain_starts_each_fold_from_its_training_consensus(monkeypatch):
     rows = []
     for event, tech in [("e0", "Tech Z"), ("e1", "Tech A"), ("e2", "Tech A"), ("e3", "Tech A"), ("e4", "Tech A")]:
@@ -262,8 +411,9 @@ def test_a_weaker_planted_effect_is_still_applied():
 
 
 @pytest.mark.unit
-def test_without_any_card_effect_the_most_played_observed_list_is_kept():
+def test_without_any_card_effect_the_most_played_observed_list_is_kept(monkeypatch):
     rows, records = _synthetic()
+    monkeypatch.setattr(best60, "tuned_spec", lambda *args: None)
     result = build_best60("X", rows, player_strength(records))
 
     played, players = best60.most_played_list([parse_list(row) for row in rows])
