@@ -168,6 +168,8 @@ def _best60(name: str, recommendation: Mapping[str, Any]) -> str:
         "<h4>Win rate</h4>" + _details(list(view["win_rates"].items())),
         "<h4>Model</h4>" + _details(list(view["model_settings"].items())),
         _matchups(recommendation),
+        ("<h4>Card values</h4><p class=\"hint\">Change in field-weighted win probability when one copy is removed.</p>"
+         + _table(view["card_values"])) if view["card_values"] else "",
         _table(view["support"]),
         _table(view["trends"]),
     ]

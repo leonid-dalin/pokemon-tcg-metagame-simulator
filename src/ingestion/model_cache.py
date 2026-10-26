@@ -165,7 +165,7 @@ def build_model_addons(
     as_of: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     records = store.player_records(before=as_of) if as_of else store.player_records()
-    strength = player_strength(records)
+    strength = player_strength(records, store.event_dates())
 
     def games(deck: str):
         return store.archetype_games(deck) if hasattr(store, "archetype_games") else None

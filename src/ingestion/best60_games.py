@@ -107,7 +107,9 @@ def build_rows(lists: Sequence[Any], strength: Mapping[tuple[str, str], float], 
                 games.append(1)
                 gap.append(own - strength.get((game.event, game.opponent), 0.0))
                 weight.append(recency_weight(game.date or entry.date, reference, spec.half_life))
-        elif entry.wins + entry.losses > 0:
+        elif not spec.games and entry.wins + entry.losses > 0:
+            # Without pairings for the archetype a list enters as its event record; with them, a list
+            # nobody paired is left out of the loss and the gate entirely.
             index.append(position)
             opponent.append(UNKNOWN)
             wins.append(entry.wins)

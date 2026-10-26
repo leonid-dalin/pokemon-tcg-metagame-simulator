@@ -189,6 +189,8 @@ class _ListStore:
         return [_stored_list(f"e{index}", f"p{index}", deck, tech=index % 2) for index in range(6)]
     def player_records(self):
         return {(f"e{index}", f"p{index}"): (3, 2) for index in range(6)}
+    def event_dates(self):
+        return {f"e{index}": f"2026-09-{index + 1:02d}T00:00:00Z" for index in range(6)}
     def pairings_with_decklists(self, pattern): return []
 
 
@@ -245,6 +247,9 @@ def test_addons_include_requested_low_share_archetypes(monkeypatch, tmp_path):
 
         def player_records(self):
             return {}
+
+        def event_dates(self):
+            return {f"e{index}": f"2026-09-{index + 1:02d}T00:00:00Z" for index in range(6)}
 
         def pairings_with_decklists(self, pattern):
             return []

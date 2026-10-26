@@ -296,7 +296,7 @@ def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
             settings = view["model_settings"]
             if settings["Card-effect prior standard deviation"] is not None:
                 st.caption(
-                    f"Scored per game against {settings['Field'].lower()} field; opponent-specific standard deviation {settings['Opponent-specific standard deviation']}, "
+                    f"Scored per decided match against {settings['Field'].lower()} field; opponent-specific standard deviation {settings['Opponent-specific standard deviation']}, "
                     f"recency half-life {settings['Recency half-life (days)'] or 'none'} days, as of {settings['As of']}."
                 )
             if view["field"]:

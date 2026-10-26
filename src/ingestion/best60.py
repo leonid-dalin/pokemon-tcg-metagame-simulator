@@ -13,7 +13,7 @@ import math
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 import numpy as np
@@ -205,19 +205,52 @@ def best_field_list(lists: Sequence[ArchetypeList], model: GameModel, field: Map
     return rows[position][0], rows[position][1], scores[position]
 
 
-def player_strength(records: Mapping[tuple[str, str], tuple[int, int]]) -> dict[tuple[str, str], float]:
-    """Log-odds of each player's record at their other events, shrunk toward even."""
-    totals: dict[str, list[int]] = {}
-    for (_, player), (wins, losses) in records.items():
-        total = totals.setdefault(player, [0, 0])
-        total[0] += wins
-        total[1] += losses
+def player_strength(
+    records: Mapping[tuple[str, str], tuple[int, int]],
+    dates: Mapping[str, Any] | None = None,
+) -> dict[tuple[str, str], float]:
+    """Log-odds of each player's record at their earlier events, shrunk toward even.
+
+    With `dates`, only events strictly before the scored event count, so a result never informs its
+    own event or a later one. Without them, every other event counts (leave-one-out).
+    """
     prior = BDIF_BEST60_STRENGTH_PRIOR_GAMES
-    strength = {}
+    if dates is None:
+        totals: dict[str, list[int]] = {}
+        for (_, player), (wins, losses) in records.items():
+            total = totals.setdefault(player, [0, 0])
+            total[0] += wins
+            total[1] += losses
+        strength = {}
+        for (event, player), (wins, losses) in records.items():
+            other_wins = totals[player][0] - wins
+            other_losses = totals[player][1] - losses
+            strength[(event, player)] = math.log((other_wins + prior) / (other_losses + prior))
+        return strength
+
+    order: dict[str, datetime] = {}
+    for event, when in dates.items():
+        parsed = when if isinstance(when, datetime) else parse_date(str(when))
+        if parsed is not None:
+            order[str(event)] = parsed
+    by_event: dict[str, list[tuple[str, int, int]]] = {}
     for (event, player), (wins, losses) in records.items():
-        other_wins = totals[player][0] - wins
-        other_losses = totals[player][1] - losses
-        strength[(event, player)] = math.log((other_wins + prior) / (other_losses + prior))
+        by_event.setdefault(str(event), []).append((str(player), wins, losses))
+    totals: dict[str, list[int]] = {}
+    strength: dict[tuple[str, str], float] = {}
+    for event in sorted(order, key=lambda name: (order[name], name)):
+        for player, _, _ in by_event.get(event, []):
+            wins_before, losses_before = totals.get(player, [0, 0])
+            strength[(event, player)] = math.log((wins_before + prior) / (losses_before + prior))
+        for player, wins, losses in by_event.get(event, []):
+            total = totals.setdefault(player, [0, 0])
+            total[0] += wins
+            total[1] += losses
+    # An event without a usable date cannot be ordered, so it is scored from every dated event.
+    for event in sorted(set(by_event) - set(order)):
+        for player, _, _ in by_event[event]:
+            total = totals.get(player, [0, 0])
+            strength[(event, player)] = math.log((total[0] + prior) / (total[1] + prior))
     return strength
 
 
@@ -232,10 +265,17 @@ def _slot_matrix(lists: Sequence[ArchetypeList], slots: Sequence[Slot]) -> np.nd
 
 
 def event_folds(lists: Sequence[ArchetypeList]) -> np.ndarray:
-    """Assign whole events to folds, so a held-out fold never shares an event with its training data."""
-    events = sorted({entry.event for entry in lists})
-    order = np.random.default_rng(SEED).permutation(len(events)) % FOLDS
-    fold_of = dict(zip(events, order))
+    """Assign whole events to contiguous date blocks, so a validation block always follows its training data."""
+    dates: dict[str, datetime] = {}
+    for entry in lists:
+        when = parse_date(entry.date)
+        if when is None:
+            continue
+        dates[entry.event] = min(dates.get(entry.event, when), when)
+    floor = datetime.min.replace(tzinfo=timezone.utc)
+    events = sorted({entry.event for entry in lists}, key=lambda event: (dates.get(event, floor), event))
+    blocks = np.array_split(np.arange(len(events)), FOLDS)
+    fold_of = {event: fold for fold, block in enumerate(blocks) for event in (events[index] for index in block)}
     return np.array([fold_of[entry.event] for entry in lists])
 
 
@@ -243,9 +283,11 @@ def _fold_strength(
     records: Mapping[tuple[str, str], tuple[int, int]],
     training_events: set[str],
     validation_events: set[str],
+    dates: Mapping[str, Any] | None = None,
 ) -> dict[tuple[str, str], float]:
     training_records = {key: value for key, value in records.items() if key[0] in training_events}
-    strength = player_strength(training_records)
+    subset = {event: dates[event] for event in training_events if dates and event in dates}
+    strength = player_strength(training_records, subset or None)
     totals: dict[str, list[int]] = {}
     for (_, player), (wins, losses) in training_records.items():
         total = totals.setdefault(player, [0, 0])
@@ -290,18 +332,19 @@ def _cross_validated(
     spec: ModelSpec,
     with_slots: bool,
 ) -> float:
-    """Held-out log loss per game over five event folds."""
+    """Held-out log loss per decided match over five forward event folds."""
     folds = event_folds(lists)
+    dates = {entry.event: entry.date for entry in lists}
 
     def score(fold: int) -> tuple[float, float]:
-        train = [entry for entry, f in zip(lists, folds) if f != fold]
+        train = [entry for entry, f in zip(lists, folds) if f < fold]
         test = [entry for entry, f in zip(lists, folds) if f == fold]
-        fold_strength = _fold_strength(records, {entry.event for entry in train}, {entry.event for entry in test}) if records is not None else strength
+        fold_strength = _fold_strength(records, {entry.event for entry in train}, {entry.event for entry in test}, dates) if records is not None else strength
         model = fit_game(train, fold_strength, spec, None if with_slots else [], with_covariance=False)
         return model.loss(test, fold_strength)
 
     with ThreadPoolExecutor(BDIF_BEST60_WORKERS) as pool:
-        scored = list(pool.map(score, range(FOLDS)))
+        scored = list(pool.map(score, range(1, FOLDS)))
     return sum(loss for loss, _ in scored) / max(1.0, sum(count for _, count in scored))
 
 
@@ -769,22 +812,23 @@ def held_out_gain(
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
     list_mode: str = "novel",
 ) -> tuple[float, float]:
-    """Cross-fitted value of the swap procedure, in log-odds: mean and standard error over five folds.
+    """Cross-fitted value of the swap procedure, in log-odds: mean and standard error over four forward folds.
 
-    Swaps are chosen by a model fitted on four folds, then valued by slot coefficients fitted only on
-    the fifth. The held-out lists never influence which swaps are chosen, and the training lists never
+    Swaps are chosen by a model fitted on earlier events, then valued by slot coefficients fitted only on
+    the next block. The held-out lists never influence which swaps are chosen, and the training lists never
     influence their value, so a swap that only looks good in sample is worth about zero here.
     """
     folds = event_folds(lists)
     if len(set(entry.event for entry in lists)) < FOLDS:
         return 0.0, 0.0
     gains = []
-    for fold in range(FOLDS):
-        train = [entry for entry, f in zip(lists, folds) if f != fold]
+    dates = {entry.event: entry.date for entry in lists}
+    for fold in range(1, FOLDS):
+        train = [entry for entry, f in zip(lists, folds) if f < fold]
         test = [entry for entry, f in zip(lists, folds) if f == fold]
         train_events = {entry.event for entry in train}
         test_events = {entry.event for entry in test}
-        fold_strength = _fold_strength(records, train_events, test_events) if records is not None else strength
+        fold_strength = _fold_strength(records, train_events, test_events, dates) if records is not None else strength
         fold_consensus = consensus_sixty(train)
         fold_groups = {card: group for entry in train for card, group in entry.groups.items()}
         _, applied, _ = improve(
@@ -863,6 +907,67 @@ def _expected_rate(lists: Sequence[ArchetypeList], gain: float) -> float:
     rate = min(max(wins / games, 1e-6), 1 - 1e-6) if games else 0.5
     logit = math.log(rate / (1.0 - rate)) + gain
     return 1.0 / (1.0 + math.exp(-logit))
+
+
+def _logistic(values: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-values))
+
+
+def card_values(deck: Mapping[str, int], model: SlotModel | None, field: Mapping[str, float]) -> list[dict[str, Any]]:
+    """Each card's value: the field-weighted win probability lost when one copy is removed.
+
+    The marginal copy is the card's highest count, so that slot must be modelled; other cards are
+    reported as not estimable. The interval is the delta-method interval over the fitted covariance.
+    """
+    not_estimable = [
+        {"card": card, "copies": copies, "value": None, "interval": None, "status": "not estimable"}
+        for card, copies in sorted(deck.items())
+    ]
+    game = None if model is None else model.game
+    if game is None:
+        return not_estimable
+    weights = normalise_field(field)
+    if not weights:
+        known = [name for name in game.opponents if name != UNKNOWN]
+        weights = {name: 1.0 / len(known) for name in known} if known else {}
+    if not weights:
+        return not_estimable
+    index = {slot: position for position, slot in enumerate(model.slots)}
+    opponents = list(weights)
+    shares = np.array([weights[name] for name in opponents], dtype=float)
+    base_logits = game.logits(deck, opponents)
+    base = float(field_scores(base_logits, shares))
+    base_probability = _logistic(base_logits)
+    start, end = game._blocks()
+    rows = []
+    for card, copies in sorted(deck.items()):
+        slot = (card, copies)
+        if slot not in index:
+            rows.append({"card": card, "copies": copies, "value": None, "interval": None, "status": "not estimable"})
+            continue
+        reduced = Counter(deck)
+        reduced[card] -= 1
+        if reduced[card] <= 0:
+            del reduced[card]
+        reduced_logits = game.logits(reduced, opponents)
+        value = base - float(field_scores(reduced_logits, shares))
+        reduced_probability = _logistic(reduced_logits)
+        gradient = np.zeros(len(game.theta))
+        for position, opponent in enumerate(opponents):
+            factor = float(shares[position] * (
+                base_probability[position] * (1.0 - base_probability[position])
+                - reduced_probability[position] * (1.0 - reduced_probability[position])
+            ))
+            if not factor:
+                continue
+            gradient[index[slot]] += factor
+            if opponent in game.specific:
+                offset = end + game.specific.index(opponent) * len(game.slots)
+                gradient[offset + index[slot]] += factor
+        variance = float(gradient @ game.covariance @ gradient)
+        half = float(norm.ppf(0.975)) * math.sqrt(max(variance, 0.0))
+        rows.append({"card": card, "copies": copies, "value": value, "interval": [value - half, value + half], "status": "estimated"})
+    return rows
 
 
 def build_best60(
@@ -994,6 +1099,7 @@ def build_best60(
         "stability": stable,
         "field": dict(sorted(used_field.items(), key=lambda item: (-item[1], item[0]))[:12]),
         "card_matchups": matchups,
+        "card_values": card_values(deck, model, used_field),
         "match_win_rate": {
             "archetype_average": _expected_rate(lists, 0.0),
             "with_swaps_in_sample": _expected_rate(lists, gain),

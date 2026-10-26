@@ -113,11 +113,103 @@ def test_held_out_folds_never_split_an_event():
 
 
 @pytest.mark.unit
+def test_player_strength_counts_only_earlier_events():
+    records = {("july", "p"): (3, 3), ("october", "p"): (9, 0)}
+    dates = {"july": "2026-07-01T00:00:00Z", "october": "2026-10-01T00:00:00Z"}
+
+    earlier = player_strength(records, dates)
+
+    assert earlier[("july", "p")] == pytest.approx(0.0)
+    assert earlier[("october", "p")] == pytest.approx(0.0)
+    assert player_strength(records)[("july", "p")] == pytest.approx(np.log(19 / 10))
+
+
+@pytest.mark.unit
+def test_forward_folds_put_every_validation_event_after_its_training_events():
+    rows = []
+    for index in range(10):
+        for player in range(3):
+            rows.append(_row(f"e{index}", f"p{index}-{player}", _base(), date=f"2026-09-{index + 1:02d}T00:00:00Z"))
+    lists = [parse_list(row) for row in rows]
+    folds = event_folds(lists)
+    dates = {entry.event: entry.date for entry in lists}
+    by_event = {entry.event: int(fold) for entry, fold in zip(lists, folds)}
+
+    assert len(set(by_event.values())) == best60.FOLDS
+    for event, fold in by_event.items():
+        earlier = [other for other, other_fold in by_event.items() if other_fold < fold]
+        later = [other for other, other_fold in by_event.items() if other_fold > fold]
+        if fold:
+            assert earlier and max(dates[name] for name in earlier) < dates[event]
+        if fold < best60.FOLDS - 1:
+            assert later and min(dates[name] for name in later) > dates[event]
+
+
+@pytest.mark.unit
+def test_lists_without_pairings_stay_out_of_the_loss_when_the_archetype_has_pairings():
+    from src.ingestion.best60_games import Game, ModelSpec, build_rows
+
+    lists = [parse_list(_row("e1", "p1", _base())), parse_list(_row("e1", "p2", _base()))]
+    games = (Game("e1", "p1", "opponent", "Opp", 1, "2026-09-01T00:00:00Z"),)
+
+    with_games = build_rows(lists, {}, ModelSpec(prior_sd=1.0, games=games))
+    without_games = build_rows(lists, {}, ModelSpec(prior_sd=1.0))
+
+    assert list(with_games.list_index) == [0]
+    assert list(without_games.list_index) == [0, 1]
+
+
+@pytest.mark.unit
+def test_a_modelled_card_reports_the_probability_lost_when_a_copy_is_removed():
+    from src.ingestion.best60_games import GameModel, ModelSpec
+
+    slots = [("Tech A", 1), ("Tech B", 1)]
+    model = best60.SlotModel(
+        slots=slots,
+        beta=np.array([0.5, 0.0]),
+        covariance=np.eye(2) * 0.01,
+        prior_sd=0.1,
+        game=GameModel(
+            slots=slots,
+            slot_means=np.array([0.0, 0.0]),
+            opponents=["O1"],
+            specific=[],
+            theta=np.array([0.0, 0.0, 0.5, 0.0]),
+            covariance=np.eye(4) * 0.01,
+            spec=ModelSpec(prior_sd=0.1),
+        ),
+    )
+    deck = {"Tech A": 1, "Tech B": 1, "Grass Energy": 58}
+
+    values = {row["card"]: row for row in best60.card_values(deck, model, {"O1": 1.0})}
+
+    assert values["Tech A"]["status"] == "estimated"
+    assert values["Tech A"]["value"] == pytest.approx(1 / (1 + np.exp(-0.5)) - 0.5)
+    assert values["Tech A"]["interval"][0] < values["Tech A"]["value"] < values["Tech A"]["interval"][1]
+    assert values["Tech B"]["value"] == pytest.approx(0.0)
+    assert values["Grass Energy"] == {"card": "Grass Energy", "copies": 58, "value": None, "interval": None, "status": "not estimable"}
+
+
+@pytest.mark.unit
+def test_the_report_says_decided_match_not_game():
+    from src.ingestion.best60_games import Game
+
+    rows, records = _synthetic(effect_a=0.8)
+    lists = [parse_list(row) for row in rows]
+    games = tuple(Game(entry.event, entry.player, "opponent", "Opp", 1, entry.date) for entry in lists)
+
+    result = build_best60("X", rows, player_strength(records), records, games=games)
+
+    assert "decided match" in result["model"]["outcome"]
+    assert "each game" not in result["model"]["outcome"]
+
+
+@pytest.mark.unit
 def test_held_out_gain_starts_each_fold_from_its_training_consensus(monkeypatch):
     rows = []
-    for event, tech in [("e0", "Tech Z"), ("e1", "Tech Z"), ("e2", "Tech Z"), ("e3", "Tech A"), ("e4", "Tech A")]:
+    for event, tech in [("e0", "Tech Z"), ("e1", "Tech A"), ("e2", "Tech A"), ("e3", "Tech A"), ("e4", "Tech A")]:
         for index in range(4):
-            rows.append(_row(event, f"{event}-{index}", _base(), date="2026-09-01T00:00:00Z"))
+            rows.append(_row(event, f"{event}-{index}", _base(), date=f"2026-09-0{int(event[1]) + 1}T00:00:00Z"))
             rows[-1]["decklist"]["trainer"].append({"name": tech, "count": 1})
             rows[-1]["decklist"]["energy"][0]["count"] -= 1
     lists = [parse_list(row) for row in rows]
@@ -141,8 +233,8 @@ def test_held_out_gain_starts_each_fold_from_its_training_consensus(monkeypatch)
     best60.held_out_gain(lists, {}, 0.5, full_consensus, {}, list_mode="novel")
 
     expected = [
-        consensus_sixty([entry for entry, fold_id in zip(lists, folds) if fold_id != fold])
-        for fold in range(best60.FOLDS)
+        consensus_sixty([entry for entry, fold_id in zip(lists, folds) if fold_id < fold])
+        for fold in range(1, best60.FOLDS)
     ]
     assert captured == expected
     assert any(consensus != full_consensus for consensus in captured)
@@ -261,8 +353,8 @@ def test_held_out_gain_chooses_on_training_events_and_prices_on_held_out_events(
 
     folds = best60.event_folds(lists)
     expected = []
-    for index in range(best60.FOLDS):
-        expected.append({entry.event for entry, fold in zip(lists, folds) if fold != index})
+    for index in range(1, best60.FOLDS):
+        expected.append({entry.event for entry, fold in zip(lists, folds) if fold < index})
         expected.append({entry.event for entry, fold in zip(lists, folds) if fold == index})
     assert calls == expected
     assert mean > 0

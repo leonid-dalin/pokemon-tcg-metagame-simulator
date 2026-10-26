@@ -149,6 +149,17 @@ def best60_view(recommendation: Mapping[str, Any]) -> dict[str, Any]:
             {"Card": slot, **{f"vs {deck}": round(float(values[0]), 3) for deck, values in by_deck.items()}}
             for slot, by_deck in recommendation.get("card_matchups", {}).items()
         ],
+        "card_values": [
+            {
+                "Card": row["card"],
+                "Copies": int(row["copies"]),
+                "Value (pp)": None if row.get("value") is None else round(float(row["value"]) * 100, 2),
+                "95% low (pp)": None if not row.get("interval") else round(float(row["interval"][0]) * 100, 2),
+                "95% high (pp)": None if not row.get("interval") else round(float(row["interval"][1]) * 100, 2),
+                "Status": row.get("status", "not estimable"),
+            }
+            for row in recommendation.get("card_values", [])
+        ],
         "list_mode": recommendation.get("list_mode", "novel"),
         "joint_probability": None if recommendation.get("joint_probability") is None else _percent(recommendation["joint_probability"]),
         "support": [
