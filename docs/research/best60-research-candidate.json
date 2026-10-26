@@ -1,0 +1,52 @@
+{
+  "scope": "research_candidate_only",
+  "deployment_supported": false,
+  "archetype_id": "kangaskhan-bouffalant",
+  "study_run": "run-20261025T223336Z-a15a1e44",
+  "code_revision": "9bbc9c120a37e679fd7da698cb814cf89198e8a4",
+  "counts": {
+    "AZ's Tranquility": 2,
+    "Air Balloon": 1,
+    "Boss's Orders": 3,
+    "Bouffalant": 3,
+    "Ciphermaniac's Codebreaking": 1,
+    "Crispin": 4,
+    "Darkness Energy": 4,
+    "Energy Switch": 1,
+    "Handheld Fan": 1,
+    "Hero's Cape": 1,
+    "Jumbo Ice Cream": 4,
+    "Lillie's Determination": 3,
+    "Lumiose City": 3,
+    "Mega Kangaskhan ex": 4,
+    "Mist Energy": 4,
+    "Munkidori": 3,
+    "Night Stretcher": 2,
+    "Poké Pad": 1,
+    "Pokégear 3.0": 2,
+    "Psychic Energy": 4,
+    "Psyduck": 1,
+    "Super Potion": 1,
+    "Switch": 1,
+    "Team Rocket's Petrel": 3,
+    "Ultra Ball": 3
+  },
+  "card_total": 60,
+  "catalogue_input_count": 225,
+  "eligible_candidate_count": 39,
+  "validator_excluded_count": 186,
+  "observed_support": 1,
+  "validation_limitations": [
+    "format-specific restrictions cannot be checked because format metadata is missing"
+  ],
+  "fitted_pair_model_score": 0.49083844318696285,
+  "fitted_vote_score": 0.4313389736412613,
+  "score_scope": "fixed historical field, zero skill gap, model conditional; not measured policy value",
+  "bootstrap_mean": 0.49773115162682013,
+  "conditional_interval": [
+    0.37551436719366704,
+    0.6155459161019095
+  ],
+  "post_selection_coverage": "unmeasured",
+  "h3_status": "not_identified"
+}

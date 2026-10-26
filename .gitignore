@@ -89,3 +89,5 @@ data/limitless.db
 
 data/input/limitless_input.json
 data/input/limitless_model_input.json
+/output/card-value-research/
+/work/
