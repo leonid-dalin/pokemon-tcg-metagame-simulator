@@ -135,6 +135,7 @@ def collect_event(client: LabsClient, event: LabsEvent, directory: Path) -> dict
     meta_path = directory / "metadata.json"
     standings_path = directory / "standings.json"
     pairings_path = directory / "pairings.json"
+    rounds_path = directory / "rounds.json"
     decklists_path = directory / "decklists.json"
 
     metadata = _read_json(meta_path, None)
@@ -153,17 +154,26 @@ def collect_event(client: LabsClient, event: LabsEvent, directory: Path) -> dict
     if not all("round" in row and "phase" in row for row in pairings):
         pairings = []
     total_rounds = int(metadata["round"])
-    collected_rounds = {row["round"] for row in pairings}
+    fetched_rounds = {int(value) for value in _read_json(rounds_path, [])}
+    fetched_rounds |= {int(row["round"]) for row in pairings}
     for round_number in range(1, total_rounds + 1):
-        if round_number in collected_rounds:
+        if round_number in fetched_rounds:
             continue
         rows = client.pairings(event.labs_id, round_number)
         pairings.extend({"round": round_number, "phase": 1, **row} for row in rows)
+        fetched_rounds.add(round_number)
         _write_json(pairings_path, pairings)
+        _write_json(rounds_path, sorted(fetched_rounds))
         logger.info("labs_pairings_collected", labs_id=event.labs_id, round=round_number, total=len(pairings))
+    _write_json(rounds_path, sorted(fetched_rounds))
 
     decklists = _read_json(decklists_path, {})
-    pending = [row for row in standings if str(row["player_id"]) not in decklists]
+    pending = [
+        row
+        for row in standings
+        if str(row["player_id"]) not in decklists
+        or (decklists[str(row["player_id"])] is None and row.get("decklist"))
+    ]
     if pending:
         with ThreadPoolExecutor(max_workers=client.workers) as pool:
             futures = {pool.submit(client.decklist, event.labs_id, row["tp_id"]): row for row in pending}
@@ -188,6 +198,7 @@ def collect_event(client: LabsClient, event: LabsEvent, directory: Path) -> dict
         "metadata": metadata,
         "standings": standings,
         "pairings": pairings,
+        "rounds_fetched": sorted(fetched_rounds),
         "decklists": decklists,
     }
     _write_json(directory / "bundle.json", bundle)
@@ -252,11 +263,16 @@ def validate_bundle(bundle: Mapping[str, Any]) -> dict[str, Any]:
         problems.append(f"duplicate pairing identities: {duplicates}")
 
     total_rounds = (bundle.get("metadata") or {}).get("round")
+    empty_rounds: list[str] = []
     if total_rounds is not None:
-        pairing_rounds = {row.get("round") for row in pairings}
-        missing_rounds = [round_number for round_number in range(1, int(total_rounds) + 1) if round_number not in pairing_rounds]
+        pairing_rounds = {int(row["round"]) for row in pairings if row.get("round") is not None}
+        fetched_rounds = {int(value) for value in bundle.get("rounds_fetched") or []} | pairing_rounds
+        missing_rounds = [n for n in range(1, int(total_rounds) + 1) if n not in fetched_rounds]
         if missing_rounds:
             problems.append(f"pairings missing rounds: {missing_rounds}")
+        empty_rounds = [f"round {n} returned no pairings"
+                        for n in range(1, int(total_rounds) + 1)
+                        if n in fetched_rounds and n not in pairing_rounds]
 
     return {
         "labs_id": bundle.get("labs_id"),
@@ -264,6 +280,7 @@ def validate_bundle(bundle: Mapping[str, Any]) -> dict[str, Any]:
         "pairings": len(pairings),
         "decklists": sum(1 for row in standings if row.get("decklist")),
         "lists_valid": sum(1 for row in standings if row.get("decklist")) - missing_lists,
+        "empty_rounds": empty_rounds,
         "problems": problems,
         "ok": not problems,
     }

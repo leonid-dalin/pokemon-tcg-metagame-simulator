@@ -14,6 +14,28 @@ def _decklist(size: int = DECK_SIZE):
     return {"pokemon": [{"name": "Mega Kangaskhan ex", "count": size}]}
 
 
+def _standing(player_id: int = 1, tp_id: int = 1, decklist: int = 1) -> dict:
+    return {
+        "player_id": player_id,
+        "tp_id": tp_id,
+        "placement": 1,
+        "wins": 1,
+        "losses": 0,
+        "ties": 0,
+        "drop_round": None,
+        "decklist": decklist,
+        "deck_id": "x",
+        "deck_name": "X",
+    }
+
+
+def _write_event_files(directory, metadata, standings, pairings) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    (directory / "standings.json").write_text(json.dumps(standings), encoding="utf-8")
+    (directory / "pairings.json").write_text(json.dumps(pairings), encoding="utf-8")
+
+
 def _bundle(*, labs_id: str = "0075", public_id: str = "580", city: str = "Recife", list_size: int = DECK_SIZE):
     standings = [
         {
@@ -192,6 +214,93 @@ def test_collect_event_resumes_by_fetching_only_the_missing_rounds(tmp_path):
 
     assert client.pairing_calls == [3, 4]
     assert {row["round"] for row in bundle["pairings"]} == {1, 2, 3, 4}
+
+
+@pytest.mark.unit
+def test_collect_event_retries_a_decklist_that_failed(tmp_path):
+    directory = tmp_path / "0100"
+    _write_event_files(
+        directory,
+        {"players": 1, "round": 1, "city": "Testville", "type": "regional"},
+        [_standing()],
+        [{"round": 1, "phase": 1, "p1_id": 1, "p2_id": None, "winner": 0}],
+    )
+
+    class _FlakyClient:
+        workers = 1
+
+        def __init__(self):
+            self.calls = 0
+            self.fail = True
+
+        def decklist(self, labs_id, tp_id):
+            self.calls += 1
+            if self.fail:
+                raise RuntimeError("temporary failure")
+            return _decklist()
+
+    client = _FlakyClient()
+    event = LabsEvent(labs_id="0100", public_id="901", city="Testville", date="2026-10-03T00:00:00.000Z")
+
+    first = collect_event(client, event, directory)
+    assert first["decklists"]["1"] is None
+
+    client.fail = False
+    resumed = collect_event(client, event, directory)
+
+    assert client.calls == 2
+    assert resumed["decklists"]["1"] == _decklist()
+
+
+@pytest.mark.unit
+def test_collect_event_records_a_round_that_returned_no_pairings(tmp_path):
+    directory = tmp_path / "0101"
+    _write_event_files(
+        directory,
+        {"players": 1, "round": 2, "city": "Testville", "type": "regional"},
+        [_standing(decklist=0)],
+        [{"round": 1, "phase": 1, "p1_id": 1, "p2_id": None, "winner": 0}],
+    )
+
+    class _EmptyRoundClient:
+        workers = 1
+
+        def __init__(self):
+            self.rounds = []
+
+        def pairings(self, labs_id, round_number):
+            self.rounds.append(round_number)
+            return []
+
+        def decklist(self, labs_id, tp_id):
+            return None
+
+    client = _EmptyRoundClient()
+    event = LabsEvent(labs_id="0101", public_id="902", city="Testville", date="2026-10-03T00:00:00.000Z")
+
+    bundle = collect_event(client, event, directory)
+
+    assert client.rounds == [2]
+    assert bundle["rounds_fetched"] == [1, 2]
+    report = validate_bundle(bundle)
+    assert report["empty_rounds"] == ["round 2 returned no pairings"]
+    assert not any("missing rounds" in problem for problem in report["problems"])
+    assert report["ok"] is True
+
+    collect_event(client, event, directory)
+    assert client.rounds == [2]
+
+
+@pytest.mark.unit
+def test_validate_bundle_separates_a_never_fetched_round_from_an_empty_one():
+    bundle = _bundle()
+    bundle["metadata"] = {**bundle["metadata"], "round": 4}
+    bundle["rounds_fetched"] = [1, 2, 3]
+
+    report = validate_bundle(bundle)
+
+    assert any("missing rounds" in problem and "[4]" in problem for problem in report["problems"])
+    assert report["empty_rounds"] == []
 
 
 @pytest.mark.unit
