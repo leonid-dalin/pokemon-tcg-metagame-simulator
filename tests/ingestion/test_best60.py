@@ -1,9 +1,11 @@
+import types
 from collections import Counter
 
 import numpy as np
 import pytest
 
 from src.ingestion import best60
+from src.ingestion.best60_games import Game, GameModel, ModelSpec
 from src.ingestion.best60 import (
     ArchetypeList,
     build_best60,
@@ -113,43 +115,325 @@ def test_held_out_folds_never_split_an_event():
 
 
 @pytest.mark.unit
-def test_held_out_gain_starts_each_fold_from_its_training_consensus(monkeypatch):
-    rows = []
-    for event, tech in [("e0", "Tech Z"), ("e1", "Tech Z"), ("e2", "Tech Z"), ("e3", "Tech A"), ("e4", "Tech A")]:
-        for index in range(4):
-            rows.append(_row(event, f"{event}-{index}", _base(), date="2026-09-01T00:00:00Z"))
-            rows[-1]["decklist"]["trainer"].append({"name": tech, "count": 1})
-            rows[-1]["decklist"]["energy"][0]["count"] -= 1
-    lists = [parse_list(row) for row in rows]
-    folds = event_folds(lists)
-    full_consensus = consensus_sixty(lists)
-    captured = []
+def test_player_strength_counts_only_earlier_events():
+    records = {("july", "p"): (3, 3), ("october", "p"): (9, 0)}
+    dates = {"july": "2026-07-01T00:00:00Z", "october": "2026-10-01T00:00:00Z"}
 
-    class Model:
-        slots = []
-        beta = []
+    earlier = player_strength(records, dates)
 
-    def fake_fit(*args, **kwargs):
-        return Model()
-
-    def fake_improve(consensus, *args, **kwargs):
-        captured.append(Counter(consensus))
-        return Counter(consensus), [], []
-
-    monkeypatch.setattr(best60, "fit_slot_model", fake_fit)
-    monkeypatch.setattr(best60, "improve", fake_improve)
-    best60.held_out_gain(lists, {}, 0.5, full_consensus, {}, list_mode="novel")
-
-    expected = [
-        consensus_sixty([entry for entry, fold_id in zip(lists, folds) if fold_id != fold])
-        for fold in range(best60.FOLDS)
-    ]
-    assert captured == expected
-    assert any(consensus != full_consensus for consensus in captured)
+    assert earlier[("july", "p")] == pytest.approx(0.0)
+    assert earlier[("october", "p")] == pytest.approx(0.0)
+    assert player_strength(records)[("july", "p")] == pytest.approx(np.log(19 / 10))
 
 
 @pytest.mark.unit
-def test_a_planted_second_copy_effect_is_applied_and_holds_up_on_held_out_events():
+def test_forward_folds_put_every_validation_event_after_its_training_events():
+    rows = []
+    for index in range(10):
+        for player in range(3):
+            rows.append(_row(f"e{index}", f"p{index}-{player}", _base(), date=f"2026-09-{index + 1:02d}T00:00:00Z"))
+    lists = [parse_list(row) for row in rows]
+    folds = event_folds(lists)
+    dates = {entry.event: entry.date for entry in lists}
+    by_event = {entry.event: int(fold) for entry, fold in zip(lists, folds)}
+
+    assert len(set(by_event.values())) == best60.FOLDS
+    for event, fold in by_event.items():
+        earlier = [other for other, other_fold in by_event.items() if other_fold < fold]
+        later = [other for other, other_fold in by_event.items() if other_fold > fold]
+        if fold:
+            assert earlier and max(dates[name] for name in earlier) < dates[event]
+        if fold < best60.FOLDS - 1:
+            assert later and min(dates[name] for name in later) > dates[event]
+
+
+@pytest.mark.unit
+def test_lists_without_pairings_stay_out_of_the_loss_when_the_archetype_has_pairings():
+    from src.ingestion.best60_games import Game, ModelSpec, build_rows
+
+    lists = [parse_list(_row("e1", "p1", _base())), parse_list(_row("e1", "p2", _base()))]
+    games = (Game("e1", "p1", "opponent", "Opp", 1, "2026-09-01T00:00:00Z"),)
+
+    with_games = build_rows(lists, {}, ModelSpec(prior_sd=1.0, games=games))
+    without_games = build_rows(lists, {}, ModelSpec(prior_sd=1.0))
+
+    assert list(with_games.list_index) == [0]
+    assert list(without_games.list_index) == [0, 1]
+
+
+@pytest.mark.unit
+def test_a_modelled_card_reports_the_probability_lost_when_a_copy_is_removed():
+    from src.ingestion.best60_games import GameModel, ModelSpec
+
+    slots = [("Tech A", 1), ("Tech B", 1)]
+    model = best60.SlotModel(
+        slots=slots,
+        beta=np.array([0.5, 0.0]),
+        covariance=np.eye(2) * 0.01,
+        prior_sd=0.1,
+        game=GameModel(
+            slots=slots,
+            slot_means=np.array([0.0, 0.0]),
+            opponents=["O1"],
+            specific=[],
+            theta=np.array([0.0, 0.0, 0.5, 0.0]),
+            covariance=np.eye(4) * 0.01,
+            spec=ModelSpec(prior_sd=0.1),
+        ),
+    )
+    deck = {"Tech A": 1, "Tech B": 1, "Grass Energy": 58}
+
+    values = {row["card"]: row for row in best60.card_values(deck, model, {"O1": 1.0})}
+
+    assert values["Tech A"]["status"] == "estimated"
+    assert values["Tech A"]["value"] == pytest.approx(1 / (1 + np.exp(-0.5)) - 0.5)
+    assert values["Tech A"]["interval"][0] < values["Tech A"]["value"] < values["Tech A"]["interval"][1]
+    assert values["Tech B"]["value"] == pytest.approx(0.0)
+    assert values["Grass Energy"] == {"card": "Grass Energy", "copies": 58, "value": None, "interval": None, "status": "not estimable"}
+
+
+@pytest.mark.unit
+def test_the_report_says_decided_match_not_game():
+    from src.ingestion.best60_games import Game
+
+    rows, records = _synthetic(effect_a=0.8)
+    lists = [parse_list(row) for row in rows]
+    games = tuple(Game(entry.event, entry.player, "opponent", "Opp", 1, entry.date) for entry in lists)
+
+    result = build_best60("X", rows, player_strength(records), records, games=games)
+
+    assert "decided match" in result["model"]["outcome"]
+    assert "each game" not in result["model"]["outcome"]
+
+
+@pytest.mark.unit
+def test_player_strength_scores_simultaneous_events_from_the_totals_before_them():
+    records = {("a", "p"): (9, 0), ("b", "p"): (0, 9)}
+    dates = {"a": "2026-07-01T00:00:00Z", "b": "2026-07-01T00:00:00Z"}
+
+    strength = player_strength(records, dates)
+
+    assert strength[("a", "p")] == pytest.approx(0.0)
+    assert strength[("b", "p")] == pytest.approx(0.0)
+
+
+@pytest.mark.unit
+def test_fold_strength_counts_only_earlier_training_events():
+    records = {("early", "p"): (3, 3), ("late", "p"): (9, 0)}
+    dates = {"early": "2026-07-01T00:00:00Z", "late": "2026-10-01T00:00:00Z"}
+
+    strength = best60._fold_strength(records, {"early", "late"}, {"validation"}, dates)
+
+    assert strength[("early", "p")] == pytest.approx(0.0)
+    assert strength[("late", "p")] == pytest.approx(0.0)
+
+
+@pytest.mark.unit
+def test_cross_validation_trains_only_on_earlier_folds(monkeypatch):
+    rows = []
+    for index in range(10):
+        for player in range(3):
+            rows.append(_row(f"e{index}", f"p{index}-{player}", _base(), date=f"2026-09-{index + 1:02d}T00:00:00Z"))
+    lists = [parse_list(row) for row in rows]
+    folds = event_folds(lists)
+    captured = []
+    real = best60.fit_game
+
+    def capture(train, strength, spec, *args, **kwargs):
+        captured.append(frozenset(entry.event for entry in train))
+        return real(train, strength, spec, *args, **kwargs)
+
+    monkeypatch.setattr(best60, "fit_game", capture)
+    best60._cross_validated(lists, {}, None, best60.ModelSpec(prior_sd=0.5), False)
+
+    expected = {
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold < block)
+        for block in range(1, best60.FOLDS)
+    }
+    assert set(captured) == expected
+
+
+@pytest.mark.unit
+def test_held_out_gain_trains_only_on_earlier_folds(monkeypatch):
+    rows = []
+    for index in range(10):
+        for player in range(3):
+            rows.append(_row(f"e{index}", f"p{index}-{player}", _base(), date=f"2026-09-{index + 1:02d}T00:00:00Z"))
+    lists = [parse_list(row) for row in rows]
+    folds = event_folds(lists)
+    captured = []
+    trivial = best60.SlotModel(slots=[], beta=np.array([]), covariance=np.zeros((0, 0)), prior_sd=0.5)
+
+    def capture(train, *_args, **_kwargs):
+        captured.append(frozenset(entry.event for entry in train))
+        return trivial
+
+    monkeypatch.setattr(best60, "fit_slot_model", capture)
+    best60.held_out_gain(lists, {}, 0.5, {}, list_mode="novel")
+
+    expected = [
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold < block)
+        for block in range(1, best60.FOLDS)
+    ]
+    assert captured[0::2] == expected
+
+
+@pytest.mark.unit
+def test_build_model_addons_reads_the_store_event_dates(monkeypatch, tmp_path):
+    from src.ingestion import model_cache
+    from src.ingestion.model import CardModelNotIdentifiable
+
+    class Store:
+        def __init__(self):
+            self.read_dates = False
+
+        def player_records(self):
+            return {("e1", "p"): (3, 2)}
+
+        def event_dates(self):
+            self.read_dates = True
+            return {"e1": "2026-09-01T00:00:00Z"}
+
+        def deck_weights(self):
+            return {"a": 1.0}
+
+        def archetype_lists(self, deck):
+            return []
+
+        def pairings_with_decklists(self, pattern):
+            return []
+
+    store = Store()
+    monkeypatch.setattr(model_cache, "load_or_fit_card_model",
+                        lambda *args: (_ for _ in ()).throw(CardModelNotIdentifiable("rank")))
+
+    model_cache.build_model_addons([], {"a": 1.0}, ["a"], "sha", tmp_path / "cache.json", store)
+
+    assert store.read_dates is True
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("slot_mean", "specific"),
+    [(0.0, []), (0.5, []), (0.0, ["O1"])],
+)
+def test_card_value_interval_matches_a_finite_difference_delta_method(slot_mean, specific):
+    from dataclasses import replace
+
+    from scipy.stats import norm as scipy_norm
+
+    from src.ingestion.best60_games import GameModel, ModelSpec
+
+    slots = [("Tech A", 1)]
+    theta = np.array([0.0, 0.0, 0.5] + ([0.5] if specific else []))
+    covariance = np.eye(len(theta)) * 0.01
+    game = GameModel(
+        slots=slots,
+        slot_means=np.array([slot_mean]),
+        opponents=["O1"],
+        specific=list(specific),
+        theta=theta,
+        covariance=covariance,
+        spec=ModelSpec(prior_sd=0.1),
+    )
+    model = best60.SlotModel(slots=slots, beta=np.array([0.5]), covariance=np.eye(1) * 0.01, prior_sd=0.1, game=game)
+    deck = {"Tech A": 1, "Grass Energy": 59}
+
+    def value_at(perturbed):
+        perturbed_model = replace(model, game=replace(game, theta=perturbed))
+        return next(row["value"] for row in best60.card_values(deck, perturbed_model, {"O1": 1.0}) if row["card"] == "Tech A")
+
+    row = next(item for item in best60.card_values(deck, model, {"O1": 1.0}) if item["card"] == "Tech A")
+    half_width = (row["interval"][1] - row["interval"][0]) / 2
+    step = 1e-6
+    gradient = np.array([
+        (value_at(theta + step * unit) - value_at(theta - step * unit)) / (2 * step)
+        for unit in np.eye(len(theta))
+    ])
+    expected = float(scipy_norm.ppf(0.975)) * np.sqrt(float(gradient @ covariance @ gradient))
+
+    assert half_width == pytest.approx(expected, rel=0.01)
+
+
+@pytest.mark.unit
+def test_best_field_list_needs_the_configured_minimum_players():
+    from src.ingestion.best60_games import GameModel, ModelSpec
+
+    rows = [_row("e1", "solo", _base(tech_a=2))] + [_row("e1", f"p{index}", _base(tech_a=1)) for index in range(3)]
+    lists = [parse_list(row) for row in rows]
+    model = GameModel(
+        slots=[("Tech A", 2)],
+        slot_means=np.array([0.0]),
+        opponents=["O1"],
+        specific=[],
+        theta=np.array([0.0, 0.0, 2.0]),
+        covariance=np.eye(3),
+        spec=ModelSpec(prior_sd=0.1),
+    )
+
+    picked, players, _ = best60.best_field_list(lists, model, {"O1": 1.0})
+    with_solo, solo_players, _ = best60.best_field_list(lists, model, {"O1": 1.0}, minimum=1)
+
+    assert (picked["Tech A"], players) == (1, 3)
+    assert (with_solo["Tech A"], solo_players) == (2, 1)
+
+
+@pytest.mark.unit
+def test_the_pick_ships_only_when_its_held_out_gain_clears_the_gate(monkeypatch):
+    rows, records = _synthetic(effect_a=0.8)
+    lists = [parse_list(row) for row in rows]
+    played, played_players = best60.most_played_list(lists)
+    pick = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 2, "Air Balloon": 1, "Grass Energy": 45})
+    assert pick != played
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (pick, 7, 0.6))
+    monkeypatch.setattr(best60, "held_out_gain", lambda *args, **kwargs: (-0.01, 0.0))
+    monkeypatch.setattr(best60, "tuned_spec", lambda *args: best60.ModelSpec(prior_sd=0.5))
+
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (-0.01, 0.0))
+    rejected = build_best60("X", rows, player_strength(records), records)
+    assert {row["card"]: row["copies"] for row in rejected["cards"]} == dict(played)
+    assert rejected["shipped_list"]["players"] == played_players
+    assert rejected["model"]["seed_source"] == "most played"
+
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
+    accepted = build_best60("X", rows, player_strength(records), records)
+    assert {row["card"]: row["copies"] for row in accepted["cards"]} == dict(pick)
+    assert accepted["shipped_list"]["seed_players"] == 7
+    assert accepted["model"]["seed_source"] == "validated pick"
+
+
+@pytest.mark.unit
+def test_held_out_gain_re_picks_inside_each_fold_from_training_blocks(monkeypatch):
+    rows = []
+    for index in range(10):
+        for player in range(3):
+            rows.append(_row(f"e{index}", f"p{index}-{player}", _base(), date=f"2026-09-{index + 1:02d}T00:00:00Z"))
+    lists = [parse_list(row) for row in rows]
+    folds = event_folds(lists)
+    seen = []
+    trivial = best60.SlotModel(slots=[], beta=np.array([]), covariance=np.zeros((0, 0)), prior_sd=0.5)
+
+    def capture(train, *_args, **_kwargs):
+        seen.append(frozenset(entry.event for entry in train))
+        return best60.most_played_list(train)[0], 0, "most played", 0.0, 0.0
+
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: trivial)
+    monkeypatch.setattr(best60, "seed_list", capture)
+    monkeypatch.setattr(best60, "improve", lambda deck, *_args, **_kwargs: (Counter(deck), [], []))
+
+    best60.held_out_gain(lists, {}, 0.5, {}, list_mode="novel")
+
+    expected = [
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold < block)
+        for block in range(1, best60.FOLDS)
+    ]
+    assert seen == expected
+
+
+@pytest.mark.unit
+@pytest.mark.unit
+def test_a_planted_second_copy_effect_is_applied_and_holds_up_on_held_out_events(monkeypatch):
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
     rows, records = _synthetic(effect_a=0.8)
     result = build_best60("X", rows, player_strength(records), records)
 
@@ -161,7 +445,8 @@ def test_a_planted_second_copy_effect_is_applied_and_holds_up_on_held_out_events
 
 
 @pytest.mark.unit
-def test_a_weaker_planted_effect_is_still_applied():
+def test_a_weaker_planted_effect_is_still_applied(monkeypatch):
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
     rows, records = _synthetic(effect_a=0.4)
     result = build_best60("X", rows, player_strength(records), records)
 
@@ -170,13 +455,15 @@ def test_a_weaker_planted_effect_is_still_applied():
 
 
 @pytest.mark.unit
-def test_without_any_card_effect_the_consensus_is_kept():
+def test_without_any_card_effect_the_most_played_observed_list_is_kept(monkeypatch):
     rows, records = _synthetic()
+    monkeypatch.setattr(best60, "tuned_spec", lambda *args: None)
     result = build_best60("X", rows, player_strength(records))
 
-    consensus = consensus_sixty([parse_list(row) for row in rows])
-    assert result["status"].startswith("consensus")
-    assert {row["card"]: row["copies"] for row in result["cards"]} == dict(consensus)
+    played, players = best60.most_played_list([parse_list(row) for row in rows])
+    assert result["status"].startswith("observed list kept")
+    assert {row["card"]: row["copies"] for row in result["cards"]} == dict(played)
+    assert result["shipped_list"]["players"] == players
     assert result["swaps"] == []
 
 
@@ -221,7 +508,7 @@ def test_swaps_never_add_an_evolution_without_its_basic_or_drop_the_last_pokemon
 def test_too_few_lists_return_the_consensus_with_a_status():
     rows = [_row("e", f"p{i}", _base()) for i in range(5)]
     result = build_best60("X", rows, {})
-    assert result["status"] == "consensus only: too few lists to score cards"
+    assert result["status"] == "observed list kept: too few lists to score cards"
     assert result["total_copies"] == 60
     assert result["deck_ids"] == ["x"]
 
@@ -230,7 +517,7 @@ def test_too_few_lists_return_the_consensus_with_a_status():
 def test_one_event_lists_keep_consensus_without_cross_validation():
     rows = [_row("e", f"p{i}", _base()) for i in range(100)]
     result = build_best60("X", rows, {})
-    assert result["status"] == "consensus only: card counts did not predict held-out results"
+    assert result["status"] == "observed list kept: card counts did not predict held-out results"
     assert result["total_copies"] == 60
 
 
@@ -245,25 +532,179 @@ def test_fold_strength_uses_training_records_only():
 
 
 @pytest.mark.unit
-def test_held_out_gain_chooses_on_training_events_and_prices_on_held_out_events(monkeypatch):
-    rows, records = _synthetic(effect_a=0.8, lists=600)
+def test_seed_gain_prices_the_pick_on_the_held_out_block(monkeypatch):
+    rows, records = _synthetic(lists=120)
     lists = [parse_list(row) for row in rows]
-    calls = []
+    folds = event_folds(lists)
+    blocks = [
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold == block)
+        for block in range(1, best60.FOLDS)
+    ]
+    captured = []
     original = best60.fit_slot_model
 
-    def capture_model(fitted, strength, prior_sd):
-        calls.append({entry.event for entry in fitted})
-        return original(fitted, strength, prior_sd)
+    def capture(train, strength, prior_sd):
+        captured.append(frozenset(entry.event for entry in train))
+        return original(train, strength, prior_sd)
 
-    monkeypatch.setattr(best60, "fit_slot_model", capture_model)
-    mean, se = best60.held_out_gain(lists, player_strength(records), 0.5, consensus_sixty(lists), {"Tech A": "trainer"}, records)
+    monkeypatch.setattr(best60, "fit_slot_model", capture)
+    best60.seed_gain(lists, {}, 0.5, records)
 
+    assert all(block in captured for block in blocks)
+
+
+@pytest.mark.unit
+def test_seed_list_keeps_the_most_played_list_when_the_gain_is_inside_one_standard_error(monkeypatch):
+    rows, _ = _synthetic(lists=60)
+    lists = [parse_list(row) for row in rows]
+    pick = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 2, "Grass Energy": 46})
+    stub = types.SimpleNamespace(game=object())
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (pick, 1, 0.9))
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.02, 0.05))
+
+    deck, players, source, gain, se = best60.seed_list(lists, {}, 0.5, None, model=stub)
+
+    assert source == "most played"
+    assert deck == Counter(best60.most_played_list(lists)[0])
+
+
+@pytest.mark.unit
+def test_seed_list_scores_the_pick_against_the_specified_field(monkeypatch):
+    rows = [_row("e1", f"a{index}", _base(tech_a=2)) for index in range(3)]
+    rows += [_row("e1", f"b{index}", _base()) for index in range(3)]
+    lists = [parse_list(row) for row in rows]
+    game = GameModel(
+        slots=[("Tech A", 2)], slot_means=np.array([0.0]), opponents=["Deck X", "Deck Y"],
+        specific=["Deck X", "Deck Y"], theta=np.array([0.0, 0.0, 0.0, 0.0, 2.0, -2.0]),
+        covariance=np.zeros((6, 6)), spec=ModelSpec(prior_sd=0.5),
+    )
+    stub = types.SimpleNamespace(game=game)
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
+
+    first, _, first_source, _, _ = best60.seed_list(lists, {}, 0.5, None, model=stub, field={"Deck X": 1.0})
+    second, _, second_source, _, _ = best60.seed_list(lists, {}, 0.5, None, model=stub, field={"Deck Y": 1.0})
+
+    assert first_source == second_source == "validated pick"
+    assert first["Tech A"] == 2
+    assert second.get("Tech A", 0) == 0
+
+
+@pytest.mark.unit
+def test_seed_gain_uses_the_specified_field_in_every_fold(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    game = GameModel(
+        slots=[], slot_means=np.array([]), opponents=["Deck X"], specific=[],
+        theta=np.array([0.0]), covariance=np.zeros((1, 1)), spec=ModelSpec(prior_sd=0.5),
+    )
+    stub = types.SimpleNamespace(game=game)
+    seen = []
+    original = best60._list_score
+
+    def capture(game_arg, deck, field):
+        seen.append(dict(field))
+        return original(game_arg, deck, field)
+
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "_list_score", capture)
+    best60.seed_gain(lists, {}, 0.5, records, field={"Deck X": 1.0})
+
+    assert seen and all(field == {"Deck X": 1.0} for field in seen)
+
+
+@pytest.mark.unit
+def test_recency_losses_passes_event_dates_to_the_fold_strength(monkeypatch):
+    rows = [
+        _row(f"e{index}", f"p{index}", _base(), date=f"2026-09-{1 + index % 25:02d}T00:00:00Z")
+        for index in range(40)
+    ]
+    lists = [parse_list(row) for row in rows]
+    records = {(entry.event, entry.player): (3, 2) for entry in lists}
+    seen = []
+    original = best60._fold_strength
+
+    def capture(records_arg, train_events, test_events, dates=None):
+        seen.append(dates)
+        return original(records_arg, train_events, test_events, dates)
+
+    monkeypatch.setattr(best60, "_fold_strength", capture)
+    best60.recency_losses(lists, {}, records, ModelSpec(prior_sd=0.5, as_of="2026-09-30T00:00:00Z"))
+
+    assert seen
+    assert seen[0] is not None
+    assert set(seen[0]) >= {entry.event for entry in lists[:5]}
+
+
+@pytest.mark.unit
+def test_seed_gain_estimates_the_field_from_training_games_only(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    folds = event_folds(lists)
+    games = [
+        Game(event=entry.event, player=entry.player, opponent="other", opponent_deck="Other", won=1)
+        for entry in lists
+    ]
+    seen = []
+    original = best60.observed_field
+
+    def capture(entries, games_arg, *args, **kwargs):
+        seen.append(frozenset(entry.event for entry in entries))
+        return original(entries, games_arg, *args, **kwargs)
+
+    monkeypatch.setattr(best60, "observed_field", capture)
+    best60.seed_gain(lists, {}, 0.5, records, games=games)
+
+    prefixes = {
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold < block)
+        for block in range(1, best60.FOLDS)
+    }
+    blocks = {
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold == block)
+        for block in range(1, best60.FOLDS)
+    }
+    assert seen and set(seen) <= prefixes | blocks
+    assert prefixes & set(seen)
+
+
+@pytest.mark.unit
+def test_seed_gain_measures_the_pick_against_the_most_played_list(monkeypatch):
+    rows, records = _synthetic(lists=60)
+    lists = [parse_list(row) for row in rows]
+    pick = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 2, "Grass Energy": 46})
+    baseline = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech B": 2, "Grass Energy": 46})
+    stub = types.SimpleNamespace(game=object())
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (pick, 1, 0.9))
+    monkeypatch.setattr(best60, "most_played_list", lambda *args, **kwargs: (baseline, 1))
+    monkeypatch.setattr(best60, "consensus_sixty", lambda *args, **kwargs: pick)
+    monkeypatch.setattr(best60, "_list_score", lambda game, deck, field: 1.0 if deck == pick else 0.0)
+
+    mean, se = best60.seed_gain(lists, {}, 0.5, records)
+
+    assert mean == pytest.approx(1.0)
+    assert se == pytest.approx(0.0)
+
+
+@pytest.mark.unit
+def test_held_out_gain_prices_each_fold_on_its_held_out_block(monkeypatch):
+    rows, records = _synthetic(effect_a=0.8, lists=600)
+    lists = [parse_list(row) for row in rows]
     folds = best60.event_folds(lists)
-    expected = []
-    for index in range(best60.FOLDS):
-        expected.append({entry.event for entry, fold in zip(lists, folds) if fold != index})
-        expected.append({entry.event for entry, fold in zip(lists, folds) if fold == index})
-    assert calls == expected
+    blocks = [
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold == block)
+        for block in range(1, best60.FOLDS)
+    ]
+    captured = []
+    original = best60.fit_slot_model
+
+    def capture(train, strength, prior_sd):
+        captured.append(frozenset(entry.event for entry in train))
+        return original(train, strength, prior_sd)
+
+    monkeypatch.setattr(best60, "fit_slot_model", capture)
+    mean, se = best60.held_out_gain(lists, player_strength(records), 0.5, {"Tech A": "trainer"}, records)
+
+    assert all(captured.count(block) == 1 for block in blocks)
     assert mean > 0
     assert se >= 0
 
@@ -288,6 +729,213 @@ def test_best60_legality_matrix_returns_legal_sixty_or_status(copies, extra_ace_
     assert result["status"] == "no legal lists" or result["total_copies"] == 60
     if result["status"] != "no legal lists":
         validate_recommendation(result["cards"])
+
+
+@pytest.mark.unit
+def test_a_failed_card_model_ships_the_most_played_observed_list():
+    base = [("Mon", 4, "pokemon"), ("Mon ex", 4, "pokemon"), ("Ultra Ball", 4, "trainer")]
+    rows = []
+    for index in range(40):
+        rows.append(_row("e", f"a{index}", base + [("Tech A", 2, "trainer"), ("Grass Energy", 46, "energy")]))
+    for index in range(35):
+        rows.append(_row("e", f"b{index}", base + [("Tech B", 2, "trainer"), ("Grass Energy", 46, "energy")]))
+    for index in range(25):
+        rows.append(_row("e", f"c{index}", base + [("Tech A", 1, "trainer"), ("Tech B", 1, "trainer"), ("Grass Energy", 46, "energy")]))
+    lists = [parse_list(row) for row in rows]
+    vote = consensus_sixty(lists)
+
+    result = build_best60("X", rows, {})
+
+    shipped = {row["card"]: row["copies"] for row in result["cards"]}
+    assert result["status"] == "observed list kept: card counts did not predict held-out results"
+    assert shipped["Tech A"] == 2 and shipped.get("Tech B", 0) == 0
+    assert shipped != dict(vote)
+    assert result["shipped_list"] == {"source": "observed", "players": 40, "seed_players": 40, "seed_field_score": None}
+
+
+@pytest.mark.unit
+def test_a_tied_most_played_list_goes_to_the_one_nearest_the_other_lists():
+    base = [("Mon", 4, "pokemon"), ("Mon ex", 4, "pokemon"), ("Ultra Ball", 4, "trainer")]
+    rows = []
+    for index in range(30):
+        rows.append(_row("e", f"b{index}", base + [("Tech B", 2, "trainer"), ("Grass Energy", 46, "energy")]))
+    for index in range(30):
+        rows.append(_row("e", f"z{index}", base + [("Tech Z", 2, "trainer"), ("Grass Energy", 46, "energy")]))
+    for index in range(20):
+        rows.append(_row("e", f"c{index}", base + [("Tech Z", 1, "trainer"), ("Grass Energy", 47, "energy")]))
+    lists = [parse_list(row) for row in rows]
+
+    deck, players = best60.most_played_list(lists)
+
+    assert players == 30
+    assert deck == Counter({**dict((card, count) for card, count, _ in base), "Tech Z": 2, "Grass Energy": 46})
+
+
+@pytest.mark.unit
+def test_build_best60_forwards_the_target_field_and_half_life(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    strength = player_strength(records)
+    deck = Counter({card: count for card, count, _ in _base()})
+    stub = types.SimpleNamespace(slots=[], game=None)
+    spec = ModelSpec(prior_sd=0.5, half_life=42.0)
+    seen = {}
+
+    monkeypatch.setattr(best60, "held_out_losses", lambda *args, **kwargs: {"model": 0.6})
+    monkeypatch.setattr(best60, "tuned_spec", lambda *args, **kwargs: spec)
+    monkeypatch.setattr(best60, "recency_losses", lambda *args, **kwargs: {})
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "improve", lambda deck, *args, **kwargs: (Counter(deck), [], []))
+
+    def seed_spy(lists, strength, prior_sd, records=None, model=None, **kwargs):
+        seen["seed"] = kwargs
+        return Counter(deck), 0, "most played", 0.0, 0.0
+
+    def gain_spy(lists, strength, prior_sd, groups, records=None, list_mode="novel", **kwargs):
+        seen["gain"] = kwargs
+        return 0.0, 0.0
+
+    monkeypatch.setattr(best60, "seed_list", seed_spy)
+    monkeypatch.setattr(best60, "held_out_gain", gain_spy)
+    best60.build_best60("X", rows, strength, records, field={"Deck X": 1.0}, as_of="2026-09-30T00:00:00Z")
+
+    assert seen["seed"]["field"] == {"Deck X": 1.0}
+    assert seen["seed"]["half_life"] == 42.0
+    assert seen["gain"]["field"] == {"Deck X": 1.0}
+    assert seen["gain"]["half_life"] == 42.0
+
+
+@pytest.mark.unit
+def test_seed_list_forwards_the_field_and_half_life_to_seed_gain(monkeypatch):
+    rows, records = _synthetic(lists=60)
+    lists = [parse_list(row) for row in rows]
+    stub = types.SimpleNamespace(game=object())
+    seen = {}
+
+    def gain_spy(lists, strength, prior_sd, records=None, **kwargs):
+        seen.update(kwargs)
+        return 0.05, 0.01
+
+    monkeypatch.setattr(best60, "seed_gain", gain_spy)
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (Counter(), 0, 0.0))
+    best60.seed_list(lists, {}, 0.5, records, model=stub, field={"Deck X": 1.0}, as_of="2026-09-30", half_life=42.0)
+
+    assert seen["field"] == {"Deck X": 1.0}
+    assert seen["as_of"] == "2026-09-30"
+    assert seen["half_life"] == 42.0
+
+
+@pytest.mark.unit
+def test_held_out_gain_forwards_the_field_to_each_fold(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    stub = types.SimpleNamespace(slots=[], beta=np.array([]), game=None)
+    calls = []
+
+    def seed_spy(*args, **kwargs):
+        calls.append(kwargs)
+        return Counter({card: count for card, count, _ in _base()}), 0, "most played", 0.0, 0.0
+
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "seed_list", seed_spy)
+    monkeypatch.setattr(best60, "improve", lambda deck, *args, **kwargs: (Counter(deck), [], []))
+    monkeypatch.setattr(best60, "_list_score", lambda *args, **kwargs: 0.0)
+    best60.held_out_gain(
+        lists, {}, 0.5, {}, records, "novel", field={"Deck X": 1.0}, as_of="2026-09-30", half_life=42.0,
+    )
+
+    assert calls
+    assert all(call["field"] == {"Deck X": 1.0} for call in calls)
+    assert all(call["half_life"] == 42.0 for call in calls)
+
+
+@pytest.mark.unit
+def test_seed_gain_estimates_the_observed_field_with_the_report_settings(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    stub = types.SimpleNamespace(game=object())
+    seen = []
+
+    def field_spy(entries, games, as_of=None, half_life=None):
+        seen.append((as_of, half_life))
+        return {"Deck X": 1.0}
+
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "observed_field", field_spy)
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (Counter(), 0, 0.0))
+    monkeypatch.setattr(best60, "_list_score", lambda *args, **kwargs: 0.0)
+    best60.seed_gain(lists, {}, 0.5, records, games=[object()], as_of="2026-09-30", half_life=42.0)
+
+    assert seen and all(as_of == "2026-09-30" and half_life == 42.0 for as_of, half_life in seen)
+
+
+@pytest.mark.unit
+def test_seed_gain_scores_strength_from_event_dates(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    stub = types.SimpleNamespace(game=object())
+    seen = []
+    original = best60._fold_strength
+
+    def capture(records_arg, train_events, test_events, dates=None):
+        seen.append(dates)
+        return original(records_arg, train_events, test_events, dates)
+
+    monkeypatch.setattr(best60, "_fold_strength", capture)
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (Counter(), 0, 0.0))
+    monkeypatch.setattr(best60, "_list_score", lambda *args, **kwargs: 0.0)
+    best60.seed_gain(lists, {}, 0.5, records)
+
+    assert seen and all(dates for dates in seen)
+
+
+@pytest.mark.unit
+def test_the_swap_search_starts_from_the_field_scored_observed_list(monkeypatch):
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
+    rows, records = _synthetic(effect_a=0.8)
+    chosen = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 2, "Grass Energy": 46})
+    seen = {}
+    monkeypatch.setattr(best60, "best_field_list", lambda *args: (chosen, 7, 0.51))
+
+    def capture(deck, *_args, **_kwargs):
+        seen["deck"] = Counter(deck)
+        return Counter(deck), [], []
+
+    monkeypatch.setattr(best60, "improve", capture)
+    monkeypatch.setattr(best60, "held_out_gain", lambda *args, **kwargs: (-0.01, 0.0))
+
+    result = build_best60("X", rows, player_strength(records), records)
+
+    assert seen["deck"] == chosen
+    assert result["shipped_list"]["source"] == "observed"
+    assert result["shipped_list"]["seed_players"] == 7
+    assert result["shipped_list"]["seed_field_score"] is not None
+    assert result["status"] == "observed list kept: swaps did not hold up on held-out events"
+
+
+@pytest.mark.unit
+def test_field_list_scores_averages_each_opponent_probability_not_its_logit():
+    from src.ingestion.best60_games import GameModel, ModelSpec
+    from src.ingestion.best60_research.selection import field_scores
+
+    model = GameModel(
+        slots=[("Tech A", 1)],
+        slot_means=np.array([0.5]),
+        opponents=["O1", "O2"],
+        specific=[],
+        theta=np.array([0.0, 0.5, 0.0, 1.0]),
+        covariance=np.eye(4),
+        spec=ModelSpec(prior_sd=1.0),
+    )
+    rows = [(Counter({"Tech A": 1}), 3), (Counter({"Tech A": 0}), 5)]
+    field = {"O1": 0.5, "O2": 0.5}
+
+    scores = best60.field_list_scores(model, rows, field)
+
+    logits = model.logits(Counter({"Tech A": 1}), ["O1", "O2"])
+    assert scores[0] == pytest.approx(float(field_scores(logits, [0.5, 0.5])))
+    assert scores[0] > scores[1]
+    assert logits == pytest.approx([0.5, 1.0])
 
 
 @pytest.mark.unit
@@ -340,27 +988,34 @@ def test_an_unlikely_swap_is_listed_as_leaning_not_applied():
 
 @pytest.mark.unit
 def test_swaps_that_do_not_hold_up_on_held_out_events_are_proposed_not_applied(monkeypatch):
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
     rows, records = _synthetic(effect_a=0.8)
-    monkeypatch.setattr(best60, "held_out_gain", lambda *args: (-0.01, 0.0))
+    chosen = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 1, "Grass Energy": 47})
+    monkeypatch.setattr(best60, "best_field_list", lambda *args: (chosen, 7, 0.51))
+    monkeypatch.setattr(best60, "held_out_gain", lambda *args, **kwargs: (-0.01, 0.0))
 
     result = build_best60("X", rows, player_strength(records))
 
-    assert result["status"] == "consensus kept: swaps did not hold up on held-out events"
+    assert result["status"] == "observed list kept: swaps did not hold up on held-out events"
     assert result["swaps"] == []
     assert {(swap["add"], swap["add_copy"]) for swap in result["proposed_swaps"]} >= {("Tech A", 2)}
-    assert {row["card"]: row["copies"] for row in result["cards"]} == dict(consensus_sixty([parse_list(row) for row in rows]))
+    shipped = {row["card"]: row["copies"] for row in result["cards"]}
+    assert shipped == {card: copies for card, copies in chosen.items()}
+    assert result["shipped_list"]["source"] == "observed"
+    assert result["shipped_list"]["players"] > 0
 
 
 @pytest.mark.unit
 @pytest.mark.parametrize(("gain", "se", "applied"), [(0.05, 0.01, True), (0.01, 0.02, False)])
 def test_swaps_need_the_held_out_gain_to_clear_one_standard_error(monkeypatch, gain, se, applied):
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
     rows, records = _synthetic(effect_a=0.8)
-    monkeypatch.setattr(best60, "held_out_gain", lambda *args: (gain, se))
+    monkeypatch.setattr(best60, "held_out_gain", lambda *args, **kwargs: (gain, se))
 
     result = build_best60("X", rows, player_strength(records), records)
 
     assert bool(result["swaps"]) is applied
-    assert result["status"] == ("complete" if applied else "consensus kept: swaps did not hold up on held-out events")
+    assert result["status"] == ("complete" if applied else "observed list kept: swaps did not hold up on held-out events")
     assert result["model"]["held_out_gain_se"] == se
 
 
@@ -402,8 +1057,10 @@ def test_count_levels_keep_only_counts_enough_lists_play():
 
 
 @pytest.mark.unit
-def test_a_card_played_at_zero_or_four_leaves_in_one_move():
+def test_a_card_played_at_zero_or_four_leaves_in_one_move(monkeypatch):
     rows, records = _tome_synthetic()
+    seed = Counter({"Mon": 4, "Ultra Ball": 4, "Tome": 4, "Grass Energy": 48})
+    monkeypatch.setattr(best60, "best_field_list", lambda *args: (seed, 12, 0.5))
     result = build_best60("X", rows, player_strength(records), records)
 
     assert result["status"] == "complete"
@@ -455,6 +1112,9 @@ def test_observed_mode_never_leaves_lists_people_played():
 @pytest.mark.unit
 def test_observed_mode_drops_moves_no_played_lists_support(monkeypatch):
     rows, records = _tome_synthetic()
+    lists = [parse_list(row) for row in rows]
+    seed = consensus_sixty(lists)
+    monkeypatch.setattr(best60, "best_field_list", lambda *args: (seed, 0, 0.5))
     monkeypatch.setattr(best60, "BDIF_BEST60_SUPPORT_LISTS", len(rows) + 1)
 
     novel = build_best60("X", rows, player_strength(records), records, "novel")

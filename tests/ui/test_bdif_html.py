@@ -199,10 +199,37 @@ def test_report_glosses_the_terms_it_abbreviates():
 
 
 @pytest.mark.unit
+def test_report_glosses_the_shipped_list_and_the_starting_list():
+    report = _report(best60_recommendations={"Dragapult": _recommendation(
+        shipped_list={"source": "observed", "players": 43}, joint_probability=0.61,
+        cards=[{"card": "Boss's Orders", "copies": 3, "consensus_copies": 4, "source": "observed"}],
+    )})
+    document = render_report_html(report)
+
+    assert "beats the list the builder started from" in document
+    assert "Chance the whole recommended list beats the consensus list" not in document
+    assert "observed when the count comes from the shipped observed list" in document
+    assert "observed when the shipped list is one players played" in document
+
+
+@pytest.mark.unit
+def test_report_labels_card_value_intervals_as_model_based():
+    report = _report(best60_recommendations={"Dragapult": _recommendation(
+        shipped_list={"source": "observed", "players": 43},
+        card_values=[{"card": "Boss's Orders", "copies": 3, "value": 0.012, "interval": [0.004, 0.02], "status": "estimated"}],
+    )})
+
+    document = render_report_html(report)
+
+    assert "model-based 95% interval from the fitted posterior covariance" in document
+    assert "Players who played it" in document
+
+
+@pytest.mark.unit
 def test_report_says_why_the_consensus_and_recommended_rows_match():
     document = render_report_html(_report())
 
-    assert "the recommended list is the consensus list" in document
+    assert "the recommended list is the observed list the builder started from" in document
 
 
 @pytest.mark.unit

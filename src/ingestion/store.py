@@ -399,6 +399,12 @@ class LimitlessStore:
                 ).fetchall()
         return {(str(event), str(player)): (int(wins or 0), int(losses or 0)) for event, player, wins, losses in rows}
 
+    def event_dates(self) -> dict[str, str]:
+        """Event id to stored date, so player strength can count earlier events only."""
+        self.prepare_for_read()
+        with self.connect() as conn:
+            return {str(event): str(date) for event, date in conn.execute("SELECT id, date FROM tournaments") if date}
+
     def archetype_games(self, archetype: str) -> list[Game]:
         """Every decided game an archetype's player played, with the opponent's deck, for Best-60."""
         self.prepare_for_read()

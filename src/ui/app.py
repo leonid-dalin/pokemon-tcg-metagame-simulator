@@ -280,10 +280,12 @@ def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
             st.info("Best-60 recommendations require an enabled card model and populated Limitless fixtures.")
         for archetype, recommendation in recommendations.items():
             view = bdif_view.best60_view(recommendation)
+            shipped = view["shipped_list"]
             st.markdown(f"#### {archetype}")
             st.caption(
-                f"Consensus of {view['legal_list_count']} legal lists ({', '.join(view['deck_ids']) or 'no deck id'}), "
-                "changed only by swaps that held up on held-out events. Observational, player strength controlled."
+                f"Shipped list: {shipped['source']} from {view['legal_list_count']} legal lists "
+                f"({', '.join(view['deck_ids']) or 'no deck id'}); {shipped['players']} players played it. "
+                "Swaps ship only when they held up on held-out events. Observational, player strength controlled."
             )
             st.caption(f"ACE SPEC choice: {view['ace_spec_choice'] or 'No ACE SPEC selected'}")
             if view["status"] != "complete":
@@ -291,12 +293,18 @@ def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
             if view["cards"]:
                 st.dataframe(pd.DataFrame(view["cards"]), width="stretch", hide_index=True)
                 st.caption(f"{view['total_copies']} cards")
+            if view["card_values"]:
+                st.dataframe(pd.DataFrame(view["card_values"]), width="stretch", hide_index=True)
+                st.caption(
+                    "Card value: change in field-weighted win probability when one copy is removed. "
+                    "The interval is a model-based 95% interval from the fitted posterior covariance."
+                )
             if any(row["Same count in resamples %"] is not None for row in view["cards"]):
                 st.caption("Same count in resamples: share of event resamples that recommend exactly this count.")
             settings = view["model_settings"]
             if settings["Card-effect prior standard deviation"] is not None:
                 st.caption(
-                    f"Scored per game against {settings['Field'].lower()} field; opponent-specific standard deviation {settings['Opponent-specific standard deviation']}, "
+                    f"Scored per decided match against {settings['Field'].lower()} field; opponent-specific standard deviation {settings['Opponent-specific standard deviation']}, "
                     f"recency half-life {settings['Recency half-life (days)'] or 'none'} days, as of {settings['As of']}."
                 )
             if view["field"]:
@@ -306,7 +314,7 @@ def render_bdif_tabs(mc_res: Dict[str, Any]) -> None:
                 with st.expander("Changed cards against each deck (log-odds)"):
                     st.dataframe(pd.DataFrame(view["matchups"]), width="stretch", hide_index=True)
             if view["joint_probability"] is not None:
-                st.caption(f"Chance the whole list beats the consensus: {view['joint_probability']}% ({view['list_mode']} mode)")
+                st.caption(f"Chance the whole list beats the list it started from: {view['joint_probability']}% ({view['list_mode']} mode)")
             if view["support"]:
                 st.dataframe(pd.DataFrame(view["support"]), width="stretch", hide_index=True)
             if any(value is not None for value in view["win_rates"].values()):

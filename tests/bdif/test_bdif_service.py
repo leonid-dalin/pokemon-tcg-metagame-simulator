@@ -189,6 +189,8 @@ class _ListStore:
         return [_stored_list(f"e{index}", f"p{index}", deck, tech=index % 2) for index in range(6)]
     def player_records(self):
         return {(f"e{index}", f"p{index}"): (3, 2) for index in range(6)}
+    def event_dates(self):
+        return {f"e{index}": f"2026-09-{index + 1:02d}T00:00:00Z" for index in range(6)}
     def pairings_with_decklists(self, pattern): return []
 
 
@@ -201,7 +203,7 @@ def test_addons_still_build_best60_when_the_card_model_is_not_identifiable(monke
     recommendations, h1, provenance = service._build_report_addons(_ListStore(), settings(), requested_archetypes=["a", "b"])
 
     assert {deck: row["total_copies"] for deck, row in recommendations.items()} == {"a": 60, "b": 60}
-    assert recommendations["a"]["status"] == "consensus only: too few lists to score cards"
+    assert recommendations["a"]["status"] == "observed list kept: too few lists to score cards"
     assert provenance["model_status"] == "not identifiable"
     assert provenance["model_status_reason"] == "rank"
     assert h1 == {}
@@ -245,6 +247,9 @@ def test_addons_include_requested_low_share_archetypes(monkeypatch, tmp_path):
 
         def player_records(self):
             return {}
+
+        def event_dates(self):
+            return {f"e{index}": f"2026-09-{index + 1:02d}T00:00:00Z" for index in range(6)}
 
         def pairings_with_decklists(self, pattern):
             return []

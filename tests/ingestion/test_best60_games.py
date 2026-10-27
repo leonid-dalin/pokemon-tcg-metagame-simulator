@@ -59,18 +59,21 @@ def _games(effect_vs_b=1.0, effect_vs_c=0.0, lists=600, seed=5, late_only=False)
 
 
 @pytest.mark.unit
-def test_game_rows_use_both_players_strength_and_lists_without_pairings_use_their_record():
+def test_game_rows_use_both_players_strength_and_drop_lists_without_pairings():
     rows = [_row("e", "p1", _cards(0), 3, 2, "2026-07-01"), _row("e", "p2", _cards(0), 4, 1, "2026-07-01")]
     lists = [parse_list(row) for row in rows]
     strength = {("e", "p1"): 0.5, ("e", "p2"): 0.1, ("e", "q"): 0.2}
     games = (Game("e", "p1", "q", "B", 1, "2026-07-01"),)
 
-    built = build_rows(lists, strength, ModelSpec(prior_sd=0.1, games=games))
+    paired = build_rows(lists, strength, ModelSpec(prior_sd=0.1, games=games))
+    records = build_rows(lists, strength, ModelSpec(prior_sd=0.1))
 
-    assert built.opponent == ["B", UNKNOWN]
-    assert built.strength.tolist() == pytest.approx([0.5 - 0.2, 0.1])
-    assert built.games.tolist() == [1, 5]
-    assert built.wins.tolist() == [1, 4]
+    assert paired.opponent == ["B"]
+    assert paired.strength.tolist() == pytest.approx([0.5 - 0.2])
+    assert paired.games.tolist() == [1]
+    assert paired.wins.tolist() == [1]
+    assert records.opponent == [UNKNOWN, UNKNOWN]
+    assert records.games.tolist() == [5, 5]
 
 
 @pytest.mark.unit
