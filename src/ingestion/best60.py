@@ -27,6 +27,7 @@ from src.core.config import (
     BDIF_BEST60_LEVEL_SHARE,
     BDIF_BEST60_LIST_MODE,
     BDIF_BEST60_MAX_SWAPS,
+    BDIF_BEST60_MIN_LIST_PLAYERS,
     BDIF_BEST60_MIN_MODEL_LISTS,
     BDIF_BEST60_MIN_RECENT_GAMES,
     BDIF_BEST60_OPPONENT_GRID,
@@ -195,14 +196,24 @@ def field_list_scores(model: GameModel, rows: Sequence[tuple[Counter[str], int]]
     return [float(field_scores(model.logits(deck, opponents), shares)) for deck, _ in rows]
 
 
-def best_field_list(lists: Sequence[ArchetypeList], model: GameModel, field: Mapping[str, float]) -> tuple[Counter[str], int, float]:
-    """The observed list with the highest field-weighted win probability."""
+def best_field_list(
+    lists: Sequence[ArchetypeList],
+    model: GameModel,
+    field: Mapping[str, float],
+    minimum: int = BDIF_BEST60_MIN_LIST_PLAYERS,
+) -> tuple[Counter[str], int, float]:
+    """The observed list with the highest field-weighted win probability.
+
+    Only lists at least `minimum` players played are candidates; a smaller archetype falls back to
+    every observed list rather than returning nothing.
+    """
     rows = exact_lists(lists)
     if not rows:
         return Counter(), 0, 0.0
-    scores = field_list_scores(model, rows, field)
-    position = max(range(len(rows)), key=lambda index: (scores[index], sorted(rows[index][0].items())))
-    return rows[position][0], rows[position][1], scores[position]
+    candidates = [row for row in rows if row[1] >= minimum] or rows
+    scores = field_list_scores(model, candidates, field)
+    position = max(range(len(candidates)), key=lambda index: (scores[index], sorted(candidates[index][0].items())))
+    return candidates[position][0], candidates[position][1], scores[position]
 
 
 def player_strength(
@@ -811,20 +822,56 @@ def trends(lists: Sequence[ArchetypeList], stats: Mapping[str, Mapping[str, Any]
     }
 
 
+def _list_score(game: GameModel, deck: Mapping[str, int], field: Mapping[str, float]) -> float:
+    return field_list_scores(game, [(Counter(deck), 0)], field)[0]
+
+
+def seed_gain(
+    lists: Sequence[ArchetypeList],
+    strength: Mapping[tuple[str, str], float],
+    prior_sd: float | ModelSpec,
+    field: Mapping[str, float],
+    records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
+) -> tuple[float, float]:
+    """Forward-fold gain of the model-picked observed list over the fold's most-played list.
+
+    The pick is chosen on the training blocks and both lists are priced on the next block with a model
+    fitted there, so a pick that only looks good in training is worth about zero. Units are win
+    probability, not log-odds.
+    """
+    folds = event_folds(lists)
+    if len(set(entry.event for entry in lists)) < FOLDS:
+        return 0.0, 0.0
+    dates = {entry.event: entry.date for entry in lists}
+    gains = []
+    for fold in range(1, FOLDS):
+        train = [entry for entry, f in zip(lists, folds) if f < fold]
+        test = [entry for entry, f in zip(lists, folds) if f == fold]
+        fold_strength = _fold_strength(records, {entry.event for entry in train}, {entry.event for entry in test}, dates) if records is not None else strength
+        picked, _, _ = best_field_list(train, fit_slot_model(train, fold_strength, prior_sd).game, field)
+        baseline, _ = most_played_list(train)
+        priced = fit_slot_model(test, fold_strength, prior_sd)
+        gains.append(_list_score(priced.game, picked, field) - _list_score(priced.game, baseline, field))
+    return float(np.mean(gains)), float(np.std(gains, ddof=1) / math.sqrt(len(gains)))
+
+
 def held_out_gain(
     lists: Sequence[ArchetypeList],
     strength: Mapping[tuple[str, str], float],
     prior_sd: float | ModelSpec,
-    consensus: Counter[str],
+    start: Counter[str],
     groups: Mapping[str, str],
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
     list_mode: str = "novel",
+    *,
+    fixed_start: bool = False,
 ) -> tuple[float, float]:
     """Cross-fitted value of the swap procedure, in log-odds: mean and standard error over four forward folds.
 
     Swaps are chosen by a model fitted on earlier events, then valued by slot coefficients fitted only on
-    the next block. The held-out lists never influence which swaps are chosen, and the training lists never
-    influence their value, so a swap that only looks good in sample is worth about zero here.
+    the next block. The starting list is the one production ships (`fixed_start`), or the fold's own
+    training consensus when the caller leaves it unset. The held-out lists never influence which swaps
+    are chosen, and the training lists never influence their value.
     """
     folds = event_folds(lists)
     if len(set(entry.event for entry in lists)) < FOLDS:
@@ -837,11 +884,11 @@ def held_out_gain(
         train_events = {entry.event for entry in train}
         test_events = {entry.event for entry in test}
         fold_strength = _fold_strength(records, train_events, test_events, dates) if records is not None else strength
-        fold_consensus = consensus_sixty(train)
+        fold_start = Counter(start) if fixed_start else consensus_sixty(train)
         fold_groups = {card: group for entry in train for card, group in entry.groups.items()}
         _, applied, _ = improve(
-            fold_consensus, fit_slot_model(train, fold_strength, prior_sd), fold_groups, prerequisites(train),
-            count_levels(train, fold_consensus), _support_check(train, list_mode),
+            fold_start, fit_slot_model(train, fold_strength, prior_sd), fold_groups, prerequisites(train),
+            count_levels(train, fold_start), _support_check(train, list_mode),
         )
         priced = fit_slot_model(test, fold_strength, prior_sd)
         beta = dict(zip(priced.slots, priced.beta))
@@ -1045,12 +1092,14 @@ def build_best60(
     matchups: dict[str, dict[str, list[float]]] = {}
     if len(lists) < BDIF_BEST60_MIN_MODEL_LISTS:
         status = "observed list kept: too few lists to score cards"
+        model_report["seed_source"] = "most played: too few lists to score cards"
     else:
         losses = held_out_losses(lists, strength, records, games)
         model_report["held_out_loss"] = losses
         spec = tuned_spec(losses, games)
         if spec is None:
             status = "observed list kept: card counts did not predict held-out results"
+            model_report["seed_source"] = "most played: card counts did not predict held-out results"
         else:
             spec = replace(spec, as_of=as_of)
             recency = recency_losses(lists, strength, records, spec)
@@ -1064,11 +1113,19 @@ def build_best60(
             prior_sd = spec
             model = fit_slot_model(lists, strength, prior_sd)
             seed, seed_players, seed_score = best_field_list(lists, model.game, used_field)
+            pick_gain, pick_se = seed_gain(lists, strength, prior_sd, used_field, records)
             model_report["seed_field_score"] = seed_score
+            model_report["seed_gain"] = pick_gain
+            model_report["seed_gain_se"] = pick_se
+            if pick_gain - BDIF_BEST60_HELD_OUT_SE * pick_se > 0:
+                model_report["seed_source"] = "validated pick"
+            else:
+                seed, seed_players = most_played_list(lists)
+                model_report["seed_source"] = "most played: the pick did not clear the gate"
             improved, proposed, leaning = improve(
                 seed, model, groups, prerequisites(lists), count_levels(lists, seed), _support_check(lists, list_mode),
             )
-            gain_held_out, gain_se = held_out_gain(lists, strength, prior_sd, seed, groups, records, list_mode)
+            gain_held_out, gain_se = held_out_gain(lists, strength, prior_sd, seed, groups, records, list_mode, fixed_start=True)
             model_report.update({
                 "prior_sd": spec.prior_sd, "opponent_sd": spec.opponent_sd, "half_life_days": spec.half_life,
                 "slots": len(model.slots), "opponents_with_own_effects": list(model.game.specific) if model.game else [],

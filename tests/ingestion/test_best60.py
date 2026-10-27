@@ -354,6 +354,80 @@ def test_card_value_interval_matches_a_finite_difference_delta_method(slot_mean,
 
 
 @pytest.mark.unit
+def test_best_field_list_needs_the_configured_minimum_players():
+    from src.ingestion.best60_games import GameModel, ModelSpec
+
+    rows = [_row("e1", "solo", _base(tech_a=2))] + [_row("e1", f"p{index}", _base(tech_a=1)) for index in range(3)]
+    lists = [parse_list(row) for row in rows]
+    model = GameModel(
+        slots=[("Tech A", 2)],
+        slot_means=np.array([0.0]),
+        opponents=["O1"],
+        specific=[],
+        theta=np.array([0.0, 0.0, 2.0]),
+        covariance=np.eye(3),
+        spec=ModelSpec(prior_sd=0.1),
+    )
+
+    picked, players, _ = best60.best_field_list(lists, model, {"O1": 1.0})
+    with_solo, solo_players, _ = best60.best_field_list(lists, model, {"O1": 1.0}, minimum=1)
+
+    assert (picked["Tech A"], players) == (1, 3)
+    assert (with_solo["Tech A"], solo_players) == (2, 1)
+
+
+@pytest.mark.unit
+def test_the_pick_ships_only_when_its_held_out_gain_clears_the_gate(monkeypatch):
+    rows, records = _synthetic(effect_a=0.8)
+    lists = [parse_list(row) for row in rows]
+    played, played_players = best60.most_played_list(lists)
+    pick = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 2, "Air Balloon": 1, "Grass Energy": 45})
+    assert pick != played
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (pick, 7, 0.6))
+    monkeypatch.setattr(best60, "held_out_gain", lambda *args, **kwargs: (-0.01, 0.0))
+    monkeypatch.setattr(best60, "tuned_spec", lambda *args: best60.ModelSpec(prior_sd=0.5))
+
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (-0.01, 0.0))
+    rejected = build_best60("X", rows, player_strength(records), records)
+    assert {row["card"]: row["copies"] for row in rejected["cards"]} == dict(played)
+    assert rejected["shipped_list"]["players"] == played_players
+    assert rejected["model"]["seed_source"] == "most played: the pick did not clear the gate"
+
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
+    accepted = build_best60("X", rows, player_strength(records), records)
+    assert {row["card"]: row["copies"] for row in accepted["cards"]} == dict(pick)
+    assert accepted["shipped_list"]["seed_players"] == 7
+    assert accepted["model"]["seed_source"] == "validated pick"
+
+
+@pytest.mark.unit
+def test_held_out_gain_starts_from_the_given_list(monkeypatch):
+    rows, records = _synthetic(effect_a=0.8)
+    lists = [parse_list(row) for row in rows]
+    strength = player_strength(records)
+    starts = []
+
+    def capture(deck, *_args, **_kwargs):
+        starts.append(Counter(deck))
+        return Counter(deck), [], []
+
+    trivial = best60.SlotModel(slots=[], beta=np.array([]), covariance=np.zeros((0, 0)), prior_sd=0.5)
+    monkeypatch.setattr(best60, "improve", capture)
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: trivial)
+    one = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 1, "Grass Energy": 47})
+    two = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 2, "Grass Energy": 46})
+
+    best60.held_out_gain(lists, strength, 0.5, one, {}, records, fixed_start=True)
+    first = list(starts)
+    starts.clear()
+    best60.held_out_gain(lists, strength, 0.5, two, {}, records, fixed_start=True)
+    second = list(starts)
+
+    assert first == [one] * len(first) and first
+    assert second == [two] * len(second) and second
+
+
+@pytest.mark.unit
 def test_held_out_gain_starts_each_fold_from_its_training_consensus(monkeypatch):
     rows = []
     for event, tech in [("e0", "Tech Z"), ("e1", "Tech A"), ("e2", "Tech A"), ("e3", "Tech A"), ("e4", "Tech A")]:
@@ -390,7 +464,8 @@ def test_held_out_gain_starts_each_fold_from_its_training_consensus(monkeypatch)
 
 
 @pytest.mark.unit
-def test_a_planted_second_copy_effect_is_applied_and_holds_up_on_held_out_events():
+def test_a_planted_second_copy_effect_is_applied_and_holds_up_on_held_out_events(monkeypatch):
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
     rows, records = _synthetic(effect_a=0.8)
     result = build_best60("X", rows, player_strength(records), records)
 
@@ -402,7 +477,8 @@ def test_a_planted_second_copy_effect_is_applied_and_holds_up_on_held_out_events
 
 
 @pytest.mark.unit
-def test_a_weaker_planted_effect_is_still_applied():
+def test_a_weaker_planted_effect_is_still_applied(monkeypatch):
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
     rows, records = _synthetic(effect_a=0.4)
     result = build_best60("X", rows, player_strength(records), records)
 
@@ -575,6 +651,7 @@ def test_a_tied_most_played_list_goes_to_the_one_nearest_the_other_lists():
 
 @pytest.mark.unit
 def test_the_swap_search_starts_from_the_field_scored_observed_list(monkeypatch):
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
     rows, records = _synthetic(effect_a=0.8)
     chosen = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 2, "Grass Energy": 46})
     seen = {}
@@ -585,7 +662,7 @@ def test_the_swap_search_starts_from_the_field_scored_observed_list(monkeypatch)
         return Counter(deck), [], []
 
     monkeypatch.setattr(best60, "improve", capture)
-    monkeypatch.setattr(best60, "held_out_gain", lambda *args: (-0.01, 0.0))
+    monkeypatch.setattr(best60, "held_out_gain", lambda *args, **kwargs: (-0.01, 0.0))
 
     result = build_best60("X", rows, player_strength(records), records)
 
@@ -671,10 +748,11 @@ def test_an_unlikely_swap_is_listed_as_leaning_not_applied():
 
 @pytest.mark.unit
 def test_swaps_that_do_not_hold_up_on_held_out_events_are_proposed_not_applied(monkeypatch):
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
     rows, records = _synthetic(effect_a=0.8)
     chosen = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 1, "Grass Energy": 47})
     monkeypatch.setattr(best60, "best_field_list", lambda *args: (chosen, 7, 0.51))
-    monkeypatch.setattr(best60, "held_out_gain", lambda *args: (-0.01, 0.0))
+    monkeypatch.setattr(best60, "held_out_gain", lambda *args, **kwargs: (-0.01, 0.0))
 
     result = build_best60("X", rows, player_strength(records))
 
@@ -690,8 +768,9 @@ def test_swaps_that_do_not_hold_up_on_held_out_events_are_proposed_not_applied(m
 @pytest.mark.unit
 @pytest.mark.parametrize(("gain", "se", "applied"), [(0.05, 0.01, True), (0.01, 0.02, False)])
 def test_swaps_need_the_held_out_gain_to_clear_one_standard_error(monkeypatch, gain, se, applied):
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
     rows, records = _synthetic(effect_a=0.8)
-    monkeypatch.setattr(best60, "held_out_gain", lambda *args: (gain, se))
+    monkeypatch.setattr(best60, "held_out_gain", lambda *args, **kwargs: (gain, se))
 
     result = build_best60("X", rows, player_strength(records), records)
 
