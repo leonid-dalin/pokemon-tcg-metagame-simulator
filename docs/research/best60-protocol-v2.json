@@ -1,0 +1,182 @@
+{
+  "estimators": {
+    "challengers": [
+      "nuisance",
+      "per_archetype_additive",
+      "pooled_additive",
+      "regularised_selected_pairs",
+      "pooled_factorisation_machine"
+    ],
+    "complexity_tie_break": "lower_complexity",
+    "development_folds": {
+      "count": 3,
+      "freeze_choice_before_test": true,
+      "selection_uses_only_development_and_validation": true,
+      "type": "rolling_chronological"
+    },
+    "fm_ranks": [
+      2,
+      4,
+      8
+    ],
+    "fm_seeds": [
+      1312,
+      1313,
+      1314
+    ],
+    "interaction_penalties": [
+      1e-05,
+      0.0001,
+      0.001
+    ],
+    "max_iterations": 5000,
+    "max_iterations_by_model": {
+      "nuisance": 5000,
+      "per_archetype_additive": 5000,
+      "pooled_additive": 5000,
+      "pooled_factorisation_machine": 5000,
+      "regularised_selected_pairs": 5000
+    },
+    "primary_reference_selection": "stronger_additive_variant_by_validation_log_loss",
+    "rolling_folds": 3,
+    "validation_metric": "weighted_natural_log_loss"
+  },
+  "features": {
+    "focal_benchmarks": [
+      "pooled",
+      "kangaskhan-bouffalant"
+    ],
+    "matchup_effects": true,
+    "opponent_card_features": false,
+    "skill_history_embargo_days": 7,
+    "slot_minimum_lists": 30,
+    "slot_minimum_non_support_lists": 30,
+    "source_and_mode_controls": true,
+    "strength_prior_games": 10,
+    "unknown_category_level": "unknown",
+    "unseen_player_strength": 0.0
+  },
+  "h1": {
+    "cluster_decision_rule": "fewer_than_20_is_inconclusive",
+    "metric": "paired_natural_log_loss_gain_over_additive",
+    "minimum_gain_nats_per_pairing": 0.0001,
+    "minimum_independent_event_clusters": 20,
+    "null_hypothesis_fixture_must_not_be_weakened": true,
+    "ranking_minimum_cluster_count": 20,
+    "ranking_minimum_decided_results_per_list": 5
+  },
+  "h3": {
+    "below_threshold_status": "not_identified",
+    "deployment_lower_bound_points": 1.0,
+    "minimum_event_clusters": 50,
+    "minimum_importance_weight_ess": 200,
+    "minimum_target_propensity": 0.01,
+    "positive_lower_confidence_bound_required": true,
+    "primary_weights_unclipped": true,
+    "weight_clip_sensitivity": 20
+  },
+  "h4": {
+    "block_sensitivity_days": 7,
+    "bootstrap_unit": "atomic_event_block",
+    "interval_scope": "model_conditional_fixed_list_mean",
+    "mean_interval_width_target": 0.1,
+    "predictive_coverage_reported_separately": true,
+    "undercoverage_tolerance": 0.05
+  },
+  "inference": {
+    "confidence_level": 0.95,
+    "h1_bootstrap_draws": 2000,
+    "mirrored_rows_are_not_independent": true,
+    "player_aware_sensitivity": "two_way_event_player_cluster_sensitivity",
+    "primary_resampling_unit": "atomic_utc_date_block"
+  },
+  "outcomes": {
+    "exclude_after_drop": true,
+    "include_byes": false,
+    "include_ties": false,
+    "paired_orientation_weights_sum_to_one": true,
+    "pairing_identity": [
+      "tournament_id",
+      "round",
+      "phase",
+      "match",
+      "player1",
+      "player2"
+    ],
+    "require_known_opponent_archetype": true,
+    "require_legal_focal_list": true,
+    "require_opponent_list": false,
+    "target": "probability_of_winning_a_decided_pairing"
+  },
+  "run": {
+    "allow_protocol_change_after_lock": false,
+    "allow_test_access_before_lock": false,
+    "atomic_outputs": true,
+    "resume_requires_matching_source_split_and_config_hashes": true,
+    "run_directory_must_be_new": true
+  },
+  "schema_version": 1,
+  "selection": {
+    "field_source": "pre_cutoff_training_data_or_explicit_field_file",
+    "recommendation_skill_gap": 0.0,
+    "score_scale": "mean_probability_over_field",
+    "selector_comparison": [
+      "vote",
+      "exact_observed_catalogue"
+    ],
+    "validation_requires_existing_format_metadata": true
+  },
+  "simulation": {
+    "checkpoint_each_replicate": true,
+    "effects_log_odds": [
+      0.0,
+      0.08,
+      0.2,
+      0.4
+    ],
+    "full_grid_requires_measured_fit_budget_before_lock": true,
+    "full_interaction_penalty_grid": [
+      1e-05,
+      0.0001,
+      0.001
+    ],
+    "full_rank_grid": [
+      2,
+      4,
+      8
+    ],
+    "full_replicates_per_effect": 500,
+    "full_seed_grid": [
+      1312,
+      1313,
+      1314
+    ],
+    "full_wall_clock_seconds": 86400,
+    "per_replicate_checkpoint": true,
+    "power_target": 0.8,
+    "primary_useful_effect_log_odds": 0.2,
+    "quick_penalty": 0.001,
+    "quick_pilot_only": true,
+    "quick_rank": 2,
+    "quick_replicates_per_effect": 20,
+    "quick_seed": 1312
+  },
+  "status": "retrospective_locked_evaluation",
+  "study": "best60-interaction-benchmark",
+  "time": {
+    "actual_completion_timestamp_field": null,
+    "atomic_unit": "event_block",
+    "change_from_v1": "v2 replaces the whole-UTC-day unit with the event block so the measurement split can reach 20 units; v1 stays locked for the phase 1 results",
+    "date_blocks_atomic": true,
+    "embargo_sensitivity_days": 14,
+    "primary_embargo_days": 7,
+    "split_fractions": {
+      "development": 0.6,
+      "test": 0.2,
+      "validation": 0.2
+    },
+    "timestamp_proxy": "event_start_date_as_result_availability",
+    "timezone": "UTC",
+    "unit_definition": "events that start on the same UTC day and share at least one player form one unit"
+  }
+}

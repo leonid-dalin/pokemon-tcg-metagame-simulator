@@ -334,7 +334,8 @@ def _pair_outcomes(arrays: dict[str, Any], logits: np.ndarray, rng: np.random.Ge
 
 
 def _split_ids(
-    pair_ids: np.ndarray, event_ids: np.ndarray, block_ids: np.ndarray, rng: np.random.Generator
+    pair_ids: np.ndarray, event_ids: np.ndarray, block_ids: np.ndarray, rng: np.random.Generator,
+    fractions: tuple[float, float, float] = (0.6, 0.2, 0.2),
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, str]:
     unique = list(dict.fromkeys(tuple(item) if isinstance(item, (list, np.ndarray)) else item for item in pair_ids.tolist()))
     if len(unique) < 10:
@@ -345,23 +346,23 @@ def _split_ids(
         key = tuple(pair) if isinstance(pair, (list, np.ndarray)) else pair
         pair_event.setdefault(key, event)
         pair_block.setdefault(key, block)
-    real_blocks = all(str(block).startswith("utc-date:") for block in pair_block.values())
+    real_blocks = all(str(block).startswith(("utc-date:", "event-block:")) for block in pair_block.values())
     if real_blocks:
         blocks = sorted(set(pair_block.values()), key=lambda item: str(item))
         if len(blocks) >= 5:
-            n_train = max(1, int(0.6 * len(blocks)))
-            n_select = max(1, int(0.2 * len(blocks)))
+            n_train = max(1, int(fractions[0] * len(blocks)))
+            n_select = max(1, int(fractions[1] * len(blocks)))
             train_blocks = set(blocks[:n_train])
             select_blocks = set(blocks[n_train : n_train + n_select])
             train_ids = [pair for pair in unique if pair_block[pair] in train_blocks]
             select_ids = [pair for pair in unique if pair_block[pair] in select_blocks]
             measure_ids = [pair for pair in unique if pair_block[pair] not in train_blocks | select_blocks]
-            return _object_vector(train_ids), _object_vector(select_ids), _object_vector(measure_ids), "utc_date"
+            return _object_vector(train_ids), _object_vector(select_ids), _object_vector(measure_ids), "event_block" if any(str(b).startswith("event-block:") for b in blocks) else "utc_date"
     event_levels = sorted(set(pair_event.values()), key=repr)
     if len(event_levels) >= 5:
         shuffled_events = [event_levels[i] for i in rng.permutation(len(event_levels))]
-        n_train = max(1, int(0.6 * len(event_levels)))
-        n_select = max(1, int(0.2 * len(event_levels)))
+        n_train = max(1, int(fractions[0] * len(event_levels)))
+        n_select = max(1, int(fractions[1] * len(event_levels)))
         train_events = set(shuffled_events[:n_train])
         select_events = set(shuffled_events[n_train : n_train + n_select])
         train_ids = [pair for pair in unique if pair_event[pair] in train_events]
@@ -371,8 +372,8 @@ def _split_ids(
     shuffled = np.empty(len(unique), dtype=object)
     shuffled[:] = unique
     shuffled = shuffled[rng.permutation(len(unique))]
-    n_train = max(1, int(0.6 * len(unique)))
-    n_select = max(1, int(0.2 * len(unique)))
+    n_train = max(1, int(fractions[0] * len(unique)))
+    n_select = max(1, int(fractions[1] * len(unique)))
     return shuffled[:n_train], shuffled[n_train : n_train + n_select], shuffled[n_train + n_select :], "pairing_fallback"
 
 
@@ -431,6 +432,7 @@ def run_simulation(
     interaction_penalties: tuple[float, ...] = (1e-5, 1e-4, 1e-3),
     seed_grid: tuple[int, ...] = (1312, 1313, 1314),
     max_iter: int = 5000,
+    split_fractions: tuple[float, float, float] = (0.6, 0.2, 0.2),
 ) -> dict[str, Any]:
     """Run or resume an observed-design interaction power simulation.
 
@@ -486,7 +488,7 @@ def run_simulation(
         "h1_min_gain": 0.0001,
         "h1_min_blocks": 20,
         "h1_bootstrap_draws": 500,
-        "split_fractions": [0.6, 0.2, 0.2],
+        "split_fractions": list(split_fractions),
         "split_event_minimum": 5,
         "minimum_pairings": 10,
         "event_logit_sd": 0.35,
@@ -531,7 +533,7 @@ def run_simulation(
         rng = np.random.default_rng(seed)
         split_rng = np.random.default_rng(seed + 0x5EED)
         train_ids, select_ids, measure_ids, split_unit = _split_ids(
-            arrays["pairing_ids"], arrays["event_ids"], arrays["block_ids"], split_rng
+            arrays["pairing_ids"], arrays["event_ids"], arrays["block_ids"], split_rng, fractions=split_fractions
         )
         pair_ids = [tuple(item) if isinstance(item, (list, np.ndarray)) else item for item in arrays["pairing_ids"].tolist()]
         train_set, selection_set, measurement_set = set(train_ids.tolist()), set(select_ids.tolist()), set(measure_ids.tolist())

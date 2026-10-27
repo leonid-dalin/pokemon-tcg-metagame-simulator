@@ -218,7 +218,7 @@ def _inner_validation_context(
         for event, value in context.get("training_event_dates", {}).items()
     }
     for event, block in context.get("event_block_ids", {}).items():
-        event_dates.setdefault(str(event), _date_value(str(block).rsplit(":", 1)[-1]))
+        event_dates.setdefault(str(event), _block_date(block))
 
     totals: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for record in context.get("eligible_records", ()):
@@ -390,6 +390,14 @@ def _event_rows(rows: Sequence[Mapping[str, Any]], event_ids: set[str]) -> list[
     return [row for row in rows if str(row.get("event")) in event_ids]
 
 
+def _block_date(block: Any) -> date | None:
+    """The UTC date a block ID carries: `utc-date:<day>` or `event-block:<day>:<root>`."""
+    parts = str(block).split(":")
+    if parts[0] in {"utc-date", "event-block"} and len(parts) >= 2:
+        return _date_value(parts[1])
+    return _date_value(str(block).rsplit(":", 1)[-1])
+
+
 def _folds(
     context: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], fold_count: int = 3
 ) -> list[dict[str, Any]]:
@@ -398,19 +406,19 @@ def _folds(
     for row in rows:
         event = str(row.get("event"))
         event_to_block[event] = str(event_blocks.get(event, _event_block(context, row)))
-    unique_blocks = sorted(set(event_to_block.values()), key=lambda value: value.rsplit(":", 1)[-1])
+    unique_blocks = sorted(set(event_to_block.values()), key=lambda value: (_block_date(value) or date.min, str(value)))
     if fold_count < 1 or len(unique_blocks) < fold_count + 1:
         return []
     chunks = [list(chunk) for chunk in np.array_split(np.asarray(unique_blocks, dtype=object), fold_count + 1)]
     result = []
     for index in range(1, fold_count + 1):
         validation_blocks = set(chunks[index])
-        first_validation_date = _date_value(sorted(validation_blocks, key=str)[0].rsplit(":", 1)[-1])
+        first_validation_date = _block_date(sorted(validation_blocks, key=lambda value: (_block_date(value) or date.min, str(value)))[0])
         if first_validation_date is not None:
             boundary = first_validation_date - timedelta(days=7)
             training_blocks = {
                 block for chunk in chunks[:index] for block in chunk
-                if (_date_value(str(block).rsplit(":", 1)[-1]) or date.min) < boundary
+                if (_block_date(block) or date.min) < boundary
             }
         else:
             training_blocks = {block for chunk in chunks[:index] for block in chunk}
@@ -1360,6 +1368,33 @@ def _weighted_h1_summary(
     }
 
 
+def _resampling_unit(values: Sequence[Any]) -> str:
+    """The label for the clusters actually used: event block, UTC day, or a bare event."""
+    text = [str(value) for value in values]
+    if text and all(value.startswith("event-block:") for value in text):
+        return "atomic_event_block"
+    if text and all(value.startswith("utc-date:") for value in text):
+        return "atomic_date_block"
+    return "event_cluster"
+
+
+def _h1_day_unit_sensitivity(
+    differences: Sequence[float],
+    days: Sequence[str],
+    protocol: Mapping[str, Any],
+) -> dict[str, Any]:
+    """The same H1 decision with whole-UTC-day clusters, for the sensitivity row."""
+    if not differences:
+        return {"status": "inconclusive", "estimate": None, "interval": None, "cluster_count": 0}
+    result = decide_h1(
+        differences, days,
+        seed=int(protocol.get("inference", {}).get("seed", 1312)),
+        draws=int(protocol.get("inference", {}).get("h1_bootstrap_draws", 2000)),
+        min_gain=float(protocol.get("h1", {}).get("minimum_gain_nats_per_pairing", 0.0001)),
+    )
+    return {key: result.get(key) for key in ("status", "estimate", "interval", "cluster_count")}
+
+
 def _ranking_gain_interval(
     ranking_data: Mapping[str, Sequence[Any]],
     *,
@@ -1385,7 +1420,7 @@ def _ranking_gain_interval(
     estimate = float(model["weighted_agreement"] - baseline["weighted_agreement"])
     result = {"status": "inconclusive", "estimate": estimate, "interval": None,
               "interaction_agreement": model, "additive_agreement": baseline,
-              "cluster_count": int(len(clusters)), "resampling_unit": "utc_date_block"}
+              "cluster_count": int(len(clusters)), "resampling_unit": _resampling_unit(clusters)}
     if len(clusters) < 20:
         result["warning"] = "fewer_than_20_independent_clusters"
         return result
@@ -1431,6 +1466,32 @@ def _ranking_gain_interval(
     result["status"] = "accepted" if interval[0] > 0 else "rejected" if interval[1] <= 0 else "inconclusive"
     result["valid_draws"] = len(estimates)
     return result
+
+
+def _predictive_coverage(
+    interval: Mapping[str, Any] | None,
+    block_ids: Sequence[str],
+    logits: Sequence[float],
+    outcomes: Sequence[float],
+    *,
+    folds: int = 5,
+) -> dict[str, Any]:
+    """H4 coverage is not estimated from the fixed-list interval in this run.
+
+    The model-conditional interval covers the fixed list's expected win rate, not a held-out pairing's
+    outcome, and the simulator's injected truth is not the observed list's mean. Rather than report a
+    number that answers neither question, the result is inconclusive with the measured row count.
+    """
+    bounds = None if not interval else interval.get("interval")
+    reason = "no_fixed_list_interval" if not bounds else "coverage_not_estimated_for_this_interval"
+    return {
+        "status": "inconclusive",
+        "reason": reason,
+        "held_out_rows": len(outcomes),
+        "held_out_blocks": len({str(block) for block in block_ids}),
+        "latent_mean_coverage": None,
+        "future_aggregate_coverage": None,
+    }
 
 
 def _evaluate_benchmark(
@@ -1534,6 +1595,7 @@ def _evaluate_benchmark(
         pair_rows[tuple(row.get("pairing_key", ()))].append(index)
     pair_diffs: list[float] = []
     pair_events: list[str] = []
+    pair_days: list[str] = []
     pair_players1: list[str] = []
     pair_players2: list[str] = []
     for key, indices in sorted(pair_rows.items(), key=lambda item: repr(item[0])):
@@ -1544,6 +1606,7 @@ def _evaluate_benchmark(
         pair_diffs.append(float(np.average(paired_gain[indices], weights=local_weights)))
         row = measured_rows[indices[0]]
         pair_events.append(str(row.get("date_block_id") or _event_block(context, row)))
+        pair_days.append(f"utc-date:{str(row.get('date') or '')[:10]}")
         pair_players1.append(str(row.get("player1") or "unknown"))
         pair_players2.append(str(row.get("player2") or "unknown"))
     h1 = decide_h1(
@@ -1551,6 +1614,7 @@ def _evaluate_benchmark(
         draws=int(protocol.get("inference", {}).get("h1_bootstrap_draws", 2000)),
         min_gain=float(protocol.get("h1", {}).get("minimum_gain_nats_per_pairing", 0.0001)),
     ) if pair_diffs else {"status": "inconclusive", "estimate": None, "interval": None, "cluster_count": 0}
+    h1_day_unit = _h1_day_unit_sensitivity(pair_diffs, pair_days, protocol)
     block_by_view = [str(row.get("date_block_id") or _event_block(context, row)) for row in measured_rows]
     summary_weights = _unit_pair_view_weights(measured_rows, weights)
     balanced = _weighted_h1_summary(
@@ -1776,17 +1840,18 @@ def _evaluate_benchmark(
             "converged": bool(int_model.converged),
         },
         "h1_predictive": h1,
+        "h1_day_unit_sensitivity": h1_day_unit,
         "h1_combined_status": h1_combined_status,
         "h1_balanced": balanced,
         "h1_balanced_unweighted_diagnostic": balanced_groups,
         "h1_ranking": ranking,
         "player_dependence_sensitivity": player_sensitivity,
-        "h4_predictive_coverage": {
-            "status": "inconclusive",
-            "latent_mean_coverage": "unmeasured",
-            "future_aggregate_coverage": "unmeasured",
-            "reason": "no verified calibration replicate set was supplied; the fixed-list interval is model-conditional and does not establish coverage",
-        },
+        "h4_predictive_coverage": _predictive_coverage(
+            interval,
+            [_event_block(context, row) for row in measured_rows],
+            ref_logit,
+            test_y,
+        ),
         "h3_policy_value": {**policy, "selection_scores_are_not_policy_value": True},
         "recommendations": selections,
         "h4_fixed_list_interval": interval,

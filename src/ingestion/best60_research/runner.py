@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -20,7 +21,7 @@ from src.core.files import relative_path
 from .context import build_context
 from .corpus import extract_corpus
 from .protocol import ProtocolMismatch, lock_protocol, require_protocol
-from .splits import _utc_date, split_events
+from .splits import _utc_date, event_blocks, split_events
 
 
 class RunnerError(RuntimeError):
@@ -232,7 +233,7 @@ def _eligible_ids(splits: dict[str, list[str]], *, include_test: bool = False) -
     return sorted(event for name in names for event in splits[name])
 
 
-def _read_metadata(database: Path, as_of: str | None = None) -> tuple[dict[str, Any], dict[str, list[str]]]:
+def _read_metadata(database: Path, as_of: str | None = None, unit: str = "date") -> tuple[dict[str, Any], dict[str, list[str]]]:
     corpus = _extract(database, include_event_ids=[])
     events = corpus["events"]
     if as_of is not None:
@@ -249,13 +250,52 @@ def _read_metadata(database: Path, as_of: str | None = None) -> tuple[dict[str, 
         events = filtered
     if not events:
         raise RunnerError(3, "database contains no tournament events")
+    players_by_event: dict[str, set[str]] = {}
+    if unit == "event_block":
+        connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+        try:
+            for tournament_id, player_id in connection.execute("SELECT tournament_id, player_id FROM standings"):
+                players_by_event.setdefault(str(tournament_id), set()).add(str(player_id))
+        finally:
+            connection.close()
     try:
-        splits = split_events(events)
+        splits = split_events(events, unit=unit, players_by_event=players_by_event)
     except ValueError as exc:
         raise RunnerError(3, f"event metadata cannot be split: {exc}") from exc
     if not splits["development"] or not splits["validation"] or not splits["test"]:
         raise RunnerError(3, "all three chronological splits need at least one event")
     return corpus, splits
+
+
+def _unit_and_players(database: Path, protocol: dict[str, Any]) -> tuple[str, dict[str, set[str]]]:
+    """The split unit and, for event blocks, each event's stored player IDs."""
+    unit = str(protocol.get("time", {}).get("atomic_unit", "date"))
+    if unit != "event_block":
+        return unit, {}
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        players: dict[str, set[str]] = {}
+        for tournament_id, player_id in connection.execute("SELECT tournament_id, player_id FROM standings"):
+            players.setdefault(str(tournament_id), set()).add(str(player_id))
+    finally:
+        connection.close()
+    return unit, players
+
+
+def _stage_context(database: Path, corpus: dict[str, Any], protocol: dict[str, Any], cutoff: str) -> dict[str, Any]:
+    """Build a stage context with the protocol's split unit, so every stage shares one definition."""
+    unit, players_by_event = _unit_and_players(database, protocol)
+    return build_context(corpus, cutoff=cutoff, embargo_days=int(protocol["time"]["primary_embargo_days"]),
+                         min_slot_lists=int(protocol["features"]["slot_minimum_lists"]),
+                         unit=unit, players_by_event=players_by_event)
+
+
+def _split_fractions(protocol: dict[str, Any]) -> tuple[float, float, float]:
+    """The protocol's split, whether it is written as a mapping or a triple."""
+    value = protocol.get("time", {}).get("split_fractions", (0.6, 0.2, 0.2))
+    if isinstance(value, dict):
+        return (float(value["development"]), float(value["validation"]), float(value["test"]))
+    return tuple(float(item) for item in value)
 
 
 def _check_budget(start: float, maximum: int | None) -> None:
@@ -283,7 +323,7 @@ def run_stage(args: Any) -> dict[str, Any]:
     if stage == "audit":
         if args.resume:
             raise RunnerError(2, "audit creates a new run and does not accept --resume")
-        metadata, splits = _read_metadata(database, as_of)
+        metadata, splits = _read_metadata(database, as_of, unit=str(protocol.get("time", {}).get("atomic_unit", "date")))
         _check_budget(start, args.max_seconds)
         included = _eligible_ids(splits)
         corpus = _extract(database, include_event_ids=included)
@@ -329,7 +369,7 @@ def run_stage(args: Any) -> dict[str, Any]:
     if as_of is not None and as_of != initial_manifest.get("as_of"):
         raise RunnerError(2, "--as-of differs from the audited run")
     as_of = initial_manifest.get("as_of")
-    source_metadata, _ = _read_metadata(database, as_of)
+    source_metadata, _ = _read_metadata(database, as_of, unit=str(protocol.get("time", {}).get("atomic_unit", "date")))
     source_hash = source_metadata["audit"]["source_sha256"]
     manifest = _manifest(run, source_hash, source_metadata["audit"].get("snapshot_fingerprint"), config_hash)
     if args.archetype_id and args.archetype_id != manifest.get("archetype_id"):
@@ -358,8 +398,7 @@ def run_stage(args: Any) -> dict[str, Any]:
         cutoff = min(validation_dates) if validation_dates else None
         if cutoff is None:
             raise RunnerError(3, "validation split has no valid event dates")
-        context = build_context(corpus, cutoff=cutoff, embargo_days=int(protocol["time"]["primary_embargo_days"]),
-                                min_slot_lists=int(protocol["features"]["slot_minimum_lists"]))
+        context = _stage_context(database, corpus, protocol, cutoff)
         validation_views, selection_window = _selection_validation_views(
             corpus,
             splits["validation"],
@@ -504,8 +543,7 @@ def _evaluate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
              if manifest["splits"]["test"]["dates"].get(event)]
     if not dates:
         raise RunnerError(3, "test split has no dated events")
-    context = build_context(corpus, cutoff=min(dates), embargo_days=int(protocol["time"]["primary_embargo_days"]),
-                            min_slot_lists=int(protocol["features"]["slot_minimum_lists"]))
+    context = _stage_context(database, corpus, protocol, min(dates))
     validation = _read_json(output_path.with_name("validation.json"))
     from .experiment import evaluate_experiment
 
@@ -518,7 +556,7 @@ def _evaluate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
 def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[str, Any], run: Path,
                      start: float, maximum: int | None) -> dict[str, Any]:
     from .experiment import prepare_simulation_context
-    from .simulation import run_simulation
+    from .simulation import _split_ids, run_simulation
 
     splits = {name: row["event_ids"] for name, row in manifest["splits"].items()}
     test_dates = manifest["splits"]["test"]["dates"]
@@ -543,24 +581,41 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
     if cutoff is None:
         raise RunnerError(3, "test split has no dated events")
     boundary = (cutoff - timedelta(days=embargo_days)).replace(hour=0, minute=0, second=0, microsecond=0)
-    training_blocks = sorted({
-        block for event_id in pretest_ids
+    dated_pretest = {
+        event_id: parsed for event_id in pretest_ids
         if (parsed := utc_datetime(
             manifest["splits"]["development"]["dates"].get(event_id)
             if event_id in splits["development"] else manifest["splits"]["validation"]["dates"].get(event_id)
-        )) is not None and parsed < boundary and (block := _utc_date(parsed)) is not None
-    })
-    n_training_blocks = len(training_blocks)
+        )) is not None and parsed < boundary
+    }
+    unit = str(protocol.get("time", {}).get("atomic_unit", "date"))
+    if unit == "event_block":
+        connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+        try:
+            players_by_event: dict[str, set[str]] = {}
+            for tournament_id, player_id in connection.execute("SELECT tournament_id, player_id FROM standings"):
+                players_by_event.setdefault(str(tournament_id), set()).add(str(player_id))
+        finally:
+            connection.close()
+        pretest_events = [{"id": event_id, "date": value.isoformat()} for event_id, value in dated_pretest.items()]
+        blocks = event_blocks(pretest_events, players_by_event)
+        training_blocks = sorted(date for date, _ in blocks)
+        n_training_blocks = len(blocks)
+        unit_label = "atomic_event_block"
+    else:
+        training_blocks = sorted({value.date().isoformat() for value in dated_pretest.values()})
+        n_training_blocks = len(training_blocks)
+        unit_label = "atomic_utc_date"
     if n_training_blocks >= 5:
         train_blocks = max(1, int(0.6 * n_training_blocks))
         selection_blocks = max(1, int(0.2 * n_training_blocks))
         measurement_upper_bound = max(0, n_training_blocks - train_blocks - selection_blocks)
-        measurement_split_unit = "atomic_utc_date"
+        measurement_split_unit = unit_label
     else:
         # The simulation falls back to event-level randomisation below five date blocks.
         # Such a split cannot create more distinct measurement date clusters than exist.
         measurement_upper_bound = n_training_blocks
-        measurement_split_unit = "event_fallback_bounded_by_date_blocks"
+        measurement_split_unit = unit_label
     if measurement_upper_bound < minimum_clusters:
         reason = (f"the pre-test training context has {n_training_blocks} atomic UTC date blocks; "
                   f"the configured 60/20/20 simulation split can provide at most "
@@ -597,9 +652,7 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
     dated_test_events = [test_dates[event] for event in splits["test"] if test_dates.get(event)]
     if not dated_test_events:
         raise RunnerError(3, "test split has no dated events")
-    context = build_context(corpus, cutoff=cutoff.isoformat(),
-                            embargo_days=embargo_days,
-                            min_slot_lists=int(protocol["features"]["slot_minimum_lists"]))
+    context = _stage_context(database, corpus, protocol, cutoff.isoformat())
     simulation = protocol["simulation"]
     estimators = protocol["estimators"]
     replicates = int(simulation.get("full_replicates_per_effect", 500))
@@ -617,7 +670,27 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
     benchmarks = {"pooled": prepare_simulation_context(context),
                   target_archetype: prepare_simulation_context(context, archetype_id=target_archetype)}
     results: dict[str, Any] = {}
+    fractions = _split_fractions(protocol)
     for benchmark, arrays in benchmarks.items():
+        measurement_units: int | None = None
+        if arrays.get("pairing_ids") is not None and arrays.get("block_ids") is not None:
+            split_rng = np.random.default_rng(int(seed_grid[0]) + 0x5EED)
+            _, _, measure_ids, _ = _split_ids(
+                arrays["pairing_ids"], arrays["event_ids"], arrays["block_ids"], split_rng, fractions=fractions,
+            )
+            block_of = {tuple(pair): block for pair, block in zip(arrays["pairing_ids"], arrays["block_ids"])}
+            measurement_units = len({block_of[tuple(pair)] for pair in measure_ids})
+        if measurement_units is not None and measurement_units < minimum_clusters:
+            results[benchmark] = {
+                "status": "inconclusive_design",
+                "measurement_units": measurement_units,
+                "minimum_independent_clusters": minimum_clusters,
+                "effects": {format(float(effect), ".12g"): {
+                    "status": "not_run_design_inconclusive", "effect": float(effect),
+                    "requested_replicates": replicates, "completed_replicates": 0,
+                } for effect in effects},
+            }
+            continue
         effect_results: dict[str, Any] = {}
         for effect in effects:
             effect_key = format(effect, ".12g")
@@ -635,6 +708,7 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
                 interaction_penalties=penalties,
                 seed_grid=seed_grid,
                 max_iter=int(estimators.get("max_iterations", 5000)),
+                split_fractions=_split_fractions(protocol),
             )
             effect_results[effect_key] = result
             if result.get("status") != "complete" or time.monotonic() >= deadline:
@@ -648,6 +722,7 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
                     "checkpoint": str(run / "simulation-checkpoints" / f"{benchmark}-{effect_key}.json"),
                 }
         results[benchmark] = {
+            "measurement_units": measurement_units,
             "status": "complete" if all(value.get("status") == "complete"
                                          and value.get("completed_replicates") == replicates
                                          for value in effect_results.values()) else "incomplete",
