@@ -77,7 +77,7 @@
   },
   "h4": {
     "block_sensitivity_days": 7,
-    "bootstrap_unit": "atomic_utc_date_block",
+    "bootstrap_unit": "atomic_event_block",
     "interval_scope": "model_conditional_fixed_list_mean",
     "mean_interval_width_target": 0.1,
     "predictive_coverage_reported_separately": true,

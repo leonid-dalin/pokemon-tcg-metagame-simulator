@@ -1441,41 +1441,21 @@ def _predictive_coverage(
     *,
     folds: int = 5,
 ) -> dict[str, Any]:
-    """Share of held-out block folds whose latent mean and observed rate the interval covers.
+    """H4 coverage is not estimated from the fixed-list interval in this run.
 
-    Latent mean: the model's mean predicted probability over the fold's rows. Future aggregate: the
-    fold's observed win share. Both are checked against the same fixed-list interval.
+    The model-conditional interval covers the fixed list's expected win rate, not a held-out pairing's
+    outcome, and the simulator's injected truth is not the observed list's mean. Rather than report a
+    number that answers neither question, the result is inconclusive with the measured row count.
     """
     bounds = None if not interval else interval.get("interval")
-    if not bounds:
-        return {"status": "inconclusive", "reason": "no_fixed_list_interval",
-                "latent_mean_coverage": None, "future_aggregate_coverage": None}
-    low, high = float(bounds[0]), float(bounds[1])
-    blocks = sorted({str(block) for block in block_ids})
-    if len(blocks) < folds:
-        return {"status": "inconclusive", "reason": "fewer_blocks_than_folds",
-                "block_count": len(blocks), "latent_mean_coverage": None, "future_aggregate_coverage": None}
-    probabilities = 1.0 / (1.0 + np.exp(-np.asarray(logits, dtype=float)))
-    outcomes = np.asarray(outcomes, dtype=float)
-    latent_hits = future_hits = 0
-    for start in range(0, len(blocks), max(1, len(blocks) // folds)):
-        group = set(blocks[start:start + max(1, len(blocks) // folds)])
-        if not group:
-            continue
-        mask = np.asarray([str(block) in group for block in block_ids])
-        if not mask.any():
-            continue
-        latent_hits += int(low <= float(probabilities[mask].mean()) <= high)
-        future_hits += int(low <= float(outcomes[mask].mean()) <= high)
-    folds_used = len(range(0, len(blocks), max(1, len(blocks) // folds)))
+    reason = "no_fixed_list_interval" if not bounds else "coverage_not_estimated_for_this_interval"
     return {
-        "status": "complete",
-        "latent_mean_coverage": latent_hits / folds_used if folds_used else None,
-        "future_aggregate_coverage": future_hits / folds_used if folds_used else None,
-        "folds": folds_used,
-        "block_count": len(blocks),
-        "interval": [low, high],
-        "scope": "model-conditional fixed-list interval",
+        "status": "inconclusive",
+        "reason": reason,
+        "held_out_rows": len(outcomes),
+        "held_out_blocks": len({str(block) for block in block_ids}),
+        "latent_mean_coverage": None,
+        "future_aggregate_coverage": None,
     }
 
 

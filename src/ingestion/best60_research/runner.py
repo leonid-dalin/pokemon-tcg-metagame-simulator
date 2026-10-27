@@ -282,6 +282,14 @@ def _unit_and_players(database: Path, protocol: dict[str, Any]) -> tuple[str, di
     return unit, players
 
 
+def _stage_context(database: Path, corpus: dict[str, Any], protocol: dict[str, Any], cutoff: str) -> dict[str, Any]:
+    """Build a stage context with the protocol's split unit, so every stage shares one definition."""
+    unit, players_by_event = _unit_and_players(database, protocol)
+    return build_context(corpus, cutoff=cutoff, embargo_days=int(protocol["time"]["primary_embargo_days"]),
+                         min_slot_lists=int(protocol["features"]["slot_minimum_lists"]),
+                         unit=unit, players_by_event=players_by_event)
+
+
 def _split_fractions(protocol: dict[str, Any]) -> tuple[float, float, float]:
     """The protocol's split, whether it is written as a mapping or a triple."""
     value = protocol.get("time", {}).get("split_fractions", (0.6, 0.2, 0.2))
@@ -390,10 +398,7 @@ def run_stage(args: Any) -> dict[str, Any]:
         cutoff = min(validation_dates) if validation_dates else None
         if cutoff is None:
             raise RunnerError(3, "validation split has no valid event dates")
-        unit, players_by_event = _unit_and_players(database, protocol)
-        context = build_context(corpus, cutoff=cutoff, embargo_days=int(protocol["time"]["primary_embargo_days"]),
-                                min_slot_lists=int(protocol["features"]["slot_minimum_lists"]),
-                                unit=unit, players_by_event=players_by_event)
+        context = _stage_context(database, corpus, protocol, cutoff)
         validation_views, selection_window = _selection_validation_views(
             corpus,
             splits["validation"],
@@ -538,10 +543,7 @@ def _evaluate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
              if manifest["splits"]["test"]["dates"].get(event)]
     if not dates:
         raise RunnerError(3, "test split has no dated events")
-    unit, players_by_event = _unit_and_players(database, protocol)
-    context = build_context(corpus, cutoff=min(dates), embargo_days=int(protocol["time"]["primary_embargo_days"]),
-                            min_slot_lists=int(protocol["features"]["slot_minimum_lists"]),
-                            unit=unit, players_by_event=players_by_event)
+    context = _stage_context(database, corpus, protocol, min(dates))
     validation = _read_json(output_path.with_name("validation.json"))
     from .experiment import evaluate_experiment
 
@@ -650,11 +652,7 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
     dated_test_events = [test_dates[event] for event in splits["test"] if test_dates.get(event)]
     if not dated_test_events:
         raise RunnerError(3, "test split has no dated events")
-    unit, players_by_event = _unit_and_players(database, protocol)
-    context = build_context(corpus, cutoff=cutoff.isoformat(),
-                            embargo_days=embargo_days,
-                            min_slot_lists=int(protocol["features"]["slot_minimum_lists"]),
-                            unit=unit, players_by_event=players_by_event)
+    context = _stage_context(database, corpus, protocol, cutoff.isoformat())
     simulation = protocol["simulation"]
     estimators = protocol["estimators"]
     replicates = int(simulation.get("full_replicates_per_effect", 500))

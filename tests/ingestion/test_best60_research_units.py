@@ -1,10 +1,11 @@
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
 
 from src.ingestion.best60_research.context import build_context
-from src.ingestion.best60_research.experiment import _predictive_coverage, prepare_simulation_context
+from src.ingestion.best60_research.experiment import _event_block, _predictive_coverage, prepare_simulation_context
 from src.ingestion.best60_research.simulation import _split_ids
 from src.ingestion.best60_research.splits import event_blocks, split_events
 
@@ -111,23 +112,78 @@ def test_build_context_emits_event_block_ids_under_v2():
     assert all(str(value).startswith("event-block:") for value in context["event_block_ids"].values())
 
 
-def test_predictive_coverage_measures_latent_and_future_hits():
+def test_predictive_coverage_is_inconclusive_with_a_measured_row_count():
     blocks = [f"b{index}" for index in range(10)]
-    logits = [0.0] * 10
-    outcomes = [1.0, 0.0] * 5
+    logits = [-9.0] * 10
+    outcomes = [0.0] * 10
 
-    inside = _predictive_coverage({"interval": [0.4, 0.6]}, blocks, logits, outcomes)
-    outside = _predictive_coverage({"interval": [0.7, 0.9]}, blocks, logits, outcomes)
+    result = _predictive_coverage({"interval": [0.85, 0.95]}, blocks, logits, outcomes)
 
-    assert inside["status"] == "complete"
-    assert inside["latent_mean_coverage"] == 1.0
-    assert inside["future_aggregate_coverage"] == 1.0
-    assert outside["latent_mean_coverage"] == 0.0
-    assert outside["future_aggregate_coverage"] == 0.0
+    assert result["status"] == "inconclusive"
+    assert result["held_out_rows"] == 10
+    assert result["latent_mean_coverage"] is None
+    assert result["future_aggregate_coverage"] is None
 
 
 def test_predictive_coverage_is_inconclusive_without_an_interval():
     result = _predictive_coverage(None, ["b0", "b1"], [0.0, 0.0], [1.0, 0.0])
 
     assert result["status"] == "inconclusive"
+    assert result["reason"] == "no_fixed_list_interval"
     assert result["latent_mean_coverage"] is None
+    assert result["future_aggregate_coverage"] is None
+
+
+def test_the_v2_protocol_split_is_read_as_a_mapping():
+    from src.ingestion.best60_research.runner import _split_fractions
+
+    protocol = json.loads(Path("docs/research/best60-protocol-v2.json").read_text(encoding="utf-8"))
+    protocol["time"]["split_fractions"] = {"development": 0.5, "validation": 0.25, "test": 0.25}
+
+    assert _split_fractions(protocol) == (0.5, 0.25, 0.25)
+
+
+def test_stage_context_uses_the_protocol_unit(monkeypatch, tmp_path):
+    from src.ingestion.best60_research import runner
+
+    database = tmp_path / "corpus.db"
+    import sqlite3
+    connection = sqlite3.connect(database)
+    connection.execute("CREATE TABLE standings (tournament_id TEXT, player_id TEXT)")
+    connection.execute("INSERT INTO standings VALUES ('e1', 'p1')")
+    connection.commit()
+    connection.close()
+    captured = {}
+    monkeypatch.setattr(runner, "build_context", lambda *args, **kwargs: captured.update(kwargs) or {})
+    protocol = {"time": {"primary_embargo_days": 7, "atomic_unit": "event_block"},
+                "features": {"slot_minimum_lists": 1}}
+
+    runner._stage_context(str(database), {"events": []}, protocol, "2026-06-01T00:00:00Z")
+
+    assert captured["unit"] == "event_block"
+    assert captured["players_by_event"] == {"e1": {"p1"}}
+
+
+def test_test_rows_cluster_on_event_blocks_under_v2():
+    events = []
+    lists = []
+    players = {}
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    for day in range(40):
+        date = (start + timedelta(days=day)).isoformat()
+        for slot in range(3):
+            event = f"e{day}-{slot}"
+            events.append({"id": event, "date": date})
+            lists.append({"event": event, "player": f"p{day}-{slot}", "counts": {"A": 4, "B": 56},
+                          "archetype_id": "kangaskhan-bouffalant"})
+            players[event] = {f"p{day}-{slot}"}
+    corpus = {"events": events, "lists": lists, "pairings": []}
+
+    context = build_context(corpus, cutoff="2026-02-01T00:00:00Z", embargo_days=0, min_slot_lists=1,
+                            unit="event_block", players_by_event=players)
+    clusters = {_event_block(context, {"event": event["id"], "date": event["date"]}) for event in events}
+    days = {event["date"][:10] for event in events}
+
+    assert all(cluster.startswith("event-block:") for cluster in clusters)
+    assert len(clusters) == 120
+    assert len(days) == 40
