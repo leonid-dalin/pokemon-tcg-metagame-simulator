@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 
 from src.ingestion.best60_research.context import build_context
-from src.ingestion.best60_research.experiment import prepare_simulation_context
+from src.ingestion.best60_research.experiment import _predictive_coverage, prepare_simulation_context
 from src.ingestion.best60_research.simulation import _split_ids
 from src.ingestion.best60_research.splits import event_blocks, split_events
 
@@ -109,3 +109,25 @@ def test_build_context_emits_event_block_ids_under_v2():
 
     assert context["event_block_ids"]
     assert all(str(value).startswith("event-block:") for value in context["event_block_ids"].values())
+
+
+def test_predictive_coverage_measures_latent_and_future_hits():
+    blocks = [f"b{index}" for index in range(10)]
+    logits = [0.0] * 10
+    outcomes = [1.0, 0.0] * 5
+
+    inside = _predictive_coverage({"interval": [0.4, 0.6]}, blocks, logits, outcomes)
+    outside = _predictive_coverage({"interval": [0.7, 0.9]}, blocks, logits, outcomes)
+
+    assert inside["status"] == "complete"
+    assert inside["latent_mean_coverage"] == 1.0
+    assert inside["future_aggregate_coverage"] == 1.0
+    assert outside["latent_mean_coverage"] == 0.0
+    assert outside["future_aggregate_coverage"] == 0.0
+
+
+def test_predictive_coverage_is_inconclusive_without_an_interval():
+    result = _predictive_coverage(None, ["b0", "b1"], [0.0, 0.0], [1.0, 0.0])
+
+    assert result["status"] == "inconclusive"
+    assert result["latent_mean_coverage"] is None

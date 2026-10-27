@@ -1433,6 +1433,52 @@ def _ranking_gain_interval(
     return result
 
 
+def _predictive_coverage(
+    interval: Mapping[str, Any] | None,
+    block_ids: Sequence[str],
+    logits: Sequence[float],
+    outcomes: Sequence[float],
+    *,
+    folds: int = 5,
+) -> dict[str, Any]:
+    """Share of held-out block folds whose latent mean and observed rate the interval covers.
+
+    Latent mean: the model's mean predicted probability over the fold's rows. Future aggregate: the
+    fold's observed win share. Both are checked against the same fixed-list interval.
+    """
+    bounds = None if not interval else interval.get("interval")
+    if not bounds:
+        return {"status": "inconclusive", "reason": "no_fixed_list_interval",
+                "latent_mean_coverage": None, "future_aggregate_coverage": None}
+    low, high = float(bounds[0]), float(bounds[1])
+    blocks = sorted({str(block) for block in block_ids})
+    if len(blocks) < folds:
+        return {"status": "inconclusive", "reason": "fewer_blocks_than_folds",
+                "block_count": len(blocks), "latent_mean_coverage": None, "future_aggregate_coverage": None}
+    probabilities = 1.0 / (1.0 + np.exp(-np.asarray(logits, dtype=float)))
+    outcomes = np.asarray(outcomes, dtype=float)
+    latent_hits = future_hits = 0
+    for start in range(0, len(blocks), max(1, len(blocks) // folds)):
+        group = set(blocks[start:start + max(1, len(blocks) // folds)])
+        if not group:
+            continue
+        mask = np.asarray([str(block) in group for block in block_ids])
+        if not mask.any():
+            continue
+        latent_hits += int(low <= float(probabilities[mask].mean()) <= high)
+        future_hits += int(low <= float(outcomes[mask].mean()) <= high)
+    folds_used = len(range(0, len(blocks), max(1, len(blocks) // folds)))
+    return {
+        "status": "complete",
+        "latent_mean_coverage": latent_hits / folds_used if folds_used else None,
+        "future_aggregate_coverage": future_hits / folds_used if folds_used else None,
+        "folds": folds_used,
+        "block_count": len(blocks),
+        "interval": [low, high],
+        "scope": "model-conditional fixed-list interval",
+    }
+
+
 def _evaluate_benchmark(
     context: dict[str, Any],
     test_views: Sequence[Mapping[str, Any]],
@@ -1781,12 +1827,12 @@ def _evaluate_benchmark(
         "h1_balanced_unweighted_diagnostic": balanced_groups,
         "h1_ranking": ranking,
         "player_dependence_sensitivity": player_sensitivity,
-        "h4_predictive_coverage": {
-            "status": "inconclusive",
-            "latent_mean_coverage": "unmeasured",
-            "future_aggregate_coverage": "unmeasured",
-            "reason": "no verified calibration replicate set was supplied; the fixed-list interval is model-conditional and does not establish coverage",
-        },
+        "h4_predictive_coverage": _predictive_coverage(
+            interval,
+            [_event_block(context, row) for row in measured_rows],
+            ref_logit,
+            test_y,
+        ),
         "h3_policy_value": {**policy, "selection_scores_are_not_policy_value": True},
         "recommendations": selections,
         "h4_fixed_list_interval": interval,

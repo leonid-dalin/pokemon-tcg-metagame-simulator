@@ -554,7 +554,7 @@ def _evaluate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
 def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[str, Any], run: Path,
                      start: float, maximum: int | None) -> dict[str, Any]:
     from .experiment import prepare_simulation_context
-    from .simulation import run_simulation
+    from .simulation import _split_ids, run_simulation
 
     splits = {name: row["event_ids"] for name, row in manifest["splits"].items()}
     test_dates = manifest["splits"]["test"]["dates"]
@@ -672,7 +672,27 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
     benchmarks = {"pooled": prepare_simulation_context(context),
                   target_archetype: prepare_simulation_context(context, archetype_id=target_archetype)}
     results: dict[str, Any] = {}
+    fractions = _split_fractions(protocol)
     for benchmark, arrays in benchmarks.items():
+        measurement_units: int | None = None
+        if arrays.get("pairing_ids") is not None and arrays.get("block_ids") is not None:
+            split_rng = np.random.default_rng(int(seed_grid[0]) + 0x5EED)
+            _, _, measure_ids, _ = _split_ids(
+                arrays["pairing_ids"], arrays["event_ids"], arrays["block_ids"], split_rng, fractions=fractions,
+            )
+            block_of = {tuple(pair): block for pair, block in zip(arrays["pairing_ids"], arrays["block_ids"])}
+            measurement_units = len({block_of[tuple(pair)] for pair in measure_ids})
+        if measurement_units is not None and measurement_units < minimum_clusters:
+            results[benchmark] = {
+                "status": "inconclusive_design",
+                "measurement_units": measurement_units,
+                "minimum_independent_clusters": minimum_clusters,
+                "effects": {format(float(effect), ".12g"): {
+                    "status": "not_run_design_inconclusive", "effect": float(effect),
+                    "requested_replicates": replicates, "completed_replicates": 0,
+                } for effect in effects},
+            }
+            continue
         effect_results: dict[str, Any] = {}
         for effect in effects:
             effect_key = format(effect, ".12g")
@@ -704,6 +724,7 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
                     "checkpoint": str(run / "simulation-checkpoints" / f"{benchmark}-{effect_key}.json"),
                 }
         results[benchmark] = {
+            "measurement_units": measurement_units,
             "status": "complete" if all(value.get("status") == "complete"
                                          and value.get("completed_replicates") == replicates
                                          for value in effect_results.values()) else "incomplete",

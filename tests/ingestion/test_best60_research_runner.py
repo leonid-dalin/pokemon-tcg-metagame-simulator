@@ -229,6 +229,67 @@ def test_simulation_preflight_uses_training_context_not_final_test_blocks(monkey
     assert result["preflight"]["measurement_date_block_upper_bound"] == 25
 
 
+def test_simulation_preflight_gates_each_benchmark_separately(monkeypatch, tmp_path):
+    import sqlite3
+
+    import numpy as np
+
+    from src.ingestion.best60_research import experiment, runner, simulation
+
+    database = tmp_path / "corpus.db"
+    connection = sqlite3.connect(database)
+    connection.execute("CREATE TABLE standings (tournament_id TEXT, player_id TEXT)")
+    connection.executemany("INSERT INTO standings VALUES (?, ?)", [(f"d{i}", f"p{i}") for i in range(120)])
+    connection.commit()
+    connection.close()
+    monkeypatch.setattr(runner, "_extract", lambda _database, **_kwargs: {"events": [], "lists": [], "pairings": []})
+    monkeypatch.setattr(runner, "build_context", lambda *_args, **_kwargs: {
+        "cutoff": "2026-06-01T00:00:00+00:00", "embargo_days": 7,
+        "coverage": {"training_event_count": 120, "eligible_pairing_count": 500},
+        "event_blocks": [{"id": f"d{i}"} for i in range(120)], "slot_names": [("A", 1)],
+    })
+
+    def prepare(_context, archetype_id=None):
+        count = 120 if archetype_id is None else 60
+        return {
+            "pairing_ids": np.array([f"p{i}" for i in range(count)], dtype=object),
+            "event_ids": np.array([f"e{i}" for i in range(count)], dtype=object),
+            "block_ids": np.array([f"event-block:2026-01-{i:03d}:e{i}" for i in range(count)], dtype=object),
+        }
+
+    monkeypatch.setattr(experiment, "prepare_simulation_context", prepare)
+    calls = []
+    monkeypatch.setattr(simulation, "run_simulation", lambda _context, **kwargs: (
+        calls.append(kwargs) or {"status": "complete", "completed_replicates": kwargs["replicates"]}
+    ))
+    development_ids = [f"d{i}" for i in range(120)]
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    development_dates = {event_id: (start + timedelta(days=index)).isoformat()
+                         for index, event_id in enumerate(development_ids)}
+    manifest = {"archetype_id": "kangaskhan-bouffalant", "splits": {
+        "development": {"event_ids": development_ids, "dates": development_dates},
+        "validation": {"event_ids": [], "dates": {}},
+        "test": {"event_ids": ["t"], "dates": {"t": "2026-06-01T00:00:00Z"}},
+    }}
+    protocol = {"time": {"primary_embargo_days": 7, "atomic_unit": "event_block",
+                         "split_fractions": {"development": 0.6, "validation": 0.2, "test": 0.2}},
+                "features": {"slot_minimum_lists": 1},
+                "estimators": {"max_iterations": 5},
+                "h1": {"minimum_independent_event_clusters": 20},
+                "simulation": {"full_replicates_per_effect": 1, "effects_log_odds": [0.0],
+                               "full_rank_grid": [2], "full_seed_grid": [1312],
+                               "full_interaction_penalty_grid": [0.001], "full_wall_clock_seconds": 30}}
+
+    result = _simulate_locked(str(database), manifest, protocol, tmp_path, time.monotonic(), None)
+
+    assert result["benchmarks"]["pooled"]["status"] == "complete"
+    assert result["benchmarks"]["pooled"]["measurement_units"] == 24
+    assert result["benchmarks"]["kangaskhan-bouffalant"]["status"] == "inconclusive_design"
+    assert result["benchmarks"]["kangaskhan-bouffalant"]["measurement_units"] == 12
+    assert all(call["replicates"] == 1 for call in calls)
+    assert len(calls) == 1
+
+
 def test_simulation_preflight_counts_event_blocks_under_protocol_v2(monkeypatch, tmp_path):
     import sqlite3
 
