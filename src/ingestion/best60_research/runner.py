@@ -21,7 +21,7 @@ from src.core.files import relative_path
 from .context import build_context
 from .corpus import extract_corpus
 from .protocol import ProtocolMismatch, lock_protocol, require_protocol
-from .splits import _utc_date, split_events
+from .splits import _utc_date, event_blocks, split_events
 
 
 class RunnerError(RuntimeError):
@@ -552,24 +552,41 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
     if cutoff is None:
         raise RunnerError(3, "test split has no dated events")
     boundary = (cutoff - timedelta(days=embargo_days)).replace(hour=0, minute=0, second=0, microsecond=0)
-    training_blocks = sorted({
-        block for event_id in pretest_ids
+    dated_pretest = {
+        event_id: parsed for event_id in pretest_ids
         if (parsed := utc_datetime(
             manifest["splits"]["development"]["dates"].get(event_id)
             if event_id in splits["development"] else manifest["splits"]["validation"]["dates"].get(event_id)
-        )) is not None and parsed < boundary and (block := _utc_date(parsed)) is not None
-    })
-    n_training_blocks = len(training_blocks)
+        )) is not None and parsed < boundary
+    }
+    unit = str(protocol.get("time", {}).get("atomic_unit", "date"))
+    if unit == "event_block":
+        connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+        try:
+            players_by_event: dict[str, set[str]] = {}
+            for tournament_id, player_id in connection.execute("SELECT tournament_id, player_id FROM standings"):
+                players_by_event.setdefault(str(tournament_id), set()).add(str(player_id))
+        finally:
+            connection.close()
+        pretest_events = [{"id": event_id, "date": value.isoformat()} for event_id, value in dated_pretest.items()]
+        blocks = event_blocks(pretest_events, players_by_event)
+        training_blocks = sorted(date for date, _ in blocks)
+        n_training_blocks = len(blocks)
+        unit_label = "atomic_event_block"
+    else:
+        training_blocks = sorted({value.date().isoformat() for value in dated_pretest.values()})
+        n_training_blocks = len(training_blocks)
+        unit_label = "atomic_utc_date"
     if n_training_blocks >= 5:
         train_blocks = max(1, int(0.6 * n_training_blocks))
         selection_blocks = max(1, int(0.2 * n_training_blocks))
         measurement_upper_bound = max(0, n_training_blocks - train_blocks - selection_blocks)
-        measurement_split_unit = "atomic_utc_date"
+        measurement_split_unit = unit_label
     else:
         # The simulation falls back to event-level randomisation below five date blocks.
         # Such a split cannot create more distinct measurement date clusters than exist.
         measurement_upper_bound = n_training_blocks
-        measurement_split_unit = "event_fallback_bounded_by_date_blocks"
+        measurement_split_unit = unit_label
     if measurement_upper_bound < minimum_clusters:
         reason = (f"the pre-test training context has {n_training_blocks} atomic UTC date blocks; "
                   f"the configured 60/20/20 simulation split can provide at most "

@@ -229,6 +229,44 @@ def test_simulation_preflight_uses_training_context_not_final_test_blocks(monkey
     assert result["preflight"]["measurement_date_block_upper_bound"] == 25
 
 
+def test_simulation_preflight_counts_event_blocks_under_protocol_v2(monkeypatch, tmp_path):
+    import sqlite3
+
+    from src.ingestion.best60_research import experiment, runner, simulation
+
+    database = tmp_path / "corpus.db"
+    connection = sqlite3.connect(database)
+    connection.execute("CREATE TABLE standings (tournament_id TEXT, player_id TEXT)")
+    connection.executemany("INSERT INTO standings VALUES (?, ?)", [("d0", "p1"), ("d1", "p2"), ("d2", "p3")])
+    connection.commit()
+    connection.close()
+    monkeypatch.setattr(runner, "_extract", lambda _database, **_kwargs: {"events": []})
+    monkeypatch.setattr(runner, "build_context", lambda *_args, **_kwargs: {
+        "cutoff": "2026-06-01T00:00:00+00:00", "embargo_days": 7,
+        "coverage": {"training_event_count": 10, "eligible_pairing_count": 500},
+        "event_blocks": [{"id": f"d{i}"} for i in range(10)], "slot_names": [("A", 1)],
+    })
+    monkeypatch.setattr(experiment, "prepare_simulation_context", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(simulation, "run_simulation", lambda _context, **kwargs: {
+        "status": "complete", "completed_replicates": kwargs["replicates"],
+    })
+    development_ids = [f"d{i}" for i in range(10)]
+    development_dates = {"d0": "2026-01-01T00:00:00Z", "d1": "2026-01-01T12:00:00Z"}
+    for index in range(2, 10):
+        development_dates[f"d{index}"] = f"2026-01-{index + 1:02d}T00:00:00Z"
+    manifest = {"archetype_id": "kangaskhan-bouffalant", "splits": {
+        "development": {"event_ids": development_ids, "dates": development_dates},
+        "validation": {"event_ids": [], "dates": {}},
+        "test": {"event_ids": ["t"], "dates": {"t": "2026-06-01T00:00:00Z"}},
+    }}
+    protocol = {"time": {"primary_embargo_days": 7, "atomic_unit": "event_block"},
+                "h1": {"minimum_independent_event_clusters": 20}}
+    result = _simulate_locked(str(database), manifest, protocol, tmp_path, time.monotonic(), None)
+
+    assert result["preflight"]["measurement_split_unit"] == "atomic_event_block"
+    assert result["preflight"]["pretest_training_date_block_count"] == 10
+
+
 def test_evaluation_passes_remaining_stage_budget_after_context_build(monkeypatch, tmp_path):
     from src.ingestion.best60_research import experiment, runner
 
