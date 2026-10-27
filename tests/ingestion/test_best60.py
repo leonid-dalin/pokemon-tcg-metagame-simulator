@@ -1,9 +1,11 @@
+import types
 from collections import Counter
 
 import numpy as np
 import pytest
 
 from src.ingestion import best60
+from src.ingestion.best60_games import Game
 from src.ingestion.best60 import (
     ArchetypeList,
     build_best60,
@@ -527,6 +529,93 @@ def test_fold_strength_uses_training_records_only():
     }
     strength = best60._fold_strength(records, {"train"}, {"held-out"})
     assert strength[("held-out", "p")] == pytest.approx(np.log(19 / 10))
+
+
+@pytest.mark.unit
+def test_seed_gain_prices_the_pick_on_the_held_out_block(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    folds = event_folds(lists)
+    blocks = [
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold == block)
+        for block in range(1, best60.FOLDS)
+    ]
+    captured = []
+    original = best60.fit_slot_model
+
+    def capture(train, strength, prior_sd):
+        captured.append(frozenset(entry.event for entry in train))
+        return original(train, strength, prior_sd)
+
+    monkeypatch.setattr(best60, "fit_slot_model", capture)
+    best60.seed_gain(lists, {}, 0.5, records)
+
+    assert all(block in captured for block in blocks)
+
+
+@pytest.mark.unit
+def test_seed_list_keeps_the_most_played_list_when_the_gain_is_inside_one_standard_error(monkeypatch):
+    rows, _ = _synthetic(lists=60)
+    lists = [parse_list(row) for row in rows]
+    pick = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 2, "Grass Energy": 46})
+    stub = types.SimpleNamespace(game=object())
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (pick, 1, 0.9))
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.02, 0.05))
+
+    deck, players, source, gain, se = best60.seed_list(lists, {}, 0.5, None, model=stub)
+
+    assert source == "most played"
+    assert deck == Counter(best60.most_played_list(lists)[0])
+
+
+@pytest.mark.unit
+def test_seed_gain_estimates_the_field_from_training_games_only(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    folds = event_folds(lists)
+    games = [
+        Game(event=entry.event, player=entry.player, opponent="other", opponent_deck="Other", won=1)
+        for entry in lists
+    ]
+    seen = []
+    original = best60.observed_field
+
+    def capture(entries, games_arg, *args, **kwargs):
+        seen.append(frozenset(entry.event for entry in entries))
+        return original(entries, games_arg, *args, **kwargs)
+
+    monkeypatch.setattr(best60, "observed_field", capture)
+    best60.seed_gain(lists, {}, 0.5, records, games=games)
+
+    prefixes = {
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold < block)
+        for block in range(1, best60.FOLDS)
+    }
+    blocks = {
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold == block)
+        for block in range(1, best60.FOLDS)
+    }
+    assert seen and set(seen) <= prefixes | blocks
+    assert prefixes & set(seen)
+
+
+@pytest.mark.unit
+def test_seed_gain_measures_the_pick_against_the_most_played_list(monkeypatch):
+    rows, records = _synthetic(lists=60)
+    lists = [parse_list(row) for row in rows]
+    pick = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 2, "Grass Energy": 46})
+    baseline = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech B": 2, "Grass Energy": 46})
+    stub = types.SimpleNamespace(game=object())
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (pick, 1, 0.9))
+    monkeypatch.setattr(best60, "most_played_list", lambda *args, **kwargs: (baseline, 1))
+    monkeypatch.setattr(best60, "consensus_sixty", lambda *args, **kwargs: pick)
+    monkeypatch.setattr(best60, "_list_score", lambda game, deck, field: 1.0 if deck == pick else 0.0)
+
+    mean, se = best60.seed_gain(lists, {}, 0.5, records)
+
+    assert mean == pytest.approx(1.0)
+    assert se == pytest.approx(0.0)
 
 
 @pytest.mark.unit
