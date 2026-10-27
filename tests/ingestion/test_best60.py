@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from src.ingestion import best60
-from src.ingestion.best60_games import Game
+from src.ingestion.best60_games import Game, GameModel, ModelSpec
 from src.ingestion.best60 import (
     ArchetypeList,
     build_best60,
@@ -566,6 +566,73 @@ def test_seed_list_keeps_the_most_played_list_when_the_gain_is_inside_one_standa
 
     assert source == "most played"
     assert deck == Counter(best60.most_played_list(lists)[0])
+
+
+@pytest.mark.unit
+def test_seed_list_scores_the_pick_against_the_specified_field(monkeypatch):
+    rows = [_row("e1", f"a{index}", _base(tech_a=2)) for index in range(3)]
+    rows += [_row("e1", f"b{index}", _base()) for index in range(3)]
+    lists = [parse_list(row) for row in rows]
+    game = GameModel(
+        slots=[("Tech A", 2)], slot_means=np.array([0.0]), opponents=["Deck X", "Deck Y"],
+        specific=["Deck X", "Deck Y"], theta=np.array([0.0, 0.0, 0.0, 0.0, 2.0, -2.0]),
+        covariance=np.zeros((6, 6)), spec=ModelSpec(prior_sd=0.5),
+    )
+    stub = types.SimpleNamespace(game=game)
+    monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
+
+    first, _, first_source, _, _ = best60.seed_list(lists, {}, 0.5, None, model=stub, field={"Deck X": 1.0})
+    second, _, second_source, _, _ = best60.seed_list(lists, {}, 0.5, None, model=stub, field={"Deck Y": 1.0})
+
+    assert first_source == second_source == "validated pick"
+    assert first["Tech A"] == 2
+    assert second.get("Tech A", 0) == 0
+
+
+@pytest.mark.unit
+def test_seed_gain_uses_the_specified_field_in_every_fold(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    game = GameModel(
+        slots=[], slot_means=np.array([]), opponents=["Deck X"], specific=[],
+        theta=np.array([0.0]), covariance=np.zeros((1, 1)), spec=ModelSpec(prior_sd=0.5),
+    )
+    stub = types.SimpleNamespace(game=game)
+    seen = []
+    original = best60._list_score
+
+    def capture(game_arg, deck, field):
+        seen.append(dict(field))
+        return original(game_arg, deck, field)
+
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "_list_score", capture)
+    best60.seed_gain(lists, {}, 0.5, records, field={"Deck X": 1.0})
+
+    assert seen and all(field == {"Deck X": 1.0} for field in seen)
+
+
+@pytest.mark.unit
+def test_recency_losses_passes_event_dates_to_the_fold_strength(monkeypatch):
+    rows = [
+        _row(f"e{index}", f"p{index}", _base(), date=f"2026-09-{1 + index % 25:02d}T00:00:00Z")
+        for index in range(40)
+    ]
+    lists = [parse_list(row) for row in rows]
+    records = {(entry.event, entry.player): (3, 2) for entry in lists}
+    seen = []
+    original = best60._fold_strength
+
+    def capture(records_arg, train_events, test_events, dates=None):
+        seen.append(dates)
+        return original(records_arg, train_events, test_events, dates)
+
+    monkeypatch.setattr(best60, "_fold_strength", capture)
+    best60.recency_losses(lists, {}, records, ModelSpec(prior_sd=0.5, as_of="2026-09-30T00:00:00Z"))
+
+    assert seen
+    assert seen[0] is not None
+    assert set(seen[0]) >= {entry.event for entry in lists[:5]}
 
 
 @pytest.mark.unit

@@ -10,15 +10,16 @@ GLOSSARY = {
     "H1 check": "Mist Energy in Alakazam Dudunsparce decks. The match result is fitted on the card twice, once with a control for the Hammer build, and the hypothesis holds when the coefficient stays positive both ways.",
     "List mode": "novel lets the builder propose a list nobody has played; observed stops at combinations already seen in the data.",
     "Legal lists": "Stored lists of this archetype that pass deck legality.",
-    "Joint probability %": "Chance the whole recommended list beats the consensus list.",
+    "Joint probability %": "Chance the whole recommended list beats the list the builder started from.",
     "Consensus": "Copies the archetype plays most often.",
-    "Source": "swap when the builder changed this count away from the consensus; consensus otherwise.",
+    "Source": "observed when the count comes from the shipped observed list; swap when the builder changed it; consensus otherwise.",
+    "Shipped list": "observed when the shipped list is one players played; swaps when the builder changed the observed list.",
     "Play rate %": "Share of the archetype's lists that run the card.",
     "Top 25% rate %": "Share of the lists running the card that finished in the top quarter.",
     "Same count in resamples %": "Share of event resamples that recommend exactly this count.",
     "Effect": "Fitted change in the log-odds of winning, per opponent.",
-    "95% low": "Lower end of the 95% interval.",
-    "95% high": "Upper end of the 95% interval.",
+    "95% low": "Lower end of the model-based 95% interval.",
+    "95% high": "Upper end of the model-based 95% interval.",
 }
 
 STYLE = """
@@ -168,7 +169,7 @@ def _best60(name: str, recommendation: Mapping[str, Any]) -> str:
         "<h4>Win rate</h4>" + _details(list(view["win_rates"].items())),
         "<h4>Model</h4>" + _details(list(view["model_settings"].items())),
         _matchups(recommendation),
-        ("<h4>Card values</h4><p class=\"hint\">Change in field-weighted win probability when one copy is removed.</p>"
+        ("<h4>Card values</h4><p class=\"hint\">Change in field-weighted win probability when one copy is removed. The interval is a model-based 95% interval from the fitted posterior covariance.</p>"
          + _table(view["card_values"])) if view["card_values"] else "",
         _table(view["support"]),
         _table(view["trends"]),

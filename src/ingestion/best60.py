@@ -418,7 +418,8 @@ def recency_losses(
     test = [lists[position] for position in late]
     if not train or not test:
         return {}
-    fold_strength = _fold_strength(records, {entry.event for entry in train}, {entry.event for entry in test}) if records is not None else strength
+    dates = {entry.event: entry.date for entry in lists}
+    fold_strength = _fold_strength(records, {entry.event for entry in train}, {entry.event for entry in test}, dates) if records is not None else strength
     probe = fit_game(train, fold_strength, replace(spec, half_life=None), with_covariance=False)
     if probe.loss(test, fold_strength)[1] < BDIF_BEST60_MIN_RECENT_GAMES:
         return {}
@@ -832,13 +833,17 @@ def seed_gain(
     prior_sd: float | ModelSpec,
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
     *,
+    field: Mapping[str, float] | None = None,
     games: Sequence[Game] | None = None,
+    as_of: str | None = None,
+    half_life: float | None = None,
 ) -> tuple[float, float]:
     """Forward-fold gain of the model-picked observed list over the fold's most-played list.
 
     The pick is chosen on the training blocks and both lists are priced on the next block with a model
-    fitted there, against the field those training games faced, so a pick that only looks good in
-    training is worth about zero. Units are win probability, not log-odds.
+    fitted there. A specified field is used as given in every fold; otherwise the field is estimated
+    from each fold's training games with the report's `as_of` and tuned half-life. Units are win
+    probability, not log-odds.
     """
     folds = event_folds(lists)
     if len(set(entry.event for entry in lists)) < FOLDS:
@@ -849,7 +854,10 @@ def seed_gain(
         train = [entry for entry, f in zip(lists, folds) if f < fold]
         test = [entry for entry, f in zip(lists, folds) if f == fold]
         fold_strength = _fold_strength(records, {entry.event for entry in train}, {entry.event for entry in test}, dates) if records is not None else strength
-        fold_field = observed_field(train, games) if games else {}
+        if field:
+            fold_field = dict(field)
+        else:
+            fold_field = observed_field(train, games, as_of, half_life) if games else {}
         picked, _, _ = best_field_list(train, fit_slot_model(train, fold_strength, prior_sd).game, fold_field)
         baseline, _ = most_played_list(train)
         priced = fit_slot_model(test, fold_strength, prior_sd)
@@ -864,16 +872,26 @@ def seed_list(
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
     model: SlotModel | None = None,
     *,
+    field: Mapping[str, float] | None = None,
     games: Sequence[Game] | None = None,
+    as_of: str | None = None,
+    half_life: float | None = None,
 ) -> tuple[Counter[str], int, str, float, float]:
-    """The list production ships for these lists: the validated pick or the most-played list."""
+    """The list production ships for these lists: the validated pick or the most-played list.
+
+    A specified field is scored as given; otherwise the field is estimated from these lists' games
+    with the report's `as_of` and tuned half-life.
+    """
     game = (model or fit_slot_model(lists, strength, prior_sd)).game
     if game is None:
         played, played_players = most_played_list(lists)
         return played, played_players, "most played", 0.0, 0.0
-    field = observed_field(lists, games) if games else {}
-    picked, picked_players, _ = best_field_list(lists, game, field)
-    gain, se = seed_gain(lists, strength, prior_sd, records, games=games)
+    if field:
+        pick_field = dict(field)
+    else:
+        pick_field = observed_field(lists, games, as_of, half_life) if games else {}
+    picked, picked_players, _ = best_field_list(lists, game, pick_field)
+    gain, se = seed_gain(lists, strength, prior_sd, records, field=field, games=games, as_of=as_of, half_life=half_life)
     if gain - BDIF_BEST60_HELD_OUT_SE * se > 0:
         return picked, picked_players, "validated pick", gain, se
     played, played_players = most_played_list(lists)
@@ -888,7 +906,10 @@ def held_out_gain(
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
     list_mode: str = "novel",
     *,
+    field: Mapping[str, float] | None = None,
     games: Sequence[Game] | None = None,
+    as_of: str | None = None,
+    half_life: float | None = None,
 ) -> tuple[float, float]:
     """Cross-fitted value of the swap procedure, in log-odds: mean and standard error over four forward folds.
 
@@ -907,7 +928,10 @@ def held_out_gain(
         test_events = {entry.event for entry in test}
         fold_strength = _fold_strength(records, train_events, test_events, dates) if records is not None else strength
         train_model = fit_slot_model(train, fold_strength, prior_sd)
-        fold_start, _, _, _, _ = seed_list(train, fold_strength, prior_sd, records, model=train_model, games=games)
+        fold_start, _, _, _, _ = seed_list(
+            train, fold_strength, prior_sd, records, model=train_model,
+            field=field, games=games, as_of=as_of, half_life=half_life,
+        )
         fold_groups = {card: group for entry in train for card, group in entry.groups.items()}
         _, applied, _ = improve(
             fold_start, train_model, fold_groups, prerequisites(train),
@@ -1131,11 +1155,15 @@ def build_best60(
                 best_recency = min(recency, key=lambda label: (recency[label], label))
                 if best_recency != "no recency weighting":
                     spec = replace(spec, half_life=float(best_recency.removeprefix("half-life ").removesuffix(" days")))
+            specified_field = used_field or None
             used_field = used_field or observed_field(lists, games, as_of, spec.half_life)
             spec = replace(spec, field=used_field)
             prior_sd = spec
             model = fit_slot_model(lists, strength, prior_sd)
-            seed, seed_players, seed_source, pick_gain, pick_se = seed_list(lists, strength, prior_sd, records, model=model, games=games)
+            seed, seed_players, seed_source, pick_gain, pick_se = seed_list(
+                lists, strength, prior_sd, records, model=model,
+                field=specified_field, games=games, as_of=as_of, half_life=spec.half_life,
+            )
             model_report["seed_field_score"] = _list_score(model.game, seed, used_field) if model.game else None
             model_report["seed_gain"] = pick_gain
             model_report["seed_gain_se"] = pick_se
@@ -1143,7 +1171,10 @@ def build_best60(
             improved, proposed, leaning = improve(
                 seed, model, groups, prerequisites(lists), count_levels(lists, seed), _support_check(lists, list_mode),
             )
-            gain_held_out, gain_se = held_out_gain(lists, strength, prior_sd, groups, records, list_mode, games=games)
+            gain_held_out, gain_se = held_out_gain(
+                lists, strength, prior_sd, groups, records, list_mode,
+                field=specified_field, games=games, as_of=as_of, half_life=spec.half_life,
+            )
             model_report.update({
                 "prior_sd": spec.prior_sd, "opponent_sd": spec.opponent_sd, "half_life_days": spec.half_life,
                 "slots": len(model.slots), "opponents_with_own_effects": list(model.game.specific) if model.game else [],
@@ -1196,6 +1227,7 @@ def build_best60(
         "field": dict(sorted(used_field.items(), key=lambda item: (-item[1], item[0]))[:12]),
         "card_matchups": matchups,
         "card_values": card_values(deck, model, used_field),
+        "card_value_interval": "model-based 95%",
         "match_win_rate": {
             "archetype_average": _expected_rate(lists, 0.0),
             "with_swaps_in_sample": _expected_rate(lists, gain),
