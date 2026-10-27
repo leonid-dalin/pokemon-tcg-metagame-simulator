@@ -758,17 +758,135 @@ def test_a_tied_most_played_list_goes_to_the_one_nearest_the_other_lists():
     base = [("Mon", 4, "pokemon"), ("Mon ex", 4, "pokemon"), ("Ultra Ball", 4, "trainer")]
     rows = []
     for index in range(30):
-        rows.append(_row("e", f"a{index}", base + [("Tech A", 2, "trainer"), ("Grass Energy", 46, "energy")]))
-    for index in range(30):
         rows.append(_row("e", f"b{index}", base + [("Tech B", 2, "trainer"), ("Grass Energy", 46, "energy")]))
+    for index in range(30):
+        rows.append(_row("e", f"z{index}", base + [("Tech Z", 2, "trainer"), ("Grass Energy", 46, "energy")]))
     for index in range(20):
-        rows.append(_row("e", f"c{index}", base + [("Tech A", 1, "trainer"), ("Grass Energy", 47, "energy")]))
+        rows.append(_row("e", f"c{index}", base + [("Tech Z", 1, "trainer"), ("Grass Energy", 47, "energy")]))
     lists = [parse_list(row) for row in rows]
 
     deck, players = best60.most_played_list(lists)
 
     assert players == 30
-    assert deck == Counter({**dict((card, count) for card, count, _ in base), "Tech A": 2, "Grass Energy": 46})
+    assert deck == Counter({**dict((card, count) for card, count, _ in base), "Tech Z": 2, "Grass Energy": 46})
+
+
+@pytest.mark.unit
+def test_build_best60_forwards_the_target_field_and_half_life(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    strength = player_strength(records)
+    deck = Counter({card: count for card, count, _ in _base()})
+    stub = types.SimpleNamespace(slots=[], game=None)
+    spec = ModelSpec(prior_sd=0.5, half_life=42.0)
+    seen = {}
+
+    monkeypatch.setattr(best60, "held_out_losses", lambda *args, **kwargs: {"model": 0.6})
+    monkeypatch.setattr(best60, "tuned_spec", lambda *args, **kwargs: spec)
+    monkeypatch.setattr(best60, "recency_losses", lambda *args, **kwargs: {})
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "improve", lambda deck, *args, **kwargs: (Counter(deck), [], []))
+
+    def seed_spy(lists, strength, prior_sd, records=None, model=None, **kwargs):
+        seen["seed"] = kwargs
+        return Counter(deck), 0, "most played", 0.0, 0.0
+
+    def gain_spy(lists, strength, prior_sd, groups, records=None, list_mode="novel", **kwargs):
+        seen["gain"] = kwargs
+        return 0.0, 0.0
+
+    monkeypatch.setattr(best60, "seed_list", seed_spy)
+    monkeypatch.setattr(best60, "held_out_gain", gain_spy)
+    best60.build_best60("X", rows, strength, records, field={"Deck X": 1.0}, as_of="2026-09-30T00:00:00Z")
+
+    assert seen["seed"]["field"] == {"Deck X": 1.0}
+    assert seen["seed"]["half_life"] == 42.0
+    assert seen["gain"]["field"] == {"Deck X": 1.0}
+    assert seen["gain"]["half_life"] == 42.0
+
+
+@pytest.mark.unit
+def test_seed_list_forwards_the_field_and_half_life_to_seed_gain(monkeypatch):
+    rows, records = _synthetic(lists=60)
+    lists = [parse_list(row) for row in rows]
+    stub = types.SimpleNamespace(game=object())
+    seen = {}
+
+    def gain_spy(lists, strength, prior_sd, records=None, **kwargs):
+        seen.update(kwargs)
+        return 0.05, 0.01
+
+    monkeypatch.setattr(best60, "seed_gain", gain_spy)
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (Counter(), 0, 0.0))
+    best60.seed_list(lists, {}, 0.5, records, model=stub, field={"Deck X": 1.0}, as_of="2026-09-30", half_life=42.0)
+
+    assert seen["field"] == {"Deck X": 1.0}
+    assert seen["as_of"] == "2026-09-30"
+    assert seen["half_life"] == 42.0
+
+
+@pytest.mark.unit
+def test_held_out_gain_forwards_the_field_to_each_fold(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    stub = types.SimpleNamespace(slots=[], beta=np.array([]), game=None)
+    calls = []
+
+    def seed_spy(*args, **kwargs):
+        calls.append(kwargs)
+        return Counter({card: count for card, count, _ in _base()}), 0, "most played", 0.0, 0.0
+
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "seed_list", seed_spy)
+    monkeypatch.setattr(best60, "improve", lambda deck, *args, **kwargs: (Counter(deck), [], []))
+    monkeypatch.setattr(best60, "_list_score", lambda *args, **kwargs: 0.0)
+    best60.held_out_gain(
+        lists, {}, 0.5, {}, records, "novel", field={"Deck X": 1.0}, as_of="2026-09-30", half_life=42.0,
+    )
+
+    assert calls
+    assert all(call["field"] == {"Deck X": 1.0} for call in calls)
+    assert all(call["half_life"] == 42.0 for call in calls)
+
+
+@pytest.mark.unit
+def test_seed_gain_estimates_the_observed_field_with_the_report_settings(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    stub = types.SimpleNamespace(game=object())
+    seen = []
+
+    def field_spy(entries, games, as_of=None, half_life=None):
+        seen.append((as_of, half_life))
+        return {"Deck X": 1.0}
+
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "observed_field", field_spy)
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (Counter(), 0, 0.0))
+    monkeypatch.setattr(best60, "_list_score", lambda *args, **kwargs: 0.0)
+    best60.seed_gain(lists, {}, 0.5, records, games=[object()], as_of="2026-09-30", half_life=42.0)
+
+    assert seen and all(as_of == "2026-09-30" and half_life == 42.0 for as_of, half_life in seen)
+
+
+@pytest.mark.unit
+def test_seed_gain_scores_strength_from_event_dates(monkeypatch):
+    rows, records = _synthetic(lists=120)
+    lists = [parse_list(row) for row in rows]
+    stub = types.SimpleNamespace(game=object())
+    seen = []
+    original = best60._fold_strength
+
+    def capture(records_arg, train_events, test_events, dates=None):
+        seen.append(dates)
+        return original(records_arg, train_events, test_events, dates)
+
+    monkeypatch.setattr(best60, "_fold_strength", capture)
+    monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: stub)
+    monkeypatch.setattr(best60, "best_field_list", lambda *args, **kwargs: (Counter(), 0, 0.0))
+    monkeypatch.setattr(best60, "_list_score", lambda *args, **kwargs: 0.0)
+    best60.seed_gain(lists, {}, 0.5, records)
+
+    assert seen and all(dates for dates in seen)
 
 
 @pytest.mark.unit
