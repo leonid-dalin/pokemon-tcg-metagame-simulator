@@ -110,6 +110,14 @@ def _checkpoint_metadata(
     return {"metadata": metadata, "metadata_sha256": hashlib.sha256(_canonical(metadata)).hexdigest()}
 
 
+def _unit_label(context: Mapping[str, Any]) -> str:
+    """The label for the resampling unit the context actually carries."""
+    ids = context.get("event_block_ids", {})
+    if ids and all(str(value).startswith("event-block:") for value in ids.values()):
+        return "atomic_event_block"
+    return "atomic_date_block"
+
+
 def fixed_list_interval(
     context: Mapping[str, Any],
     counts: Mapping[str, int],
@@ -143,7 +151,7 @@ def fixed_list_interval(
             "requested_draws": int(draws),
             "scope": "model_conditional",
             "target": "expected_decided_pairing_win_probability",
-            "resampling_unit": "atomic_date_block",
+            "resampling_unit": _unit_label(context),
         }
     event_to_block = _block_map(context, events)
     block_events: dict[Any, list[Any]] = {}
@@ -163,7 +171,7 @@ def fixed_list_interval(
             "block_count": len(block_ids),
             "scope": "model_conditional",
             "target": "expected_decided_pairing_win_probability",
-            "resampling_unit": "atomic_date_block",
+            "resampling_unit": _unit_label(context),
         }
     selected_count = dict(counts)
     checkpoint_target = Path(checkpoint_path) if checkpoint_path is not None else None
@@ -276,7 +284,7 @@ def fixed_list_interval(
         "scope": "model_conditional",
         "target": "expected_decided_pairing_win_probability",
         "resampling_unit": (
-            "atomic_date_block"
+            _unit_label(context)
             if any(block != event for event, block in event_to_block.items())
             else "event_cluster"
         ),

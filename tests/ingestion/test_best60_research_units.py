@@ -5,7 +5,12 @@ from pathlib import Path
 import numpy as np
 
 from src.ingestion.best60_research.context import build_context
-from src.ingestion.best60_research.experiment import _event_block, _folds, _predictive_coverage, prepare_simulation_context
+from src.ingestion.best60_research.evaluation import decide_h1
+from src.ingestion.best60_research.experiment import (
+    _event_block, _folds, _h1_day_unit_sensitivity, _predictive_coverage, _resampling_unit,
+    prepare_simulation_context,
+)
+from src.ingestion.best60_research.uncertainty import _unit_label
 from src.ingestion.best60_research.simulation import _split_ids
 from src.ingestion.best60_research.splits import event_blocks, split_events
 
@@ -210,3 +215,26 @@ def test_folds_order_event_blocks_by_date_not_by_root_id():
         for event in fold["training_event_ids"]:
             assert (datetime.fromisoformat(dates[event]).date()
                     < datetime.fromisoformat(first_validation).date() - timedelta(days=7))
+
+
+def test_day_unit_sensitivity_counts_days_while_primary_counts_blocks():
+    days = [f"utc-date:2026-01-{day:02d}" for day in range(1, 21) for _ in range(2)]
+    blocks = [f"event-block:2026-01-{day:02d}:e{day}-{slot}" for day in range(1, 21) for slot in range(2)]
+    differences = [0.1] * 40
+
+    primary = decide_h1(differences, blocks, draws=50)
+    sensitivity = _h1_day_unit_sensitivity(differences, days, {
+        "h1": {"minimum_gain_nats_per_pairing": 0.0001},
+        "inference": {"seed": 1312, "h1_bootstrap_draws": 50},
+    })
+
+    assert primary["cluster_count"] == 40
+    assert sensitivity["cluster_count"] == 20
+    assert set(sensitivity) == {"status", "estimate", "interval", "cluster_count"}
+
+
+def test_resampling_labels_follow_the_unit():
+    assert _resampling_unit(["event-block:2026-01-01:e1"]) == "atomic_event_block"
+    assert _resampling_unit(["utc-date:2026-01-01"]) == "atomic_date_block"
+    assert _unit_label({"event_block_ids": {"e1": "event-block:2026-01-01:e1"}}) == "atomic_event_block"
+    assert _unit_label({"event_block_ids": {"e1": "utc-date:2026-01-01"}}) == "atomic_date_block"

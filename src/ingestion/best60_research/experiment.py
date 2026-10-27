@@ -1368,6 +1368,33 @@ def _weighted_h1_summary(
     }
 
 
+def _resampling_unit(values: Sequence[Any]) -> str:
+    """The label for the clusters actually used: event block, UTC day, or a bare event."""
+    text = [str(value) for value in values]
+    if text and all(value.startswith("event-block:") for value in text):
+        return "atomic_event_block"
+    if text and all(value.startswith("utc-date:") for value in text):
+        return "atomic_date_block"
+    return "event_cluster"
+
+
+def _h1_day_unit_sensitivity(
+    differences: Sequence[float],
+    days: Sequence[str],
+    protocol: Mapping[str, Any],
+) -> dict[str, Any]:
+    """The same H1 decision with whole-UTC-day clusters, for the sensitivity row."""
+    if not differences:
+        return {"status": "inconclusive", "estimate": None, "interval": None, "cluster_count": 0}
+    result = decide_h1(
+        differences, days,
+        seed=int(protocol.get("inference", {}).get("seed", 1312)),
+        draws=int(protocol.get("inference", {}).get("h1_bootstrap_draws", 2000)),
+        min_gain=float(protocol.get("h1", {}).get("minimum_gain_nats_per_pairing", 0.0001)),
+    )
+    return {key: result.get(key) for key in ("status", "estimate", "interval", "cluster_count")}
+
+
 def _ranking_gain_interval(
     ranking_data: Mapping[str, Sequence[Any]],
     *,
@@ -1393,7 +1420,7 @@ def _ranking_gain_interval(
     estimate = float(model["weighted_agreement"] - baseline["weighted_agreement"])
     result = {"status": "inconclusive", "estimate": estimate, "interval": None,
               "interaction_agreement": model, "additive_agreement": baseline,
-              "cluster_count": int(len(clusters)), "resampling_unit": "utc_date_block"}
+              "cluster_count": int(len(clusters)), "resampling_unit": _resampling_unit(clusters)}
     if len(clusters) < 20:
         result["warning"] = "fewer_than_20_independent_clusters"
         return result
@@ -1568,6 +1595,7 @@ def _evaluate_benchmark(
         pair_rows[tuple(row.get("pairing_key", ()))].append(index)
     pair_diffs: list[float] = []
     pair_events: list[str] = []
+    pair_days: list[str] = []
     pair_players1: list[str] = []
     pair_players2: list[str] = []
     for key, indices in sorted(pair_rows.items(), key=lambda item: repr(item[0])):
@@ -1578,6 +1606,7 @@ def _evaluate_benchmark(
         pair_diffs.append(float(np.average(paired_gain[indices], weights=local_weights)))
         row = measured_rows[indices[0]]
         pair_events.append(str(row.get("date_block_id") or _event_block(context, row)))
+        pair_days.append(f"utc-date:{str(row.get('date') or '')[:10]}")
         pair_players1.append(str(row.get("player1") or "unknown"))
         pair_players2.append(str(row.get("player2") or "unknown"))
     h1 = decide_h1(
@@ -1585,6 +1614,7 @@ def _evaluate_benchmark(
         draws=int(protocol.get("inference", {}).get("h1_bootstrap_draws", 2000)),
         min_gain=float(protocol.get("h1", {}).get("minimum_gain_nats_per_pairing", 0.0001)),
     ) if pair_diffs else {"status": "inconclusive", "estimate": None, "interval": None, "cluster_count": 0}
+    h1_day_unit = _h1_day_unit_sensitivity(pair_diffs, pair_days, protocol)
     block_by_view = [str(row.get("date_block_id") or _event_block(context, row)) for row in measured_rows]
     summary_weights = _unit_pair_view_weights(measured_rows, weights)
     balanced = _weighted_h1_summary(
@@ -1810,6 +1840,7 @@ def _evaluate_benchmark(
             "converged": bool(int_model.converged),
         },
         "h1_predictive": h1,
+        "h1_day_unit_sensitivity": h1_day_unit,
         "h1_combined_status": h1_combined_status,
         "h1_balanced": balanced,
         "h1_balanced_unweighted_diagnostic": balanced_groups,
