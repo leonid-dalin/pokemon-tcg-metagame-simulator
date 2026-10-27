@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -232,7 +233,7 @@ def _eligible_ids(splits: dict[str, list[str]], *, include_test: bool = False) -
     return sorted(event for name in names for event in splits[name])
 
 
-def _read_metadata(database: Path, as_of: str | None = None) -> tuple[dict[str, Any], dict[str, list[str]]]:
+def _read_metadata(database: Path, as_of: str | None = None, unit: str = "date") -> tuple[dict[str, Any], dict[str, list[str]]]:
     corpus = _extract(database, include_event_ids=[])
     events = corpus["events"]
     if as_of is not None:
@@ -249,8 +250,16 @@ def _read_metadata(database: Path, as_of: str | None = None) -> tuple[dict[str, 
         events = filtered
     if not events:
         raise RunnerError(3, "database contains no tournament events")
+    players_by_event: dict[str, set[str]] = {}
+    if unit == "event_block":
+        connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+        try:
+            for tournament_id, player_id in connection.execute("SELECT tournament_id, player_id FROM standings"):
+                players_by_event.setdefault(str(tournament_id), set()).add(str(player_id))
+        finally:
+            connection.close()
     try:
-        splits = split_events(events)
+        splits = split_events(events, unit=unit, players_by_event=players_by_event)
     except ValueError as exc:
         raise RunnerError(3, f"event metadata cannot be split: {exc}") from exc
     if not splits["development"] or not splits["validation"] or not splits["test"]:
@@ -283,7 +292,7 @@ def run_stage(args: Any) -> dict[str, Any]:
     if stage == "audit":
         if args.resume:
             raise RunnerError(2, "audit creates a new run and does not accept --resume")
-        metadata, splits = _read_metadata(database, as_of)
+        metadata, splits = _read_metadata(database, as_of, unit=str(protocol.get("time", {}).get("atomic_unit", "date")))
         _check_budget(start, args.max_seconds)
         included = _eligible_ids(splits)
         corpus = _extract(database, include_event_ids=included)
@@ -329,7 +338,7 @@ def run_stage(args: Any) -> dict[str, Any]:
     if as_of is not None and as_of != initial_manifest.get("as_of"):
         raise RunnerError(2, "--as-of differs from the audited run")
     as_of = initial_manifest.get("as_of")
-    source_metadata, _ = _read_metadata(database, as_of)
+    source_metadata, _ = _read_metadata(database, as_of, unit=str(protocol.get("time", {}).get("atomic_unit", "date")))
     source_hash = source_metadata["audit"]["source_sha256"]
     manifest = _manifest(run, source_hash, source_metadata["audit"].get("snapshot_fingerprint"), config_hash)
     if args.archetype_id and args.archetype_id != manifest.get("archetype_id"):
@@ -635,6 +644,7 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
                 interaction_penalties=penalties,
                 seed_grid=seed_grid,
                 max_iter=int(estimators.get("max_iterations", 5000)),
+                split_fractions=tuple(float(value) for value in protocol.get("time", {}).get("split_fractions", (0.6, 0.2, 0.2))),
             )
             effect_results[effect_key] = result
             if result.get("status") != "complete" or time.monotonic() >= deadline:

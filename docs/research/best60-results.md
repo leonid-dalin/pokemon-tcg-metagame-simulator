@@ -56,3 +56,21 @@ The 14-day embargo audit compared retained event, pairing and list counts only. 
 The full test suite passed 679 tests. The mutation sweep caught 103 targeted mutants at revision `0b97e6d95b8fb9c2069ace7827f468d09d3c7de2`; the later evaluation-only correction left the 17 mutation-target files unchanged. The quality audit reported no blocking findings and one pre-existing warning
 
 The run reached `reported` with every hypothesis status recorded. The saved report, simulation output, validation provenance and locked protocol provide the detailed machine-readable evidence
+
+## Protocol v2: event-block units
+
+This section records a protocol change made after the phase 1 results above. The v1 protocol and its lock are unchanged; v2 lives in `best60-protocol-v2.json` and was locked in a fresh run.
+
+The v1 unit was the whole UTC day. On snapshot `170afff7` that turns 1,049 events into 95 day units, so a 20% measurement split can never reach the protocol's 20-cluster minimum. v2 uses an event block instead: events that start on the same UTC day and share at least one player form one unit. Player identities come from the stored standings. Splits are 60/20/20 by unit in time order, with the same 7-day embargo. The 20-unit minimum, the two-way event-player cluster sensitivity and the whole-UTC-day result are reported as a sensitivity row.
+
+On the v2 audit run the units are:
+
+| Split | Events | Event-block units |
+| --- | --- | --- |
+| development | 654 | 188 |
+| validation | 197 | 63 |
+| test | 198 | 62 |
+
+The pre-test training context has 225 units; the simulation split is 135 train, 45 selection and 45 measurement, so the measurement split clears the 20-unit minimum.
+
+The simulation split now reads `time.split_fractions` from the protocol instead of a literal, and a test fails if the two differ.
