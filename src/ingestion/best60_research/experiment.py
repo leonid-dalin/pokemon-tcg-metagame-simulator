@@ -218,7 +218,7 @@ def _inner_validation_context(
         for event, value in context.get("training_event_dates", {}).items()
     }
     for event, block in context.get("event_block_ids", {}).items():
-        event_dates.setdefault(str(event), _date_value(str(block).rsplit(":", 1)[-1]))
+        event_dates.setdefault(str(event), _block_date(block))
 
     totals: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     for record in context.get("eligible_records", ()):
@@ -390,6 +390,14 @@ def _event_rows(rows: Sequence[Mapping[str, Any]], event_ids: set[str]) -> list[
     return [row for row in rows if str(row.get("event")) in event_ids]
 
 
+def _block_date(block: Any) -> date | None:
+    """The UTC date a block ID carries: `utc-date:<day>` or `event-block:<day>:<root>`."""
+    parts = str(block).split(":")
+    if parts[0] in {"utc-date", "event-block"} and len(parts) >= 2:
+        return _date_value(parts[1])
+    return _date_value(str(block).rsplit(":", 1)[-1])
+
+
 def _folds(
     context: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], fold_count: int = 3
 ) -> list[dict[str, Any]]:
@@ -398,19 +406,19 @@ def _folds(
     for row in rows:
         event = str(row.get("event"))
         event_to_block[event] = str(event_blocks.get(event, _event_block(context, row)))
-    unique_blocks = sorted(set(event_to_block.values()), key=lambda value: value.rsplit(":", 1)[-1])
+    unique_blocks = sorted(set(event_to_block.values()), key=lambda value: (_block_date(value) or date.min, str(value)))
     if fold_count < 1 or len(unique_blocks) < fold_count + 1:
         return []
     chunks = [list(chunk) for chunk in np.array_split(np.asarray(unique_blocks, dtype=object), fold_count + 1)]
     result = []
     for index in range(1, fold_count + 1):
         validation_blocks = set(chunks[index])
-        first_validation_date = _date_value(sorted(validation_blocks, key=str)[0].rsplit(":", 1)[-1])
+        first_validation_date = _block_date(sorted(validation_blocks, key=lambda value: (_block_date(value) or date.min, str(value)))[0])
         if first_validation_date is not None:
             boundary = first_validation_date - timedelta(days=7)
             training_blocks = {
                 block for chunk in chunks[:index] for block in chunk
-                if (_date_value(str(block).rsplit(":", 1)[-1]) or date.min) < boundary
+                if (_block_date(block) or date.min) < boundary
             }
         else:
             training_blocks = {block for chunk in chunks[:index] for block in chunk}

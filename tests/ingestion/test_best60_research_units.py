@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from src.ingestion.best60_research.context import build_context
-from src.ingestion.best60_research.experiment import _event_block, _predictive_coverage, prepare_simulation_context
+from src.ingestion.best60_research.experiment import _event_block, _folds, _predictive_coverage, prepare_simulation_context
 from src.ingestion.best60_research.simulation import _split_ids
 from src.ingestion.best60_research.splits import event_blocks, split_events
 
@@ -187,3 +187,26 @@ def test_test_rows_cluster_on_event_blocks_under_v2():
     assert all(cluster.startswith("event-block:") for cluster in clusters)
     assert len(clusters) == 120
     assert len(days) == 40
+
+
+def test_folds_order_event_blocks_by_date_not_by_root_id():
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    rows = []
+    block_ids = {}
+    dates = {}
+    for day in range(20):
+        when = start + timedelta(days=day)
+        event = f"e{day}"
+        block_ids[event] = f"event-block:{when.date().isoformat()}:z{19 - day:02d}"
+        dates[event] = when.date().isoformat()
+        rows.append({"event": event, "counts": {"A": 1}})
+    context = {"event_block_ids": block_ids, "training_event_dates": dates}
+
+    folds = _folds(context, rows, fold_count=3)
+
+    assert folds
+    for fold in folds:
+        first_validation = min(dates[event] for event in fold["validation_event_ids"])
+        for event in fold["training_event_ids"]:
+            assert (datetime.fromisoformat(dates[event]).date()
+                    < datetime.fromisoformat(first_validation).date() - timedelta(days=7))
