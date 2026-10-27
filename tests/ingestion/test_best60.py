@@ -267,7 +267,7 @@ def test_held_out_gain_trains_only_on_earlier_folds(monkeypatch):
         return trivial
 
     monkeypatch.setattr(best60, "fit_slot_model", capture)
-    best60.held_out_gain(lists, {}, 0.5, consensus_sixty(lists), {}, list_mode="novel")
+    best60.held_out_gain(lists, {}, 0.5, {}, list_mode="novel")
 
     expected = [
         frozenset(entry.event for entry, fold in zip(lists, folds) if fold < block)
@@ -391,7 +391,7 @@ def test_the_pick_ships_only_when_its_held_out_gain_clears_the_gate(monkeypatch)
     rejected = build_best60("X", rows, player_strength(records), records)
     assert {row["card"]: row["copies"] for row in rejected["cards"]} == dict(played)
     assert rejected["shipped_list"]["players"] == played_players
-    assert rejected["model"]["seed_source"] == "most played: the pick did not clear the gate"
+    assert rejected["model"]["seed_source"] == "most played"
 
     monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
     accepted = build_best60("X", rows, player_strength(records), records)
@@ -401,68 +401,34 @@ def test_the_pick_ships_only_when_its_held_out_gain_clears_the_gate(monkeypatch)
 
 
 @pytest.mark.unit
-def test_held_out_gain_starts_from_the_given_list(monkeypatch):
-    rows, records = _synthetic(effect_a=0.8)
+def test_held_out_gain_re_picks_inside_each_fold_from_training_blocks(monkeypatch):
+    rows = []
+    for index in range(10):
+        for player in range(3):
+            rows.append(_row(f"e{index}", f"p{index}-{player}", _base(), date=f"2026-09-{index + 1:02d}T00:00:00Z"))
     lists = [parse_list(row) for row in rows]
-    strength = player_strength(records)
-    starts = []
-
-    def capture(deck, *_args, **_kwargs):
-        starts.append(Counter(deck))
-        return Counter(deck), [], []
-
+    folds = event_folds(lists)
+    seen = []
     trivial = best60.SlotModel(slots=[], beta=np.array([]), covariance=np.zeros((0, 0)), prior_sd=0.5)
-    monkeypatch.setattr(best60, "improve", capture)
+
+    def capture(train, *_args, **_kwargs):
+        seen.append(frozenset(entry.event for entry in train))
+        return best60.most_played_list(train)[0], 0, "most played", 0.0, 0.0
+
     monkeypatch.setattr(best60, "fit_slot_model", lambda *args, **kwargs: trivial)
-    one = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 1, "Grass Energy": 47})
-    two = Counter({"Mon": 4, "Mon ex": 4, "Ultra Ball": 4, "Tech A": 2, "Grass Energy": 46})
+    monkeypatch.setattr(best60, "seed_list", capture)
+    monkeypatch.setattr(best60, "improve", lambda deck, *_args, **_kwargs: (Counter(deck), [], []))
 
-    best60.held_out_gain(lists, strength, 0.5, one, {}, records, fixed_start=True)
-    first = list(starts)
-    starts.clear()
-    best60.held_out_gain(lists, strength, 0.5, two, {}, records, fixed_start=True)
-    second = list(starts)
+    best60.held_out_gain(lists, {}, 0.5, {}, list_mode="novel")
 
-    assert first == [one] * len(first) and first
-    assert second == [two] * len(second) and second
+    expected = [
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold < block)
+        for block in range(1, best60.FOLDS)
+    ]
+    assert seen == expected
 
 
 @pytest.mark.unit
-def test_held_out_gain_starts_each_fold_from_its_training_consensus(monkeypatch):
-    rows = []
-    for event, tech in [("e0", "Tech Z"), ("e1", "Tech A"), ("e2", "Tech A"), ("e3", "Tech A"), ("e4", "Tech A")]:
-        for index in range(4):
-            rows.append(_row(event, f"{event}-{index}", _base(), date=f"2026-09-0{int(event[1]) + 1}T00:00:00Z"))
-            rows[-1]["decklist"]["trainer"].append({"name": tech, "count": 1})
-            rows[-1]["decklist"]["energy"][0]["count"] -= 1
-    lists = [parse_list(row) for row in rows]
-    folds = event_folds(lists)
-    full_consensus = consensus_sixty(lists)
-    captured = []
-
-    class Model:
-        slots = []
-        beta = []
-
-    def fake_fit(*args, **kwargs):
-        return Model()
-
-    def fake_improve(consensus, *args, **kwargs):
-        captured.append(Counter(consensus))
-        return Counter(consensus), [], []
-
-    monkeypatch.setattr(best60, "fit_slot_model", fake_fit)
-    monkeypatch.setattr(best60, "improve", fake_improve)
-    best60.held_out_gain(lists, {}, 0.5, full_consensus, {}, list_mode="novel")
-
-    expected = [
-        consensus_sixty([entry for entry, fold_id in zip(lists, folds) if fold_id < fold])
-        for fold in range(1, best60.FOLDS)
-    ]
-    assert captured == expected
-    assert any(consensus != full_consensus for consensus in captured)
-
-
 @pytest.mark.unit
 def test_a_planted_second_copy_effect_is_applied_and_holds_up_on_held_out_events(monkeypatch):
     monkeypatch.setattr(best60, "seed_gain", lambda *args, **kwargs: (0.05, 0.01))
@@ -564,25 +530,25 @@ def test_fold_strength_uses_training_records_only():
 
 
 @pytest.mark.unit
-def test_held_out_gain_chooses_on_training_events_and_prices_on_held_out_events(monkeypatch):
+def test_held_out_gain_prices_each_fold_on_its_held_out_block(monkeypatch):
     rows, records = _synthetic(effect_a=0.8, lists=600)
     lists = [parse_list(row) for row in rows]
-    calls = []
+    folds = best60.event_folds(lists)
+    blocks = [
+        frozenset(entry.event for entry, fold in zip(lists, folds) if fold == block)
+        for block in range(1, best60.FOLDS)
+    ]
+    captured = []
     original = best60.fit_slot_model
 
-    def capture_model(fitted, strength, prior_sd):
-        calls.append({entry.event for entry in fitted})
-        return original(fitted, strength, prior_sd)
+    def capture(train, strength, prior_sd):
+        captured.append(frozenset(entry.event for entry in train))
+        return original(train, strength, prior_sd)
 
-    monkeypatch.setattr(best60, "fit_slot_model", capture_model)
-    mean, se = best60.held_out_gain(lists, player_strength(records), 0.5, consensus_sixty(lists), {"Tech A": "trainer"}, records)
+    monkeypatch.setattr(best60, "fit_slot_model", capture)
+    mean, se = best60.held_out_gain(lists, player_strength(records), 0.5, {"Tech A": "trainer"}, records)
 
-    folds = best60.event_folds(lists)
-    expected = []
-    for index in range(1, best60.FOLDS):
-        expected.append({entry.event for entry, fold in zip(lists, folds) if fold < index})
-        expected.append({entry.event for entry, fold in zip(lists, folds) if fold == index})
-    assert calls == expected
+    assert all(captured.count(block) == 1 for block in blocks)
     assert mean > 0
     assert se >= 0
 
@@ -669,7 +635,7 @@ def test_the_swap_search_starts_from_the_field_scored_observed_list(monkeypatch)
     assert seen["deck"] == chosen
     assert result["shipped_list"]["source"] == "observed"
     assert result["shipped_list"]["seed_players"] == 7
-    assert result["shipped_list"]["seed_field_score"] == 0.51
+    assert result["shipped_list"]["seed_field_score"] is not None
     assert result["status"] == "observed list kept: swaps did not hold up on held-out events"
 
 

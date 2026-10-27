@@ -855,23 +855,41 @@ def seed_gain(
     return float(np.mean(gains)), float(np.std(gains, ddof=1) / math.sqrt(len(gains)))
 
 
+def seed_list(
+    lists: Sequence[ArchetypeList],
+    strength: Mapping[tuple[str, str], float],
+    prior_sd: float | ModelSpec,
+    field: Mapping[str, float],
+    records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
+    model: SlotModel | None = None,
+) -> tuple[Counter[str], int, str, float, float]:
+    """The list production ships for these lists: the validated pick or the most-played list."""
+    game = (model or fit_slot_model(lists, strength, prior_sd)).game
+    if game is None:
+        played, played_players = most_played_list(lists)
+        return played, played_players, "most played", 0.0, 0.0
+    picked, picked_players, _ = best_field_list(lists, game, field)
+    gain, se = seed_gain(lists, strength, prior_sd, field, records)
+    if gain - BDIF_BEST60_HELD_OUT_SE * se > 0:
+        return picked, picked_players, "validated pick", gain, se
+    played, played_players = most_played_list(lists)
+    return played, played_players, "most played", gain, se
+
+
 def held_out_gain(
     lists: Sequence[ArchetypeList],
     strength: Mapping[tuple[str, str], float],
     prior_sd: float | ModelSpec,
-    start: Counter[str],
     groups: Mapping[str, str],
     records: Mapping[tuple[str, str], tuple[int, int]] | None = None,
     list_mode: str = "novel",
     *,
-    fixed_start: bool = False,
+    field: Mapping[str, float] | None = None,
 ) -> tuple[float, float]:
     """Cross-fitted value of the swap procedure, in log-odds: mean and standard error over four forward folds.
 
-    Swaps are chosen by a model fitted on earlier events, then valued by slot coefficients fitted only on
-    the next block. The starting list is the one production ships (`fixed_start`), or the fold's own
-    training consensus when the caller leaves it unset. The held-out lists never influence which swaps
-    are chosen, and the training lists never influence their value.
+    Each fold re-runs the production seed procedure on its training blocks only, then prices the swaps
+    that start from it on the next block. No fold's start or price sees its held-out lists.
     """
     folds = event_folds(lists)
     if len(set(entry.event for entry in lists)) < FOLDS:
@@ -884,10 +902,11 @@ def held_out_gain(
         train_events = {entry.event for entry in train}
         test_events = {entry.event for entry in test}
         fold_strength = _fold_strength(records, train_events, test_events, dates) if records is not None else strength
-        fold_start = Counter(start) if fixed_start else consensus_sixty(train)
+        train_model = fit_slot_model(train, fold_strength, prior_sd)
+        fold_start, _, _, _, _ = seed_list(train, fold_strength, prior_sd, field or {}, records, model=train_model)
         fold_groups = {card: group for entry in train for card, group in entry.groups.items()}
         _, applied, _ = improve(
-            fold_start, fit_slot_model(train, fold_strength, prior_sd), fold_groups, prerequisites(train),
+            fold_start, train_model, fold_groups, prerequisites(train),
             count_levels(train, fold_start), _support_check(train, list_mode),
         )
         priced = fit_slot_model(test, fold_strength, prior_sd)
@@ -1112,20 +1131,15 @@ def build_best60(
             spec = replace(spec, field=used_field)
             prior_sd = spec
             model = fit_slot_model(lists, strength, prior_sd)
-            seed, seed_players, seed_score = best_field_list(lists, model.game, used_field)
-            pick_gain, pick_se = seed_gain(lists, strength, prior_sd, used_field, records)
-            model_report["seed_field_score"] = seed_score
+            seed, seed_players, seed_source, pick_gain, pick_se = seed_list(lists, strength, prior_sd, used_field, records, model=model)
+            model_report["seed_field_score"] = _list_score(model.game, seed, used_field) if model.game else None
             model_report["seed_gain"] = pick_gain
             model_report["seed_gain_se"] = pick_se
-            if pick_gain - BDIF_BEST60_HELD_OUT_SE * pick_se > 0:
-                model_report["seed_source"] = "validated pick"
-            else:
-                seed, seed_players = most_played_list(lists)
-                model_report["seed_source"] = "most played: the pick did not clear the gate"
+            model_report["seed_source"] = seed_source
             improved, proposed, leaning = improve(
                 seed, model, groups, prerequisites(lists), count_levels(lists, seed), _support_check(lists, list_mode),
             )
-            gain_held_out, gain_se = held_out_gain(lists, strength, prior_sd, seed, groups, records, list_mode, fixed_start=True)
+            gain_held_out, gain_se = held_out_gain(lists, strength, prior_sd, groups, records, list_mode, field=used_field)
             model_report.update({
                 "prior_sd": spec.prior_sd, "opponent_sd": spec.opponent_sd, "half_life_days": spec.half_life,
                 "slots": len(model.slots), "opponents_with_own_effects": list(model.game.specific) if model.game else [],
