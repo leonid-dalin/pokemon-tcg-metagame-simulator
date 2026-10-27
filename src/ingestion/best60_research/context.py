@@ -7,7 +7,7 @@ import json
 import math
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Mapping
 
 from src.core.config import (
     BDIF_BEST60_MIN_SLOT_LISTS,
@@ -15,6 +15,7 @@ from src.core.config import (
     BDIF_BEST60_STRENGTH_PRIOR_GAMES,
 )
 from src.ingestion.best60 import ACE_SPEC_CARDS, BASIC_ENERGY_NAMES
+from src.ingestion.best60_research.splits import event_blocks
 
 STRENGTH_PRIOR_GAMES = float(BDIF_BEST60_STRENGTH_PRIOR_GAMES)
 
@@ -81,7 +82,8 @@ def _prerequisites(lists: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
 
 
 def build_context(corpus: dict[str, Any], *, cutoff: str, embargo_days: int = 7,
-                  min_slot_lists: int = 30) -> dict[str, Any]:
+                  min_slot_lists: int = 30, unit: str = "date",
+                  players_by_event: Mapping[str, set[str]] | None = None) -> dict[str, Any]:
     """Build all estimator inputs from events strictly before cutoff minus the embargo."""
     target = _datetime(cutoff)
     if target is None:
@@ -94,7 +96,19 @@ def build_context(corpus: dict[str, Any], *, cutoff: str, embargo_days: int = 7,
     training_event_ids = sorted(event_id for event_id, date in event_dates.items() if date is not None and date < boundary)
     training_set = set(training_event_ids)
     day_by_event = {event_id: date.date().isoformat() for event_id, date in event_dates.items() if date is not None}
-    block_ids = {event_id: f"utc-date:{day}" for event_id, day in day_by_event.items()}
+    if unit == "event_block":
+        events = [{"id": str(event["id"]), "date": event.get("date")} for event in corpus.get("events", [])
+                  if str(event["id"]) in day_by_event]
+        block_ids = {}
+        block_dates = {}
+        for date, event_ids in event_blocks(events, players_by_event or {}):
+            block_id = f"event-block:{date}:{event_ids[0]}"
+            for event_id in event_ids:
+                block_ids[event_id] = block_id
+                block_dates[event_id] = date
+    else:
+        block_ids = {event_id: f"utc-date:{day}" for event_id, day in day_by_event.items()}
+        block_dates = dict(day_by_event)
 
     eligible_lists = [row for row in corpus.get("lists", [])
                       if row.get("event") in training_set and _legal(dict(row.get("counts") or {}))]
@@ -161,7 +175,7 @@ def build_context(corpus: dict[str, Any], *, cutoff: str, embargo_days: int = 7,
                   "archetype_ids": sorted(entry["archetype_ids"]),
                   "companions": {card: companion_rules.get(card, {}) for card in entry["counts"]}}
                  for _, entry in sorted(catalogue_by_hash.items())]
-    event_block_rows = sorted({(day_by_event[event_id], block_ids[event_id]) for event_id in training_event_ids})
+    event_block_rows = sorted({(block_dates[event_id], block_ids[event_id]) for event_id in training_event_ids})
     paired_view_counts = Counter(tuple(row["pairing_key"]) for row in eligible_views)
     coverage = {"training_event_count": len(training_event_ids), "training_list_count": len(eligible_lists),
                 "eligible_pairing_count": len(eligible_pairings), "eligible_pairing_view_count": len(eligible_views),

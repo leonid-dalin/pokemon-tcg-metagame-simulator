@@ -267,6 +267,29 @@ def _read_metadata(database: Path, as_of: str | None = None, unit: str = "date")
     return corpus, splits
 
 
+def _unit_and_players(database: Path, protocol: dict[str, Any]) -> tuple[str, dict[str, set[str]]]:
+    """The split unit and, for event blocks, each event's stored player IDs."""
+    unit = str(protocol.get("time", {}).get("atomic_unit", "date"))
+    if unit != "event_block":
+        return unit, {}
+    connection = sqlite3.connect(f"file:{database}?mode=ro", uri=True)
+    try:
+        players: dict[str, set[str]] = {}
+        for tournament_id, player_id in connection.execute("SELECT tournament_id, player_id FROM standings"):
+            players.setdefault(str(tournament_id), set()).add(str(player_id))
+    finally:
+        connection.close()
+    return unit, players
+
+
+def _split_fractions(protocol: dict[str, Any]) -> tuple[float, float, float]:
+    """The protocol's split, whether it is written as a mapping or a triple."""
+    value = protocol.get("time", {}).get("split_fractions", (0.6, 0.2, 0.2))
+    if isinstance(value, dict):
+        return (float(value["development"]), float(value["validation"]), float(value["test"]))
+    return tuple(float(item) for item in value)
+
+
 def _check_budget(start: float, maximum: int | None) -> None:
     if maximum is not None and time.monotonic() - start >= maximum:
         raise RunnerError(4, "stage exceeded --max-seconds; completed checkpoints remain resumable")
@@ -367,8 +390,10 @@ def run_stage(args: Any) -> dict[str, Any]:
         cutoff = min(validation_dates) if validation_dates else None
         if cutoff is None:
             raise RunnerError(3, "validation split has no valid event dates")
+        unit, players_by_event = _unit_and_players(database, protocol)
         context = build_context(corpus, cutoff=cutoff, embargo_days=int(protocol["time"]["primary_embargo_days"]),
-                                min_slot_lists=int(protocol["features"]["slot_minimum_lists"]))
+                                min_slot_lists=int(protocol["features"]["slot_minimum_lists"]),
+                                unit=unit, players_by_event=players_by_event)
         validation_views, selection_window = _selection_validation_views(
             corpus,
             splits["validation"],
@@ -513,8 +538,10 @@ def _evaluate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
              if manifest["splits"]["test"]["dates"].get(event)]
     if not dates:
         raise RunnerError(3, "test split has no dated events")
+    unit, players_by_event = _unit_and_players(database, protocol)
     context = build_context(corpus, cutoff=min(dates), embargo_days=int(protocol["time"]["primary_embargo_days"]),
-                            min_slot_lists=int(protocol["features"]["slot_minimum_lists"]))
+                            min_slot_lists=int(protocol["features"]["slot_minimum_lists"]),
+                            unit=unit, players_by_event=players_by_event)
     validation = _read_json(output_path.with_name("validation.json"))
     from .experiment import evaluate_experiment
 
@@ -623,9 +650,11 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
     dated_test_events = [test_dates[event] for event in splits["test"] if test_dates.get(event)]
     if not dated_test_events:
         raise RunnerError(3, "test split has no dated events")
+    unit, players_by_event = _unit_and_players(database, protocol)
     context = build_context(corpus, cutoff=cutoff.isoformat(),
                             embargo_days=embargo_days,
-                            min_slot_lists=int(protocol["features"]["slot_minimum_lists"]))
+                            min_slot_lists=int(protocol["features"]["slot_minimum_lists"]),
+                            unit=unit, players_by_event=players_by_event)
     simulation = protocol["simulation"]
     estimators = protocol["estimators"]
     replicates = int(simulation.get("full_replicates_per_effect", 500))
@@ -661,7 +690,7 @@ def _simulate_locked(database: Path, manifest: dict[str, Any], protocol: dict[st
                 interaction_penalties=penalties,
                 seed_grid=seed_grid,
                 max_iter=int(estimators.get("max_iterations", 5000)),
-                split_fractions=tuple(float(value) for value in protocol.get("time", {}).get("split_fractions", (0.6, 0.2, 0.2))),
+                split_fractions=_split_fractions(protocol),
             )
             effect_results[effect_key] = result
             if result.get("status") != "complete" or time.monotonic() >= deadline:

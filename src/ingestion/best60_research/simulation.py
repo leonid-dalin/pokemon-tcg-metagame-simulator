@@ -346,7 +346,7 @@ def _split_ids(
         key = tuple(pair) if isinstance(pair, (list, np.ndarray)) else pair
         pair_event.setdefault(key, event)
         pair_block.setdefault(key, block)
-    real_blocks = all(str(block).startswith("utc-date:") for block in pair_block.values())
+    real_blocks = all(str(block).startswith(("utc-date:", "event-block:")) for block in pair_block.values())
     if real_blocks:
         blocks = sorted(set(pair_block.values()), key=lambda item: str(item))
         if len(blocks) >= 5:
@@ -357,7 +357,7 @@ def _split_ids(
             train_ids = [pair for pair in unique if pair_block[pair] in train_blocks]
             select_ids = [pair for pair in unique if pair_block[pair] in select_blocks]
             measure_ids = [pair for pair in unique if pair_block[pair] not in train_blocks | select_blocks]
-            return _object_vector(train_ids), _object_vector(select_ids), _object_vector(measure_ids), "utc_date"
+            return _object_vector(train_ids), _object_vector(select_ids), _object_vector(measure_ids), "event_block" if any(str(b).startswith("event-block:") for b in blocks) else "utc_date"
     event_levels = sorted(set(pair_event.values()), key=repr)
     if len(event_levels) >= 5:
         shuffled_events = [event_levels[i] for i in rng.permutation(len(event_levels))]

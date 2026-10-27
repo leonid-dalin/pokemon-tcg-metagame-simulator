@@ -1,5 +1,10 @@
+import json
+from pathlib import Path
+
 import numpy as np
 
+from src.ingestion.best60_research.context import build_context
+from src.ingestion.best60_research.experiment import prepare_simulation_context
 from src.ingestion.best60_research.simulation import _split_ids
 from src.ingestion.best60_research.splits import event_blocks, split_events
 
@@ -55,3 +60,52 @@ def test_simulation_split_reads_the_protocol_fractions():
 
     assert unit == "utc_date"
     assert (len(train), len(selection), len(measurement)) == (10, 5, 5)
+
+
+def test_the_v2_protocol_split_is_read_as_a_mapping():
+    from src.ingestion.best60_research.runner import _split_fractions
+
+    protocol = json.loads(Path("docs/research/best60-protocol-v2.json").read_text(encoding="utf-8"))
+
+    assert _split_fractions(protocol) == (0.6, 0.2, 0.2)
+
+
+def test_event_block_ids_flow_into_the_simulation_split():
+    views = []
+    block_ids = {}
+    for day in range(40):
+        date = f"2026-01-{day + 1:02d}"
+        for slot in range(3):
+            event = f"e{day}-{slot}"
+            block_ids[event] = f"event-block:{date}:{event}"
+            views.append({
+                "event": event, "player": f"p{day}-{slot}", "opponent": f"o{day}-{slot}",
+                "side": 1, "won": slot % 2, "counts": {"A": 1},
+                "archetype_id": "kangaskhan-bouffalant", "pairing_key": (event, slot),
+            })
+    context = {"eligible_views": views, "event_block_ids": block_ids, "slot_names": [("A", 1)], "strength": {}}
+
+    arrays = prepare_simulation_context(context)
+    train, selection, measurement, unit = _split_ids(
+        arrays["pairing_ids"], arrays["event_ids"], arrays["block_ids"], np.random.default_rng(7),
+    )
+
+    block_of = {tuple(pair): block for pair, block in zip(arrays["pairing_ids"], arrays["block_ids"])}
+
+    assert unit == "event_block"
+    assert len({block_of[tuple(pair)] for pair in measurement}) >= 20
+
+
+def test_build_context_emits_event_block_ids_under_v2():
+    events = [{"id": f"e{index}", "date": f"2026-01-{index + 1:02d}T00:00:00Z"}
+              for index in range(4)]
+    lists = [{"event": event["id"], "player": f"p{event['id']}", "counts": {"A": 4, "B": 56},
+              "archetype_id": "kangaskhan-bouffalant"} for event in events]
+    corpus = {"events": events, "lists": lists, "pairings": []}
+    players = {event["id"]: {f"p{event['id']}"} for event in events}
+
+    context = build_context(corpus, cutoff="2026-02-01T00:00:00Z", embargo_days=0, min_slot_lists=1,
+                            unit="event_block", players_by_event=players)
+
+    assert context["event_block_ids"]
+    assert all(str(value).startswith("event-block:") for value in context["event_block_ids"].values())
